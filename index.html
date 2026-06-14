@@ -518,8 +518,17 @@ const BACKEND_URL = (
     location.hostname === '127.0.0.1'
 ) ? 'http://127.0.0.1:5001' : '';
 
-// V základu přidány české a populární akcie
-let myStocks = JSON.parse(localStorage.getItem('mystocks_portfolio')) || ['NVDA', 'TSLA', 'PLTR', 'CSG.PR', 'CEZ.PR', 'BTC-USD'];
+// Výchozí sledované akcie
+// NVDA, Lithium Argentina (LAR), Colt CZ / CSG (COLT.PR), Alphabet (GOOGL),
+// Navitas (NVTS), Zlato (GC=F), Stříbro (SI=F), Měď (HG=F)
+const DEFAULT_WATCHLIST = ['NVDA', 'LAR', 'COLT.PR', 'GOOGL', 'NVTS', 'GC=F', 'SI=F', 'HG=F'];
+let myStocks = JSON.parse(localStorage.getItem('mystocks_portfolio')) || DEFAULT_WATCHLIST;
+// Jednorázový seed: i prohlížečům se starým uloženým seznamem nastaví nový (jen jednou).
+if (!localStorage.getItem('mystocks_seed_v3')) {
+    myStocks = DEFAULT_WATCHLIST.slice();
+    localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
+    localStorage.setItem('mystocks_seed_v3', '1');
+}
 // Portfolio pozice: { "NVDA": { qty: 10, avgPrice: 450.00 }, ... }
 let myPositions = JSON.parse(localStorage.getItem('mystocks_positions')) || {};
 
