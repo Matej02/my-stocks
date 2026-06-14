@@ -1,29 +1,34 @@
 #!/usr/bin/env python3
 """
 MY STOCKS - Backend pro Vercel (Serverless Function)
-Flask app exportovaná jako `app` - Vercel ji automaticky spustí jako
-WSGI handler pro všechny požadavky na /api/*
 
-Obsahuje deterministický výpočetní engine (RSI, SMA, MACD, volatilita,
-momentum) a Signal Score 0-100, který je nezávislý na AI.
+Data se tahají PŘÍMO z veřejných Yahoo Finance HTTP endpointů
+(v8/finance/chart, v1/finance/search, v10 quoteSummary) pomocí `requests`.
+Žádné yfinance/pandas/numpy -> spolehlivé i na serverless (AWS) IP a rychlý cold start.
+
+Indikátory (RSI, SMA, MACD, volatilita, momentum) a Signal Score 0-100
+se počítají v čistém Pythonu a jsou nezávislé na AI.
 """
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import yfinance as yf
 import requests
 import math
-import time
+from datetime import datetime, timezone
+from urllib.parse import quote
 
 app = Flask(__name__)
 CORS(app)
+
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+HEADERS = {"User-Agent": UA, "Accept": "application/json"}
 
 
 # ---------------------------------------------------------------------------
 # Pomocné funkce
 # ---------------------------------------------------------------------------
 def _clean(v, default=None):
-    """Ošetří NaN/inf/None pro bezpečný JSON."""
     try:
         if v is None:
             return default
@@ -46,67 +51,116 @@ def _round(v, n=3, default=None):
         return default
 
 
+def yahoo_chart(ticker, rng, interval):
+    """Stáhne data z Yahoo chart endpointu. Vrací result dict (meta, timestamp, quote)."""
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(ticker, safe='')}"
+    params = {"range": rng, "interval": interval, "includePrePost": "false"}
+    r = requests.get(url, headers=HEADERS, params=params, timeout=10)
+    j = r.json()
+    res = (j.get("chart") or {}).get("result")
+    if not res:
+        err = (j.get("chart") or {}).get("error")
+        raise ValueError(err or "Yahoo nevrátil data")
+    return res[0]
+
+
 # ---------------------------------------------------------------------------
-# Technické indikátory (počítané z denní historie pomocí pandas)
+# Technické indikátory (čistý Python)
 # ---------------------------------------------------------------------------
-def compute_indicators(df):
-    """df = denní OHLCV DataFrame z yfinance. Vrací dict s indikátory."""
+def _sma(vals, w):
+    if len(vals) < w:
+        return None
+    return sum(vals[-w:]) / w
+
+
+def _ema_last(vals, span):
+    if len(vals) < span:
+        return None
+    k = 2 / (span + 1)
+    e = sum(vals[:span]) / span
+    for v in vals[span:]:
+        e = v * k + e * (1 - k)
+    return e
+
+
+def _ema_series(vals, span):
+    if len(vals) < span:
+        return []
+    k = 2 / (span + 1)
+    e = sum(vals[:span]) / span
+    out = [e]
+    for v in vals[span:]:
+        e = v * k + e * (1 - k)
+        out.append(e)
+    return out
+
+
+def compute_indicators(closes, volumes):
     out = {
         "rsi": None, "sma20": None, "sma50": None, "sma200": None,
         "macd": None, "macd_hist": None, "volatility": None,
         "mom_1m": None, "avg_volume": None, "last_volume": None,
     }
-    try:
-        close = df["Close"].dropna()
-        if len(close) < 5:
-            return out
+    closes = [c for c in closes if c is not None]
+    if len(closes) < 5:
+        return out
 
-        # RSI(14) – Wilderovo vyhlazení
-        delta = close.diff()
-        up = delta.clip(lower=0)
-        down = -delta.clip(upper=0)
-        roll_up = up.ewm(alpha=1 / 14, adjust=False).mean()
-        roll_down = down.ewm(alpha=1 / 14, adjust=False).mean()
-        rs = roll_up / roll_down.replace(0, float("nan"))
-        rsi = 100 - 100 / (1 + rs)
-        out["rsi"] = _round(rsi.iloc[-1], 1)
+    # RSI(14) – Wilder
+    deltas = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
+    if len(deltas) >= 14:
+        gains = [max(d, 0) for d in deltas]
+        losses = [max(-d, 0) for d in deltas]
+        avg_g = sum(gains[:14]) / 14
+        avg_l = sum(losses[:14]) / 14
+        for i in range(14, len(deltas)):
+            avg_g = (avg_g * 13 + gains[i]) / 14
+            avg_l = (avg_l * 13 + losses[i]) / 14
+        if avg_l == 0:
+            out["rsi"] = 100.0
+        else:
+            rs = avg_g / avg_l
+            out["rsi"] = round(100 - 100 / (1 + rs), 1)
 
-        # Klouzavé průměry
-        for w in (20, 50, 200):
-            if len(close) >= w:
-                out[f"sma{w}"] = _round(close.rolling(w).mean().iloc[-1], 3)
+    out["sma20"] = _round(_sma(closes, 20), 3)
+    out["sma50"] = _round(_sma(closes, 50), 3)
+    out["sma200"] = _round(_sma(closes, 200), 3)
 
-        # MACD (12/26/9)
-        ema12 = close.ewm(span=12, adjust=False).mean()
-        ema26 = close.ewm(span=26, adjust=False).mean()
-        macd = ema12 - ema26
-        signal = macd.ewm(span=9, adjust=False).mean()
-        out["macd"] = _round(macd.iloc[-1], 4)
-        out["macd_hist"] = _round((macd - signal).iloc[-1], 4)
+    # MACD (12/26/9)
+    if len(closes) >= 26:
+        e12 = _ema_last(closes, 12)
+        e26 = _ema_last(closes, 26)
+        macd_now = (e12 or 0) - (e26 or 0)
+        out["macd"] = round(macd_now, 4)
+        e12s = _ema_series(closes, 12)
+        e26s = _ema_series(closes, 26)
+        n = min(len(e12s), len(e26s))
+        if n >= 9:
+            macd_series = [e12s[-n + i] - e26s[-n + i] for i in range(n)]
+            sig = _ema_last(macd_series, 9)
+            if sig is not None:
+                out["macd_hist"] = round(macd_now - sig, 4)
 
-        # Volatilita (anualizovaná, %)
-        ret = close.pct_change().dropna()
-        if len(ret) > 2:
-            out["volatility"] = _round(ret.std() * (252 ** 0.5) * 100, 1)
+    # Volatilita (anualizovaná %)
+    rets = [(closes[i] / closes[i - 1] - 1) for i in range(1, len(closes)) if closes[i - 1]]
+    if len(rets) > 2:
+        mean = sum(rets) / len(rets)
+        var = sum((x - mean) ** 2 for x in rets) / (len(rets) - 1)
+        out["volatility"] = round((var ** 0.5) * (252 ** 0.5) * 100, 1)
 
-        # Momentum za ~1 měsíc (21 obchodních dní)
-        if len(close) > 22:
-            out["mom_1m"] = _round((close.iloc[-1] / close.iloc[-22] - 1) * 100, 1)
+    # Momentum ~1 měsíc
+    if len(closes) > 22:
+        out["mom_1m"] = round((closes[-1] / closes[-22] - 1) * 100, 1)
 
-        # Objem
-        if "Volume" in df:
-            vol = df["Volume"].dropna()
-            if len(vol) > 0:
-                out["last_volume"] = _clean(int(vol.iloc[-1]), None)
-            if len(vol) >= 5:
-                out["avg_volume"] = _clean(int(vol.tail(20).mean()), None)
-    except Exception:
-        pass
+    vols = [v for v in volumes if v is not None]
+    if vols:
+        out["last_volume"] = int(vols[-1])
+        if len(vols) >= 5:
+            tail = vols[-20:]
+            out["avg_volume"] = int(sum(tail) / len(tail))
     return out
 
 
 def signal_score(price, ind, high52, low52):
-    """Deterministický technický scoring 0-100 + rozpad na faktory."""
     score = 50.0
     comps = []
 
@@ -177,19 +231,70 @@ def signal_score(price, ind, high52, low52):
         label = "PRODÁVAT"
     else:
         label = "SILNĚ PRODÁVAT"
-
     return round(score), label, comps
 
 
 def sma_overlay(closes, window):
-    """Rolling SMA přes pole close hodnot. Nedostatek dat -> None (mezera v grafu)."""
     out = []
     n = len(closes)
     for i in range(n):
         if i + 1 < window:
             out.append(None)
         else:
-            out.append(round(sum(closes[i + 1 - window:i + 1]) / window, 4))
+            seg = [c for c in closes[i + 1 - window:i + 1] if c is not None]
+            out.append(round(sum(seg) / len(seg), 4) if len(seg) == window else None)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Fundamenty (best-effort přes quoteSummary + crumb; když selže -> N/A)
+# ---------------------------------------------------------------------------
+def _raw(node, key, default=None):
+    try:
+        v = node.get(key)
+        if isinstance(v, dict):
+            return v.get("raw", default)
+        return v if v is not None else default
+    except Exception:
+        return default
+
+
+def fetch_fundamentals(ticker):
+    out = {}
+    try:
+        s = requests.Session()
+        s.headers.update(HEADERS)
+        s.get("https://finance.yahoo.com/quote/" + quote(ticker, safe=''), timeout=4)
+        crumb = s.get("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=4).text.strip()
+        if not crumb or "<" in crumb or len(crumb) > 40:
+            return out
+        modules = "summaryDetail,defaultKeyStatistics,assetProfile,price,financialData"
+        url = f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{quote(ticker, safe='')}"
+        r = s.get(url, params={"modules": modules, "crumb": crumb}, timeout=6)
+        result = (((r.json() or {}).get("quoteSummary") or {}).get("result") or [])
+        if not result:
+            return out
+        d = result[0]
+        sd = d.get("summaryDetail", {}) or {}
+        ks = d.get("defaultKeyStatistics", {}) or {}
+        ap = d.get("assetProfile", {}) or {}
+        pr = d.get("price", {}) or {}
+        fd = d.get("financialData", {}) or {}
+
+        out["name"] = pr.get("longName") or pr.get("shortName")
+        out["sector"] = ap.get("sector")
+        out["industry"] = ap.get("industry")
+        out["description"] = ap.get("longBusinessSummary")
+        out["pe_ratio"] = _raw(sd, "trailingPE")
+        out["forward_pe"] = _raw(sd, "forwardPE")
+        out["market_cap"] = _raw(pr, "marketCap") or _raw(sd, "marketCap")
+        out["beta"] = _raw(sd, "beta") or _raw(ks, "beta")
+        out["eps"] = _raw(ks, "trailingEps")
+        out["dividend_yield"] = _raw(sd, "dividendYield")
+        out["target_mean"] = _raw(fd, "targetMeanPrice")
+        out["recommendation"] = fd.get("recommendationKey")
+    except Exception:
+        pass
     return out
 
 
@@ -201,21 +306,18 @@ def search_ticker():
     query = request.args.get("q", "")
     if len(query) < 1:
         return jsonify({"ok": True, "results": []})
-
     try:
-        url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}&quotesCount=8&newsCount=0"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-        r = requests.get(url, headers=headers, timeout=8)
+        url = f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(query)}&quotesCount=8&newsCount=0"
+        r = requests.get(url, headers=HEADERS, timeout=8)
         data = r.json()
-
         results = []
-        for quote in data.get('quotes', []):
-            if quote.get('quoteType') in ['EQUITY', 'ETF', 'CRYPTOCURRENCY', 'INDEX']:
+        for q in data.get('quotes', []):
+            if q.get('quoteType') in ['EQUITY', 'ETF', 'CRYPTOCURRENCY', 'INDEX', 'FUTURE', 'CURRENCY']:
                 results.append({
-                    "ticker": quote.get('symbol'),
-                    "name": quote.get('shortname', quote.get('longname', 'Neznámý název')),
-                    "exchange": quote.get('exchDisp', 'Trh'),
-                    "type": quote.get('quoteType')
+                    "ticker": q.get('symbol'),
+                    "name": q.get('shortname', q.get('longname', 'Neznámý název')),
+                    "exchange": q.get('exchDisp', 'Trh'),
+                    "type": q.get('quoteType')
                 })
         return jsonify({"ok": True, "results": results})
     except Exception as e:
@@ -230,65 +332,43 @@ def get_watchlist():
 
     tickers = [t.strip().upper() for t in tickers_param.split(",") if t.strip()]
     results = []
-
     for ticker in tickers:
         try:
-            stock = yf.Ticker(ticker)
-            fi = stock.fast_info
-
-            price = getattr(fi, 'last_price', None)
+            res = yahoo_chart(ticker, "1d", "1d")
+            meta = res.get("meta", {})
+            price = meta.get("regularMarketPrice")
             if price is None:
                 continue
-
-            prev_close = getattr(fi, 'previous_close', price)
-            change_pct = ((price - prev_close) / prev_close) * 100 if prev_close else 0
-
+            prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
+            change_pct = ((price - prev) / prev) * 100 if prev else 0
             results.append({
                 "ticker": ticker,
-                "name": ticker,
+                "name": meta.get("shortName") or meta.get("longName") or ticker,
                 "price": _round(price, 3),
-                "prev_close": _round(prev_close, 3),
+                "prev_close": _round(prev, 3),
                 "change_pct": _round(change_pct, 2, 0),
-                "currency": getattr(fi, 'currency', 'USD')
+                "currency": meta.get("currency", "USD")
             })
         except Exception:
             continue
-
     return jsonify({"ok": True, "results": results})
 
 
 @app.route("/api/news/<path:ticker>")
 def get_news(ticker):
     try:
-        stock = yf.Ticker(ticker.upper())
-        raw = getattr(stock, "news", []) or []
+        url = f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(ticker.upper())}&quotesCount=0&newsCount=8"
+        r = requests.get(url, headers=HEADERS, timeout=8)
+        data = r.json()
         items = []
-        for n in raw[:8]:
-            # yfinance vrací buď ploché dicty, nebo zanořené pod "content"
-            content = n.get("content", n)
-            title = content.get("title") or n.get("title")
-            if not title:
+        for n in data.get("news", [])[:8]:
+            if not n.get("title"):
                 continue
-            link = (
-                n.get("link")
-                or (content.get("clickThroughUrl") or {}).get("url")
-                or (content.get("canonicalUrl") or {}).get("url")
-                or ""
-            )
-            publisher = (
-                n.get("publisher")
-                or (content.get("provider") or {}).get("displayName")
-                or "Zdroj"
-            )
-            ts = n.get("providerPublishTime")
-            if not ts:
-                pub = content.get("pubDate") or content.get("displayTime")
-                ts = pub  # ISO string fallback
             items.append({
-                "title": title,
-                "link": link,
-                "publisher": publisher,
-                "time": ts
+                "title": n.get("title"),
+                "link": n.get("link", ""),
+                "publisher": n.get("publisher", "Zdroj"),
+                "time": n.get("providerPublishTime")
             })
         return jsonify({"ok": True, "results": items})
     except Exception as e:
@@ -297,41 +377,50 @@ def get_news(ticker):
 
 @app.route("/api/stock/<path:ticker>")
 def get_stock_detail(ticker):
+    ticker = ticker.upper()
     period = request.args.get("period", "6mo")
 
-    intraday_map = {
-        "1d": ("1d", "5m"),
-        "5d": ("5d", "15m"),
+    range_map = {
+        "1d": ("1d", "5m"), "5d": ("5d", "15m"), "1mo": ("1mo", "1d"),
+        "3mo": ("3mo", "1d"), "6mo": ("6mo", "1d"), "1y": ("1y", "1d"),
+        "max": ("max", "1wk"),
     }
-    hist_period, hist_interval = intraday_map.get(period, (period, "1d"))
+    rng, interval = range_map.get(period, ("6mo", "1d"))
     is_intraday = period in ("1d", "5d")
 
     try:
-        stock = yf.Ticker(ticker.upper())
-        fi = stock.fast_info
-        info = stock.info
+        res = yahoo_chart(ticker, rng, interval)
+        meta = res.get("meta", {})
+        ts = res.get("timestamp") or []
+        quote_node = ((res.get("indicators") or {}).get("quote") or [{}])[0]
+        opens = quote_node.get("open") or []
+        highs = quote_node.get("high") or []
+        lows = quote_node.get("low") or []
+        closes = quote_node.get("close") or []
+        vols = quote_node.get("volume") or []
 
-        hist = stock.history(period=hist_period, interval=hist_interval)
-        if hist.empty:
-            return jsonify({"ok": False, "error": f"Nenalezena historická data pro {ticker}."})
-
-        # Graf: OHLC + objem
+        gmt = meta.get("gmtoffset", 0) or 0
         chart_data = []
         closes_for_sma = []
-        for date, row in hist.iterrows():
-            label = date.strftime("%d.%m %H:%M") if is_intraday else date.strftime("%Y-%m-%d")
-            c = _round(row["Close"], 4)
-            closes_for_sma.append(c if c is not None else 0)
+        for i, t in enumerate(ts):
+            c = closes[i] if i < len(closes) else None
+            if c is None:
+                continue
+            dt = datetime.fromtimestamp(t + gmt, tz=timezone.utc)
+            label = dt.strftime("%d.%m %H:%M") if is_intraday else dt.strftime("%Y-%m-%d")
+            closes_for_sma.append(round(c, 4))
             chart_data.append({
                 "x": label,
-                "o": _round(row["Open"], 4),
-                "h": _round(row["High"], 4),
-                "l": _round(row["Low"], 4),
-                "c": c,
-                "v": _clean(int(row["Volume"]), 0) if "Volume" in row else 0
+                "o": _round(opens[i] if i < len(opens) else c, 4),
+                "h": _round(highs[i] if i < len(highs) else c, 4),
+                "l": _round(lows[i] if i < len(lows) else c, 4),
+                "c": round(c, 4),
+                "v": int(vols[i]) if i < len(vols) and vols[i] is not None else 0
             })
 
-        # MA overlay jen pro denní grafy (u intraday nedává smysl)
+        if not chart_data:
+            return jsonify({"ok": False, "error": f"Nenalezena historická data pro {ticker}."})
+
         if not is_intraday:
             sma20 = sma_overlay(closes_for_sma, 20)
             sma50 = sma_overlay(closes_for_sma, 50)
@@ -339,67 +428,57 @@ def get_stock_detail(ticker):
         else:
             sma20 = sma50 = sma200 = [None] * len(closes_for_sma)
 
-        # Denní historie pro indikátory (vždy ~1 rok, nezávisle na zvoleném období)
+        # Indikátory z 1 roku denních dat
         try:
-            daily = stock.history(period="1y", interval="1d")
-            indicators = compute_indicators(daily)
+            daily = yahoo_chart(ticker, "1y", "1d")
+            dq = ((daily.get("indicators") or {}).get("quote") or [{}])[0]
+            indicators = compute_indicators(dq.get("close") or [], dq.get("volume") or [])
         except Exception:
-            indicators = compute_indicators(hist)
+            indicators = compute_indicators(closes_for_sma, vols)
 
-        price = _round(getattr(fi, 'last_price', 0), 3) or 0
-        prev_close = _round(getattr(fi, 'previous_close', price), 3) or price
-        change_pct = ((price - prev_close) / prev_close) * 100 if prev_close else 0
-
-        high52 = _round(getattr(fi, 'year_high', price), 3) or price
-        low52 = _round(getattr(fi, 'year_low', price), 3) or price
+        price = _round(meta.get("regularMarketPrice", closes_for_sma[-1]), 3)
+        prev = _round(meta.get("previousClose") or meta.get("chartPreviousClose") or price, 3)
+        change_pct = ((price - prev) / prev) * 100 if prev else 0
+        high52 = _round(meta.get("fiftyTwoWeekHigh", price), 3) or price
+        low52 = _round(meta.get("fiftyTwoWeekLow", price), 3) or price
 
         score, score_label, score_comps = signal_score(price, indicators, high52, low52)
 
-        name = info.get("shortName") or info.get("longName") or ticker.upper()
-
-        # Dividendový výnos: nejspolehlivěji z roční dividendy a ceny.
-        # (info["dividendYield"] má napříč verzemi yfinance nejednotný formát.)
-        div = None
-        rate = _clean(info.get("trailingAnnualDividendRate"), None) or _clean(info.get("dividendRate"), None)
-        if rate and price:
-            div = round(rate / price * 100, 2)
-        else:
-            dy = _clean(info.get("dividendYield"), None)
-            if dy is not None:
-                # zlomek (0.0044 -> 0.44 %) vs. už procenta (0.44 -> 0.44 %)
-                div = round(dy * 100 if dy < 1 else dy, 2)
+        # Fundamenty (best-effort)
+        f = fetch_fundamentals(ticker)
+        div = _clean(f.get("dividend_yield"), None)
+        if div is not None:
+            div = round(div * 100 if div < 1 else div, 2)
 
         return jsonify({
             "ok": True,
-            "ticker": ticker.upper(),
-            "name": name,
+            "ticker": ticker,
+            "name": f.get("name") or meta.get("shortName") or meta.get("longName") or ticker,
             "price": price,
-            "prev_close": prev_close,
+            "prev_close": prev,
             "change_pct": _round(change_pct, 2, 0),
-            "currency": getattr(fi, 'currency', 'USD'),
-            "sector": info.get("sector", "Trh"),
-            "industry": info.get("industry", "Obecné"),
-            "description": info.get("longBusinessSummary", "Popis není k dispozici."),
-            "pe_ratio": _clean(info.get("trailingPE"), "N/A"),
-            "forward_pe": _clean(info.get("forwardPE"), "N/A"),
-            "market_cap": _clean(getattr(fi, 'market_cap', None), info.get("marketCap", "N/A")),
+            "currency": meta.get("currency", "USD"),
+            "sector": f.get("sector") or meta.get("exchangeName", "Trh"),
+            "industry": f.get("industry") or meta.get("instrumentType", "Obecné"),
+            "description": f.get("description") or "Popis není k dispozici.",
+            "pe_ratio": _clean(f.get("pe_ratio"), "N/A"),
+            "forward_pe": _clean(f.get("forward_pe"), "N/A"),
+            "market_cap": _clean(f.get("market_cap"), "N/A"),
             "high52": high52,
             "low52": low52,
-            "open": _round(getattr(fi, 'open', info.get("open")), 3),
-            "day_high": _round(getattr(fi, 'day_high', info.get("dayHigh")), 3),
-            "day_low": _round(getattr(fi, 'day_low', info.get("dayLow")), 3),
-            "beta": _round(info.get("beta"), 2),
-            "eps": _round(info.get("trailingEps"), 2),
+            "open": _round(opens[-1] if opens else None, 3),
+            "day_high": _round(meta.get("regularMarketDayHigh"), 3),
+            "day_low": _round(meta.get("regularMarketDayLow"), 3),
+            "beta": _round(f.get("beta"), 2),
+            "eps": _round(f.get("eps"), 2),
             "dividend_yield": div,
-            "earnings_ts": _clean(info.get("earningsTimestamp"), None),
-            "target_mean": _round(info.get("targetMeanPrice"), 2),
-            "recommendation": info.get("recommendationKey", None),
-            # Technický engine
+            "earnings_ts": None,
+            "target_mean": _round(f.get("target_mean"), 2),
+            "recommendation": f.get("recommendation"),
             "indicators": indicators,
             "score": score,
             "score_label": score_label,
             "score_components": score_comps,
-            # Graf
             "chart": chart_data,
             "sma20": sma20,
             "sma50": sma50,
@@ -409,6 +488,6 @@ def get_stock_detail(ticker):
         return jsonify({"ok": False, "error": f"Nepodařilo se stáhnout detail: {e}"})
 
 
-# Lokální testování: python api/index.py -> běží na http://127.0.0.1:5001
+# Lokální test: python api/index.py -> http://127.0.0.1:5001
 if __name__ == "__main__":
     app.run(debug=True, port=5001, host="127.0.0.1")
