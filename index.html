@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MY STOCKS – Trading Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;800&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<style>
+:root {
+  --bg: #050507; --bg-glass: rgba(18, 20, 28, 0.6);
+  --accent: #FF7A00; --accent-glow: rgba(255, 122, 0, 0.4);
+  --up: #00E676; --up-glow: rgba(0, 230, 118, 0.2);
+  --down: #FF3D00; --down-glow: rgba(255, 61, 0, 0.2);
+  --border: rgba(255, 255, 255, 0.08); --border-accent: rgba(255, 122, 0, 0.3);
+  --text: #ffffff; --text2: #9ba1b0;
+  --fh: 'Space Grotesk', sans-serif; --fb: 'Outfit', sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100vh;overflow-x:hidden;}
+body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50vw;background:radial-gradient(circle, var(--accent-glow) 0%, transparent 60%);filter:blur(100px);z-index:-1;opacity:0.25;pointer-events:none;}
+
+.container{max-width:1150px;margin:0 auto;padding:2rem;}
+
+.navbar {display:flex; justify-content:space-between; align-items:center; margin-bottom: 2.5rem; position: relative; z-index: 50;}
+.brand {display:flex; align-items:center; gap:12px; cursor:pointer;}
+.brand-icon {width:45px; height:45px; background:var(--accent); border-radius:10px; display:flex; align-items:center; justify-content:center; color:#000; font-size:24px; box-shadow: 0 0 15px var(--accent-glow);}
+.brand-text {font-family:var(--fh); font-size:26px; font-weight:800; letter-spacing:1px;}
+.brand-text span {color:var(--accent);}
+
+/* LIVE SEARCH */
+.search-box {position:relative; width: 450px;}
+.search-box input {width:100%; padding:14px 20px 14px 45px; background:var(--bg-glass); backdrop-filter: blur(10px); border:1px solid var(--border); border-radius:30px; color:var(--text); font-family:var(--fb); font-size:16px; outline:none; transition:all 0.3s;}
+.search-box input:focus {border-color:var(--accent); box-shadow: 0 0 15px var(--accent-glow); border-bottom-left-radius: 15px; border-bottom-right-radius: 15px;}
+.search-box i.ti-search {position:absolute; left:18px; top:15px; color:var(--text2); font-size:18px;}
+.search-dropdown {position: absolute; top: 100%; left: 0; right: 0; background: #12141c; border: 1px solid var(--accent); border-top: none; border-radius: 0 0 15px 15px; overflow: hidden; display: none; flex-direction: column; box-shadow: 0 15px 30px rgba(0,0,0,0.5);}
+.search-item {padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.2s;}
+.search-item:last-child {border-bottom: none;}
+.search-item:hover {background: rgba(255, 122, 0, 0.1);}
+.si-ticker {font-family: var(--fh); font-weight: bold; color: var(--accent); font-size: 15px;}
+
+.settings-btn {background:var(--bg-glass); border:1px solid var(--border); padding:10px 15px; border-radius:20px; color:var(--text2); cursor:pointer; display:flex; align-items:center; gap:8px; transition:all 0.2s;}
+.settings-btn:hover {color:var(--accent); border-color:var(--accent);}
+.api-panel {display:none; background:var(--bg-glass); border:1px solid var(--accent); padding:1.5rem; border-radius:15px; margin-bottom:2rem; gap:10px; align-items:center;}
+.api-panel input, .api-panel select {padding:10px; background:rgba(0,0,0,0.5); border:1px solid var(--border); border-radius:8px; color:white; outline:none; font-family:var(--fb);}
+.api-panel input {flex:1;}
+.btn-save {padding:10px 20px; background:var(--accent); color:#000; border:none; border-radius:8px; font-weight:700; cursor:pointer;}
+
+/* AI DASHBOARD BRIEFING & PICKS */
+.ai-dashboard-box {background: linear-gradient(145deg, rgba(255,122,0,0.05) 0%, rgba(20,22,30,0.8) 100%); border:1px solid var(--border-accent); border-radius:20px; padding:2rem; margin-bottom:2.5rem; position:relative; overflow:hidden;}
+.ai-dashboard-box::before {content:''; position:absolute; top:0; left:0; width:4px; height:100%; background:var(--accent); box-shadow:0 0 15px var(--accent);}
+.ai-brief-header {display:flex; align-items:center; gap:10px; margin-bottom:15px; font-family:var(--fh); font-size:20px; font-weight:700;}
+.ai-brief-header i {color:var(--accent); font-size:24px;}
+.ai-brief-content {font-size:16px; color:var(--text); line-height:1.7; margin-bottom:20px;}
+.ai-picks-grid {display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:15px;}
+
+/* KLIKACÍ NÁKUPNÍ POLÍČKA */
+.pick-card {background: rgba(0, 230, 118, 0.05); border: 1px solid rgba(0, 230, 118, 0.3); border-radius: 12px; padding: 15px; cursor: pointer; transition: all 0.3s; display:flex; flex-direction: column; gap:8px;}
+.pick-card:hover {transform: translateY(-3px); border-color: var(--up); box-shadow: 0 5px 20px var(--up-glow); background: rgba(0, 230, 118, 0.1);}
+.pick-top {display:flex; justify-content:space-between; align-items:center;}
+.pick-ticker {font-family:var(--fh); font-weight:bold; font-size:18px; color:var(--text);}
+.pick-badge {background:var(--up); color:#000; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:4px; text-transform:uppercase;}
+.pick-reason {font-size:13px; color:var(--text2); line-height:1.4;}
+
+.section-title {font-family:var(--fh); font-size:20px; margin-bottom:1.5rem; color:var(--text2); font-weight:600; display:flex; justify-content:space-between; align-items:center;}
+.live-badge {font-size:11px; color:var(--up); font-family:var(--fb); background:var(--up-glow); padding:3px 8px; border-radius:10px; border:1px solid var(--up); animation: pulse 2s infinite;}
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; box-shadow: 0 0 10px var(--up); } 100% { opacity: 1; } }
+
+/* PORTFOLIO CARDS */
+.grid-watchlist {display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:20px; margin-bottom:3rem;}
+.stock-card {background:var(--bg-glass); border:1px solid var(--border); border-radius:20px; padding:1.5rem; cursor:pointer; transition:all 0.2s;}
+.stock-card:hover {transform:translateY(-5px); border-color:var(--accent); box-shadow: 0 10px 25px var(--accent-glow);}
+.sc-ticker {font-family:var(--fh); font-weight:700; font-size:22px; color:var(--text);}
+.sc-price {font-family:var(--fh); font-size:28px; font-weight:600; margin-top:10px;}
+.sc-change {font-size:14px; font-weight:600; display:flex; align-items:center; gap:4px; margin-top:5px;}
+.up {color:var(--up);} .down {color:var(--down);}
+
+/* DETAIL VIEW */
+#detail-view {display:none; background:var(--bg-glass); border:1px solid var(--border); border-radius:25px; padding:2.5rem; animation:slideUp 0.4s ease; position: relative; z-index: 10;}
+@keyframes slideUp {from{opacity:0; transform:translateY(20px)} to{opacity:1; transform:translateY(0)}}
+
+.detail-header {display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem;}
+.dh-left h1 {font-family:var(--fh); font-size:42px; line-height:1; margin-bottom:5px;}
+.dh-right {text-align:right;}
+.dh-price {font-family:var(--fh); font-size:48px; font-weight:700; line-height:1;}
+.dh-change {font-size:20px; font-weight:600; margin-top:5px;}
+
+/* CHART CONTROLS (SVÍČKY & ČAS) */
+.chart-controls {display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; background:rgba(0,0,0,0.3); padding:8px 15px; border-radius:12px; border:1px solid var(--border);}
+.btn-group {display:flex; gap:5px;}
+.c-btn {background:transparent; border:1px solid transparent; color:var(--text2); padding:5px 12px; border-radius:8px; font-family:var(--fb); font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s;}
+.c-btn:hover {color:var(--text);}
+.c-btn.active {background:var(--bg2); color:var(--accent); border:1px solid var(--border-accent);}
+
+.detail-body {display:grid; grid-template-columns: 2fr 1fr; gap:30px;}
+.chart-container {background:rgba(0,0,0,0.3); border-radius:15px; padding:15px 15px 0 15px; border:1px solid var(--border);}
+.metrics-grid {display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;}
+.metric-box {background:rgba(255,255,255,0.03); padding:15px; border-radius:12px; border:1px solid var(--border);}
+.metric-lbl {font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;}
+.metric-val {font-family:var(--fh); font-size:18px; font-weight:600;}
+
+/* AI ANALÝZA BOX V DETAILU */
+.ai-box {padding:25px; background:rgba(255,122,0,0.05); border:1px solid var(--border-accent); border-radius:15px; font-size:15px; line-height:1.8; position:relative; box-shadow: 0 10px 30px rgba(0,0,0,0.2);}
+.ai-box::before {content:''; position:absolute; top:0; left:0; width:4px; height:100%; background:var(--accent); border-radius:15px 0 0 15px;}
+.ai-verdict {display:inline-block; padding:5px 12px; border-radius:8px; font-family:var(--fh); font-weight:bold; margin-bottom:10px;}
+.v-buy {background:var(--up-glow); color:var(--up); border:1px solid var(--up);}
+.v-sell {background:var(--down-glow); color:var(--down); border:1px solid var(--down);}
+.v-hold {background:rgba(255, 196, 0, 0.1); color:#FFC400; border:1px solid #FFC400;}
+.ai-p {margin-bottom:10px;}
+.ai-p b {color:var(--accent); font-weight:600;}
+
+.action-bar {margin-top:2rem; display:flex; gap:15px;}
+.btn-outline {padding:12px 25px; background:transparent; border:1px solid var(--text2); color:var(--text); border-radius:30px; cursor:pointer; transition:all 0.2s;}
+.btn-outline:hover {border-color:var(--accent); color:var(--accent);}
+
+/* PORTFOLIO P/L */
+.sc-pl {font-size:12px; margin-top:6px; color:var(--text2); border-top:1px solid var(--border); padding-top:6px; display:flex; justify-content:space-between;}
+.pl-val {font-weight:700; font-family:var(--fh);}
+.pl-modal {display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); align-items:center; justify-content:center;}
+.pl-modal.open {display:flex;}
+.pl-modal-box {background:#12141c; border:1px solid var(--accent); border-radius:20px; padding:2rem; width:380px; max-width:90vw; position:relative;}
+.pl-modal-box h3 {font-family:var(--fh); font-size:20px; margin-bottom:1.5rem;}
+.pl-field {display:flex; flex-direction:column; gap:6px; margin-bottom:1rem;}
+.pl-field label {font-size:12px; color:var(--text2); text-transform:uppercase; letter-spacing:1px;}
+.pl-field input {padding:10px 14px; background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:10px; color:var(--text); font-family:var(--fb); font-size:16px; outline:none;}
+.pl-field input:focus {border-color:var(--accent);}
+.pl-modal-btns {display:flex; gap:10px; margin-top:1.5rem;}
+.btn-primary {padding:10px 20px; background:var(--accent); color:#000; border:none; border-radius:10px; font-weight:700; cursor:pointer; flex:1;}
+.btn-ghost {padding:10px 20px; background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:10px; cursor:pointer; flex:1;}
+.detail-pl-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:15px; margin-bottom:15px;}
+.detail-pl-row {display:flex; justify-content:space-between; font-size:14px; margin-bottom:8px;}
+.detail-pl-row:last-child {margin-bottom:0; padding-top:8px; border-top:1px solid var(--border); font-weight:700;}
+
+/* PERIOD PERFORMANCE BADGE */
+.period-perf {display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; font-family:var(--fh); font-size:15px; font-weight:700; margin-left:12px; vertical-align:middle; transition:all 0.4s ease;}
+.period-perf.up {background:var(--up-glow); color:var(--up); border:1px solid rgba(0,230,118,0.3);}
+.period-perf.down {background:var(--down-glow); color:var(--down); border:1px solid rgba(255,61,0,0.3);}
+.period-label {font-size:11px; color:var(--text2); margin-left:4px; font-weight:400; font-family:var(--fb);}
+
+/* DASHBOARD PORTFOLIO HODNOCENÍ */
+.port-eval-box {background:linear-gradient(145deg, rgba(18,20,30,0.9) 0%, rgba(12,14,22,0.95) 100%); border:1px solid var(--border-accent); border-radius:20px; padding:2rem; margin-bottom:2.5rem; position:relative; overflow:hidden;}
+.port-eval-box::before {content:''; position:absolute; top:0; left:0; width:4px; height:100%; background:linear-gradient(180deg, var(--accent), var(--up)); box-shadow:0 0 15px var(--accent);}
+.port-eval-header {display:flex; align-items:center; gap:10px; margin-bottom:1.2rem; font-family:var(--fh); font-size:20px; font-weight:700;}
+.port-eval-header i {color:var(--accent); font-size:24px;}
+.port-eval-grid {display:grid; grid-template-columns:1fr 1fr; gap:15px;}
+.eval-col-header {font-size:11px; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:6px;}
+.eval-sell-col .eval-col-header {color:var(--down);}
+.eval-buy-col .eval-col-header {color:var(--up);}
+.eval-ticker-pill {display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-radius:10px; margin-bottom:8px; cursor:pointer; transition:all 0.2s; font-size:14px;}
+.eval-ticker-pill:hover {transform:translateX(3px);}
+.eval-sell-col .eval-ticker-pill {background:rgba(255,61,0,0.07); border:1px solid rgba(255,61,0,0.2);}
+.eval-sell-col .eval-ticker-pill:hover {background:rgba(255,61,0,0.14); border-color:var(--down);}
+.eval-buy-col .eval-ticker-pill {background:rgba(0,230,118,0.06); border:1px solid rgba(0,230,118,0.2);}
+.eval-buy-col .eval-ticker-pill:hover {background:rgba(0,230,118,0.12); border-color:var(--up);}
+.eval-ticker-name {font-family:var(--fh); font-weight:700;}
+.eval-ticker-reason {font-size:12px; color:var(--text2); margin-top:2px; line-height:1.3;}
+.eval-ticker-badge {font-size:11px; font-weight:700; white-space:nowrap; padding:3px 8px; border-radius:6px;}
+.eval-sell-col .eval-ticker-badge {color:var(--down); background:rgba(255,61,0,0.15);}
+.eval-buy-col .eval-ticker-badge {color:var(--up); background:rgba(0,230,118,0.1);}
+.port-eval-loading {color:var(--text2); display:flex; align-items:center; gap:10px; font-size:15px; padding:10px 0;}
+.port-eval-summary {font-size:14px; color:var(--text2); line-height:1.6; margin-bottom:1.2rem; padding-bottom:1.2rem; border-bottom:1px solid var(--border);}
+
+@media (max-width: 768px) {
+  .navbar {flex-wrap:wrap; gap:12px;}
+  .search-box {width:100%; order:3;}
+  .brand {order:1;}
+  .settings-btn {order:2;}
+  .detail-body {grid-template-columns:1fr;}
+  .grid-watchlist {grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));}
+  .ai-picks-grid {grid-template-columns:1fr;}
+  .container {padding:1rem;}
+  .dh-left h1 {font-size:28px;}
+  .dh-price {font-size:32px;}
+  .search-dropdown {position:fixed; left:1rem; right:1rem; top:auto; max-height:60vh; overflow-y:auto;}
+}
+@media (max-width: 480px) {
+  .metrics-grid {grid-template-columns:1fr 1fr;}
+  .action-bar {flex-wrap:wrap;}
+  .chart-controls {flex-direction:column; gap:8px; align-items:stretch;}
+  .btn-group {justify-content:center;}
+}
+
+/* ============ PORTFOLIO PŘEHLED (SUMMARY BAR) ============ */
+.port-summary {display:grid; grid-template-columns:1.4fr 1fr; gap:20px; margin-bottom:2.5rem; background:linear-gradient(145deg, rgba(255,122,0,0.05), rgba(20,22,30,0.85)); border:1px solid var(--border-accent); border-radius:20px; padding:1.8rem;}
+.ps-left {display:flex; flex-direction:column; gap:18px;}
+.ps-stats {display:grid; grid-template-columns:repeat(2,1fr); gap:14px;}
+.ps-stat {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:14px; padding:14px 16px;}
+.ps-stat-lbl {font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:6px;}
+.ps-stat-val {font-family:var(--fh); font-size:24px; font-weight:700; margin-top:6px;}
+.ps-stat-sub {font-size:12px; margin-top:3px; font-weight:600;}
+.ps-movers {display:flex; gap:10px; flex-wrap:wrap;}
+.mover-chip {display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:12px; cursor:pointer; font-size:13px; border:1px solid var(--border); background:rgba(255,255,255,0.03); transition:all .2s;}
+.mover-chip:hover {transform:translateY(-2px); border-color:var(--accent);}
+.mover-chip b {font-family:var(--fh);}
+.ps-right {display:flex; flex-direction:column; align-items:center; justify-content:center; border-left:1px solid var(--border); padding-left:20px;}
+.ps-right h4 {font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px; align-self:flex-start;}
+.ps-toolbar {display:flex; gap:10px; margin-bottom:1.2rem; flex-wrap:wrap;}
+.tool-btn {background:var(--bg-glass); border:1px solid var(--border); padding:8px 14px; border-radius:12px; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; display:flex; align-items:center; gap:6px; transition:all .2s;}
+.tool-btn:hover {color:var(--accent); border-color:var(--accent);}
+
+/* ============ TECHNICKÝ SIGNAL PANEL ============ */
+.signal-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-bottom:20px;}
+.signal-head {display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+.signal-title {font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text2); display:flex; align-items:center; gap:8px;}
+.signal-title i {color:var(--accent);}
+.signal-verdict {font-family:var(--fh); font-weight:700; font-size:14px; padding:5px 12px; border-radius:8px;}
+.signal-gauge {position:relative; height:10px; border-radius:6px; background:linear-gradient(90deg, var(--down) 0%, #FFC400 50%, var(--up) 100%); margin:8px 0 6px;}
+.signal-needle {position:absolute; top:-5px; width:4px; height:20px; background:#fff; border-radius:2px; box-shadow:0 0 8px rgba(255,255,255,0.8); transition:left .5s ease;}
+.signal-scale {display:flex; justify-content:space-between; font-size:10px; color:var(--text2); margin-bottom:14px;}
+.signal-score-num {font-family:var(--fh); font-size:32px; font-weight:800; line-height:1;}
+.signal-comps {display:flex; flex-direction:column; gap:6px; margin-top:12px;}
+.signal-comp {display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text2);}
+.signal-comp i {font-size:15px;}
+.sc-bull {color:var(--up);} .sc-bear {color:var(--down);} .sc-neutral {color:#FFC400;}
+
+/* ============ NEWS FEED ============ */
+.news-box {margin-top:20px;}
+.news-item {display:block; padding:12px 14px; border:1px solid var(--border); border-radius:12px; margin-bottom:8px; text-decoration:none; color:var(--text); transition:all .2s; background:rgba(255,255,255,0.02);}
+.news-item:hover {border-color:var(--accent); transform:translateX(3px);}
+.news-title {font-size:14px; font-weight:500; line-height:1.4; margin-bottom:5px;}
+.news-meta {font-size:11px; color:var(--text2); display:flex; gap:8px; align-items:center;}
+
+/* ============ AI CHAT ============ */
+.chat-box {margin-top:20px; border:1px solid var(--border-accent); border-radius:15px; overflow:hidden; background:rgba(255,122,0,0.03);}
+.chat-head {padding:12px 16px; font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text2); display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border);}
+.chat-head i {color:var(--accent);}
+.chat-log {max-height:240px; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px;}
+.chat-msg {padding:10px 14px; border-radius:12px; font-size:14px; line-height:1.5; max-width:88%;}
+.chat-user {align-self:flex-end; background:var(--accent); color:#000; border-bottom-right-radius:3px;}
+.chat-ai {align-self:flex-start; background:rgba(255,255,255,0.05); border:1px solid var(--border); border-bottom-left-radius:3px;}
+.chat-input-row {display:flex; gap:8px; padding:12px; border-top:1px solid var(--border);}
+.chat-input-row input {flex:1; padding:10px 14px; background:rgba(0,0,0,0.4); border:1px solid var(--border); border-radius:10px; color:var(--text); outline:none; font-family:var(--fb);}
+.chat-input-row input:focus {border-color:var(--accent);}
+.chat-send {background:var(--accent); color:#000; border:none; border-radius:10px; padding:0 16px; cursor:pointer; font-weight:700;}
+.chat-suggest {display:flex; gap:6px; flex-wrap:wrap; padding:0 12px 12px;}
+.chat-chip {font-size:12px; padding:5px 10px; border:1px solid var(--border); border-radius:20px; color:var(--text2); cursor:pointer; transition:all .2s;}
+.chat-chip:hover {border-color:var(--accent); color:var(--accent);}
+
+/* ============ ALERT MODAL & TOAST ============ */
+.alert-dir {display:flex; gap:8px; margin-bottom:1rem;}
+.alert-dir button {flex:1; padding:10px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text2); cursor:pointer; font-family:var(--fb); font-weight:600;}
+.alert-dir button.active {border-color:var(--accent); color:var(--accent); background:rgba(255,122,0,0.1);}
+.alert-list {margin-top:1rem; display:flex; flex-direction:column; gap:8px; max-height:160px; overflow-y:auto;}
+.alert-row {display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:10px; font-size:13px;}
+.alert-row button {background:none; border:none; color:var(--down); cursor:pointer; font-size:16px;}
+.toast-wrap {position:fixed; top:20px; right:20px; z-index:2000; display:flex; flex-direction:column; gap:10px;}
+.toast {background:#12141c; border:1px solid var(--accent); border-left:4px solid var(--accent); border-radius:12px; padding:14px 18px; min-width:260px; box-shadow:0 10px 30px rgba(0,0,0,0.5); animation:slideIn .3s ease; display:flex; align-items:center; gap:12px;}
+@keyframes slideIn {from{opacity:0; transform:translateX(40px);} to{opacity:1; transform:translateX(0);}}
+.toast i {font-size:22px; color:var(--accent);}
+.toast.up {border-color:var(--up); border-left-color:var(--up);} .toast.up i {color:var(--up);}
+.toast.down {border-color:var(--down); border-left-color:var(--down);} .toast.down i {color:var(--down);}
+.ma-legend {display:flex; gap:12px; font-size:11px; margin:6px 2px 0; color:var(--text2);}
+.ma-legend span {display:flex; align-items:center; gap:5px;}
+.ma-dot {width:10px; height:3px; border-radius:2px; display:inline-block;}
+@media (max-width:768px){ .port-summary{grid-template-columns:1fr;} .ps-right{border-left:none; border-top:1px solid var(--border); padding-left:0; padding-top:16px;} }
+</style>
+</head>
+<body>
+
+<div class="container">
+  
+  <div class="navbar">
+    <div class="brand" onclick="closeDetail()">
+      <div class="brand-icon"><i class="ti ti-activity-heartbeat"></i></div>
+      <div class="brand-text">MY <span>STOCKS</span></div>
+    </div>
+    
+    <div class="search-box">
+      <i class="ti ti-search"></i>
+      <input type="text" id="searchInput" placeholder="Hledat ticker (např. NVDA, CSG.PR, BTC-USD)..." autocomplete="off">
+      <div id="searchDropdown" class="search-dropdown"></div>
+    </div>
+
+    <button class="settings-btn" onclick="toggleApiPanel()">
+      <i class="ti ti-settings"></i> Nastavení AI
+    </button>
+  </div>
+
+  <div class="api-panel" id="apiPanel">
+    <select id="api-provider"><option value="groq">Groq AI (Zdarma)</option><option value="openai">OpenAI</option></select>
+    <input type="password" id="api-key" placeholder="Vlož svůj API klíč...">
+    <button class="btn-save" onclick="saveApi()">Uložit klíč</button>
+  </div>
+
+  <!-- PORTFOLIO P/L MODAL -->
+  <div class="pl-modal" id="plModal">
+    <div class="pl-modal-box">
+      <h3><i class="ti ti-coins" style="color:var(--accent)"></i> Zadat pozici: <span id="plModal-ticker"></span></h3>
+      <div class="pl-field">
+        <label>Počet akcií / kusů</label>
+        <input type="number" id="plModal-qty" placeholder="např. 10" min="0" step="any">
+      </div>
+      <div class="pl-field">
+        <label>Průměrná nákupní cena</label>
+        <input type="number" id="plModal-price" placeholder="např. 450.00" min="0" step="any">
+      </div>
+      <div class="pl-modal-btns">
+        <button class="btn-ghost" onclick="closePlModal()">Zrušit</button>
+        <button class="btn-primary" onclick="savePlPosition()">Uložit pozici</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOASTY (upozornění) -->
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <!-- ALERT MODAL -->
+  <div class="pl-modal" id="alertModal">
+    <div class="pl-modal-box">
+      <h3><i class="ti ti-bell" style="color:var(--accent)"></i> Upozornění: <span id="alertModal-ticker"></span></h3>
+      <div class="alert-dir">
+        <button id="alert-above" class="active" onclick="setAlertDir('above')"><i class="ti ti-arrow-up"></i> Nad cenou</button>
+        <button id="alert-below" onclick="setAlertDir('below')"><i class="ti ti-arrow-down"></i> Pod cenou</button>
+      </div>
+      <div class="pl-field">
+        <label>Cílová cena</label>
+        <input type="number" id="alertModal-price" placeholder="např. 500" min="0" step="any">
+      </div>
+      <div class="alert-list" id="alertModal-list"></div>
+      <div class="pl-modal-btns">
+        <button class="btn-ghost" onclick="closeAlertModal()">Zavřít</button>
+        <button class="btn-primary" onclick="saveAlert()">Přidat upozornění</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard">
+    <!-- PORTFOLIO PŘEHLED -->
+    <div class="ps-toolbar" id="ps-toolbar" style="display:none;">
+      <button class="tool-btn" onclick="requestNotif()"><i class="ti ti-bell"></i> Povolit notifikace</button>
+      <button class="tool-btn" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
+      <button class="tool-btn" onclick="loadWatchlist()"><i class="ti ti-refresh"></i> Obnovit</button>
+    </div>
+    <div class="port-summary" id="port-summary" style="display:none;">
+      <div class="ps-left">
+        <div class="ps-stats">
+          <div class="ps-stat">
+            <div class="ps-stat-lbl"><i class="ti ti-wallet"></i> Hodnota portfolia</div>
+            <div class="ps-stat-val" id="ps-value">--</div>
+            <div class="ps-stat-sub" id="ps-today">--</div>
+          </div>
+          <div class="ps-stat">
+            <div class="ps-stat-lbl"><i class="ti ti-trending-up"></i> Celkový zisk / ztráta</div>
+            <div class="ps-stat-val" id="ps-pl">--</div>
+            <div class="ps-stat-sub" id="ps-pl-pct">--</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Dnešní pohyby</div>
+          <div class="ps-movers" id="ps-movers"></div>
+        </div>
+      </div>
+      <div class="ps-right">
+        <h4>Rozložení pozic</h4>
+        <div id="allocChart" style="width:100%; min-height:200px;"></div>
+      </div>
+    </div>
+
+    <!-- PORTFOLIO HODNOCENÍ: CO PRODAT / PŘIKOUPIT -->
+    <div class="port-eval-box" id="port-eval-box" style="display:none;">
+      <div class="port-eval-header"><i class="ti ti-chart-arrows-vertical"></i> Hodnocení Portfolia — Co prodat a přikoupit</div>
+      <div class="port-eval-summary" id="port-eval-summary"><i class="ti ti-loader spin"></i> Analyzuji portfolio...</div>
+      <div class="port-eval-grid">
+        <div class="eval-sell-col">
+          <div class="eval-col-header"><i class="ti ti-arrow-down-circle"></i> PRODAT / SNÍŽIT</div>
+          <div id="eval-sell-list"><div class="port-eval-loading"><i class="ti ti-loader spin"></i></div></div>
+        </div>
+        <div class="eval-buy-col">
+          <div class="eval-col-header"><i class="ti ti-arrow-up-circle"></i> PŘIKOUPIT / KOUPIT</div>
+          <div id="eval-buy-list"><div class="port-eval-loading"><i class="ti ti-loader spin"></i></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ai-dashboard-box" id="ai-dashboard-brief" style="display:none;">
+      <div class="ai-brief-header"><i class="ti ti-robot"></i> Tržní Briefing & Doporučení k nákupu</div>
+      <div class="ai-brief-content" id="ai-brief-text">
+        <i class="ti ti-loader spin"></i> Analyzuji tvé portfolio pro dnešní den...
+      </div>
+      <div class="ai-picks-grid" id="ai-picks-grid">
+        </div>
+    </div>
+
+    <div class="section-title">
+      <div style="display:flex; align-items:center; gap:10px;">
+        Moje Portfolio <span class="live-badge" id="live-badge" style="display:none;"><i class="ti ti-point-filled"></i> LIVE</span>
+      </div>
+    </div>
+    <div class="grid-watchlist" id="watchlist-grid"></div>
+  </div>
+
+  <div id="detail-view">
+    <div class="detail-header">
+      <div class="dh-left">
+        <h1 id="d-ticker">--</h1>
+        <p id="d-name">--</p>
+        <div style="margin-top:10px; color:var(--text2); font-size:13px;" id="d-sector">--</div>
+      </div>
+      <div class="dh-right">
+        <div class="dh-price" id="d-price">--</div>
+        <div class="dh-change" id="d-change">--</div>
+        <div style="margin-top:8px;">
+          <span id="period-perf-badge" class="period-perf up" style="display:none;">
+            <i class="ti ti-trending-up"></i>
+            <span id="period-perf-val">--</span>
+            <span class="period-label" id="period-perf-label">za 6M</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-body">
+      
+      <div style="display:flex; flex-direction:column;">
+        <div class="chart-controls">
+          <div class="btn-group" id="chart-types">
+            <button class="c-btn active" onclick="setChartType('area')">Křivka</button>
+            <button class="c-btn" onclick="setChartType('candlestick')">Svíčky</button>
+            <button class="c-btn" id="ma-toggle" onclick="toggleMA()">MA</button>
+          </div>
+          <div class="btn-group" id="chart-periods">
+            <button class="c-btn" onclick="setChartPeriod('1d')">1D</button>
+            <button class="c-btn" onclick="setChartPeriod('5d')">1T</button>
+            <button class="c-btn" onclick="setChartPeriod('1mo')">1M</button>
+            <button class="c-btn" onclick="setChartPeriod('3mo')">3M</button>
+            <button class="c-btn active" onclick="setChartPeriod('6mo')">6M</button>
+            <button class="c-btn" onclick="setChartPeriod('1y')">1Y</button>
+            <button class="c-btn" onclick="setChartPeriod('max')">MAX</button>
+          </div>
+        </div>
+        <div class="chart-container">
+          <div id="chart"></div>
+          <div class="ma-legend" id="ma-legend" style="display:none;">
+            <span><i class="ma-dot" style="background:#FFC400"></i> SMA20</span>
+            <span><i class="ma-dot" style="background:#29B6F6"></i> SMA50</span>
+            <span><i class="ma-dot" style="background:#AB47BC"></i> SMA200</span>
+          </div>
+          <div id="volChart"></div>
+        </div>
+      </div>
+      
+      <div class="info-container">
+        <div class="signal-box" id="signal-box" style="display:none;">
+          <div class="signal-head">
+            <div class="signal-title"><i class="ti ti-gauge"></i> Technický signál</div>
+            <div class="signal-verdict" id="signal-verdict">--</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:16px; margin-bottom:6px;">
+            <div class="signal-score-num" id="signal-num">--</div>
+            <div style="flex:1;">
+              <div class="signal-gauge"><div class="signal-needle" id="signal-needle" style="left:50%;"></div></div>
+              <div class="signal-scale"><span>Prodávat</span><span>Neutrál</span><span>Nakupovat</span></div>
+            </div>
+          </div>
+          <div class="signal-comps" id="signal-comps"></div>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-box"><div class="metric-lbl">P/E Ratio</div><div class="metric-val" id="d-pe">--</div></div>
+          <div class="metric-box"><div class="metric-lbl">Market Cap</div><div class="metric-val" id="d-cap">--</div></div>
+          <div class="metric-box"><div class="metric-lbl">RSI (14)</div><div class="metric-val" id="d-rsi">--</div></div>
+          <div class="metric-box"><div class="metric-lbl">Volatilita</div><div class="metric-val" id="d-vol">--</div></div>
+          <div class="metric-box"><div class="metric-lbl">52W High</div><div class="metric-val" id="d-high">--</div></div>
+          <div class="metric-box"><div class="metric-lbl">52W Low</div><div class="metric-val" id="d-low">--</div></div>
+          <div class="metric-box"><div class="metric-lbl">Beta</div><div class="metric-val" id="d-beta">--</div></div>
+          <div class="metric-box"><div class="metric-lbl">Dividenda</div><div class="metric-val" id="d-div">--</div></div>
+        </div>
+
+        <div class="ai-box" id="ai-output">
+           <div style="color:var(--text2); display:flex; align-items:center; gap:10px;">
+             <i class="ti ti-loader spin" style="color:var(--accent);"></i> AI generuje analýzu...
+           </div>
+        </div>
+
+        <div class="chat-box" id="chat-box">
+          <div class="chat-head"><i class="ti ti-message-chatbot"></i> Zeptej se AI na tuto akcii</div>
+          <div class="chat-log" id="chat-log"></div>
+          <div class="chat-suggest" id="chat-suggest"></div>
+          <div class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="Napiš dotaz..." onkeydown="if(event.key==='Enter')sendChat()">
+            <button class="chat-send" onclick="sendChat()"><i class="ti ti-send"></i></button>
+          </div>
+        </div>
+
+        <div class="news-box" id="news-box">
+          <div style="font-size:12px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin:20px 0 10px; display:flex; align-items:center; gap:8px;"><i class="ti ti-news" style="color:var(--accent)"></i> Aktuální zprávy</div>
+          <div id="news-list"><div style="color:var(--text2); font-size:13px;"><i class="ti ti-loader spin"></i> Načítám zprávy...</div></div>
+        </div>
+
+        <div class="detail-pl-box" id="detail-pl-box" style="display:none;">
+          <div style="font-size:12px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px;">Moje pozice</div>
+          <div class="detail-pl-row"><span>Počet kusů</span><span id="dpl-qty">--</span></div>
+          <div class="detail-pl-row"><span>Nákupní cena</span><span id="dpl-buy">--</span></div>
+          <div class="detail-pl-row"><span>Aktuální hodnota</span><span id="dpl-cur">--</span></div>
+          <div class="detail-pl-row"><span>Zisk / Ztráta</span><span id="dpl-pl" class="pl-val">--</span></div>
+        </div>
+
+        <div class="action-bar">
+          <button class="btn-outline" onclick="closeDetail()"><i class="ti ti-arrow-left"></i> Zpět</button>
+          <button class="btn-outline" id="btn-toggle-watch" onclick="toggleWatchlist()"><i class="ti ti-star"></i> Sledovat</button>
+          <button class="btn-outline" onclick="openPlModal()"><i class="ti ti-coins"></i> Pozice</button>
+          <button class="btn-outline" onclick="openAlertModal()"><i class="ti ti-bell"></i> Upozornit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Na Vercelu běží frontend i backend na stejné domeně -> relativní cesty ("").
+// Lokálně (file:// nebo localhost) se automaticky napojí na Flask na :5001.
+const BACKEND_URL = (
+    location.protocol === 'file:' ||
+    location.hostname === 'localhost' ||
+    location.hostname === '127.0.0.1'
+) ? 'http://127.0.0.1:5001' : '';
+
+// V základu přidány české a populární akcie
+let myStocks = JSON.parse(localStorage.getItem('mystocks_portfolio')) || ['NVDA', 'TSLA', 'PLTR', 'CSG.PR', 'CEZ.PR', 'BTC-USD'];
+// Portfolio pozice: { "NVDA": { qty: 10, avgPrice: 450.00 }, ... }
+let myPositions = JSON.parse(localStorage.getItem('mystocks_positions')) || {};
+
+let currentStockData = null;
+let currentChartData = null;
+let chartInstance = null;
+let autoRefreshTimer = null;
+let searchTimeout = null;
+
+// Nastavení grafu
+let chartType = 'area';
+let chartPeriod = '6mo';
+let showMA = false;
+let volChartInstance = null;
+let allocChartInstance = null;
+let lastWatchlistData = [];
+let alertDir = 'above';
+
+// Cenová upozornění: [{ticker, dir:'above'|'below', price}]
+let myAlerts = JSON.parse(localStorage.getItem('mystocks_alerts')) || [];
+// Historie AI chatu pro aktuální akcii
+let chatHistory = [];
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById('api-key').value = localStorage.getItem('mystocks_key') || '';
+    document.getElementById('api-provider').value = localStorage.getItem('mystocks_prov') || 'groq';
+    
+    loadWatchlist();
+
+    const searchInput = document.getElementById('searchInput');
+    const searchDropdown = document.getElementById('searchDropdown');
+
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim();
+        if(query.length === 0) { searchDropdown.style.display = 'none'; return; }
+        searchDropdown.style.display = 'flex';
+        searchDropdown.innerHTML = '<div style="padding:15px; color:var(--text2); text-align:center;"><i class="ti ti-loader spin"></i> Hledám...</div>';
+        searchTimeout = setTimeout(() => fetchSearchResults(query), 300);
+    });
+
+    document.addEventListener('click', (e) => {
+        if(!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) searchDropdown.style.display = 'none';
+    });
+    
+    // Close modals on backdrop click
+    document.getElementById('plModal').addEventListener('click', (e) => {
+        if(e.target === document.getElementById('plModal')) closePlModal();
+    });
+    document.getElementById('alertModal').addEventListener('click', (e) => {
+        if(e.target === document.getElementById('alertModal')) closeAlertModal();
+    });
+
+    // Klávesové zkratky
+    document.addEventListener('keydown', (e) => {
+        if(e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+            e.preventDefault(); searchInput.focus();
+        }
+        if(e.key === 'Escape') {
+            if(document.getElementById('plModal').classList.contains('open')) { closePlModal(); return; }
+            if(document.getElementById('alertModal').classList.contains('open')) { closeAlertModal(); return; }
+            if(document.getElementById('detail-view').style.display === 'block') closeDetail();
+            searchDropdown.style.display = 'none';
+        }
+    });
+});
+
+async function fetchSearchResults(query) {
+    const dropdown = document.getElementById('searchDropdown');
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        if(!data.ok || data.results.length === 0) {
+            dropdown.innerHTML = '<div style="padding:15px; color:var(--text2); text-align:center;">Nic nenalezeno</div>'; return;
+        }
+        dropdown.innerHTML = '';
+        data.results.forEach(item => {
+            dropdown.innerHTML += `
+                <div class="search-item" onclick="selectSearchItem('${item.ticker}')">
+                    <div style="display:flex; align-items:center; gap:10px;"><span class="si-ticker">${item.ticker}</span><span class="si-name">${item.name}</span></div>
+                    <span class="si-exch">${item.exchange}</span>
+                </div>`;
+        });
+    } catch(e) { dropdown.innerHTML = '<div style="padding:15px; color:var(--down); text-align:center;">Chyba připojení k serveru.</div>'; }
+}
+
+function selectSearchItem(ticker) {
+    document.getElementById('searchDropdown').style.display = 'none';
+    document.getElementById('searchInput').value = '';
+    loadStockDetail(ticker);
+}
+
+function toggleApiPanel() {
+    const p = document.getElementById('apiPanel');
+    p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
+}
+function saveApi() {
+    localStorage.setItem('mystocks_key', document.getElementById('api-key').value);
+    localStorage.setItem('mystocks_prov', document.getElementById('api-provider').value);
+    toggleApiPanel();
+}
+function formatNum(num) {
+    if(!num || num === "N/A") return "N/A";
+    if(num >= 1e12) return (num / 1e12).toFixed(2) + " T";
+    if(num >= 1e9) return (num / 1e9).toFixed(2) + " B";
+    if(num >= 1e6) return (num / 1e6).toFixed(2) + " M";
+    return num.toLocaleString();
+}
+
+// --- ROBUSTNÍ JSON PARSER: Vytáhne JSON i z obalených odpovědí modelu ---
+function extractJson(rawStr) {
+    // 1) Zkusíme přímé parsování
+    try { return JSON.parse(rawStr); } catch {}
+    // 2) Najdeme první { ... } blok v textu (třeba po ```json nebo textu)
+    const match = rawStr.match(/\{[\s\S]*\}/);
+    if(match) {
+        try { return JSON.parse(match[0]); } catch {}
+    }
+    throw new Error("Nelze parsovat JSON z odpovědi modelu");
+}
+
+// --- RATE LIMIT HELPER: Vrátí čitelnou chybovou hlášku ---
+function aiErrorMessage(err, httpStatus) {
+    if(httpStatus === 429) {
+        return `<span style="color:#FFC400"><i class="ti ti-clock-pause"></i> AI si dává pauzu kvůli limitu dotazů. Zkuste to za minutu.</span>`;
+    }
+    if(httpStatus === 401) {
+        return `<span style="color:var(--down)"><i class="ti ti-key-off"></i> Neplatný API klíč. Zkontrolujte nastavení.</span>`;
+    }
+    return `<span style="color:var(--down)"><i class="ti ti-alert-circle"></i> Chyba AI: ${err?.message || 'Neznámá chyba'}.</span>`;
+}
+
+// --- VOLÁNÍ AI (sdílená funkce pro Groq i OpenAI) ---
+async function callAI(prompt, jsonMode = false) {
+    const key = localStorage.getItem('mystocks_key');
+    const provider = localStorage.getItem('mystocks_prov') || 'groq';
+    if(!key) return { ok: false, status: 0, error: 'no_key' };
+
+    const body = jsonMode
+        ? { model: provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' } }
+        : { model: provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }] };
+
+    const url = provider === 'groq'
+        ? 'https://api.groq.com/openai/v1/chat/completions'
+        : 'https://api.openai.com/v1/chat/completions';
+
+    // Groq nepodporuje response_format json_object na všech modelech - odebereme ho bezpečně
+    if(provider === 'groq' && jsonMode) delete body.response_format;
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify(body)
+    });
+
+    if(!res.ok) return { ok: false, status: res.status };
+    const data = await res.json();
+    return { ok: true, content: data.choices[0].message.content };
+}
+
+// --- PORTFOLIO P/L MODAL ---
+function openPlModal() {
+    if(!currentStockData) return;
+    const t = currentStockData.ticker;
+    const pos = myPositions[t] || {};
+    document.getElementById('plModal-ticker').innerText = t;
+    document.getElementById('plModal-qty').value = pos.qty || '';
+    document.getElementById('plModal-price').value = pos.avgPrice || '';
+    document.getElementById('plModal').classList.add('open');
+}
+
+function closePlModal() {
+    document.getElementById('plModal').classList.remove('open');
+}
+
+function savePlPosition() {
+    if(!currentStockData) return;
+    const t = currentStockData.ticker;
+    const qty = parseFloat(document.getElementById('plModal-qty').value);
+    const avgPrice = parseFloat(document.getElementById('plModal-price').value);
+    
+    if(qty > 0 && avgPrice > 0) {
+        myPositions[t] = { qty, avgPrice };
+    } else {
+        delete myPositions[t];
+    }
+    localStorage.setItem('mystocks_positions', JSON.stringify(myPositions));
+    closePlModal();
+    renderDetailPL();
+    loadWatchlistSilent(); // Obnoví karty s P/L
+}
+
+function renderDetailPL() {
+    if(!currentStockData) return;
+    const t = currentStockData.ticker;
+    const pos = myPositions[t];
+    const box = document.getElementById('detail-pl-box');
+    if(!pos) { box.style.display = 'none'; return; }
+    
+    box.style.display = 'block';
+    const cur = currentStockData.price;
+    const currency = currentStockData.currency || 'USD';
+    const curVal = pos.qty * cur;
+    const buyVal = pos.qty * pos.avgPrice;
+    const pl = curVal - buyVal;
+    const plPct = ((pl / buyVal) * 100).toFixed(2);
+    const isPlus = pl >= 0;
+    
+    document.getElementById('dpl-qty').innerText = pos.qty;
+    document.getElementById('dpl-buy').innerText = `${pos.avgPrice.toFixed(3)} ${currency}`;
+    document.getElementById('dpl-cur').innerText = `${curVal.toFixed(2)} ${currency}`;
+    const plEl = document.getElementById('dpl-pl');
+    plEl.className = `pl-val ${isPlus ? 'up' : 'down'}`;
+    plEl.innerText = `${isPlus ? '+' : ''}${pl.toFixed(2)} ${currency} (${isPlus ? '+' : ''}${plPct}%)`;
+}
+
+// --- PORTFOLIO & DASHBOARD AI ---
+async function loadWatchlist() {
+    const grid = document.getElementById('watchlist-grid');
+    const badge = document.getElementById('live-badge');
+    const dbrief = document.getElementById('ai-dashboard-brief');
+    
+    if(myStocks.length === 0) {
+        grid.innerHTML = '<div style="color:var(--text2)">Zatím nesleduješ žádné akcie.</div>';
+        dbrief.style.display = 'none';
+        document.getElementById('port-summary').style.display = 'none';
+        document.getElementById('ps-toolbar').style.display = 'none';
+        return;
+    }
+    
+    grid.innerHTML = '<div style="color:var(--accent)"><i class="ti ti-loader spin"></i> Připojuji se k burze...</div>';
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/watchlist?tickers=${myStocks.join(',')}`);
+        const data = await res.json();
+        if(!data.ok) throw new Error();
+        
+        badge.style.display = 'inline-block';
+        lastWatchlistData = data.results;
+        renderWatchCards(data.results);
+        renderPortfolioSummary(data.results);
+        checkAlerts(data.results);
+
+        // AI Analýza trhu (Čistý JSON!)
+        generateDashboardBrief(data.results);
+        generatePortfolioEval(data.results);
+
+        if(!autoRefreshTimer) {
+            autoRefreshTimer = setInterval(() => {
+                if(document.getElementById('dashboard').style.display !== 'none') loadWatchlistSilent();
+            }, 10000);
+        }
+    } catch(e) {
+        badge.style.display = 'none';
+        grid.innerHTML = `<div style="color:var(--down); padding:20px; border:1px solid var(--down); border-radius:10px;">Chyba: Backend neběží na portu 5001.</div>`;
+    }
+}
+
+async function loadWatchlistSilent() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/watchlist?tickers=${myStocks.join(',')}`);
+        const data = await res.json();
+        if(!data.ok) return;
+        lastWatchlistData = data.results;
+        renderWatchCards(data.results);
+        renderPortfolioSummary(data.results);
+        checkAlerts(data.results);
+    } catch(e) {}
+}
+
+// --- SDÍLENÉ VYKRESLENÍ KARET PORTFOLIA ---
+function renderWatchCards(results) {
+    const grid = document.getElementById('watchlist-grid');
+    grid.innerHTML = '';
+    results.forEach(s => {
+        const isUp = s.change_pct >= 0;
+        const pos = myPositions[s.ticker];
+        let plHtml = '';
+        if(pos && pos.qty > 0) {
+            const pl = (s.price - pos.avgPrice) * pos.qty;
+            const plPct = ((pl / (pos.avgPrice * pos.qty)) * 100).toFixed(1);
+            const plClass = pl >= 0 ? 'up' : 'down';
+            plHtml = `<div class="sc-pl"><span>P/L:</span><span class="pl-val ${plClass}">${pl >= 0 ? '+' : ''}${pl.toFixed(2)} (${pl >= 0 ? '+' : ''}${plPct}%)</span></div>`;
+        }
+        const hasAlert = myAlerts.some(a => a.ticker === s.ticker);
+        const bell = hasAlert ? '<i class="ti ti-bell-ringing" style="color:var(--accent); font-size:14px; float:right;"></i>' : '';
+        grid.innerHTML += `
+            <div class="stock-card" onclick="loadStockDetail('${s.ticker}')">
+                <div class="sc-ticker">${s.ticker} ${bell}</div>
+                <div class="sc-price">${s.price.toFixed(3)} <span style="font-size:12px;color:var(--text2)">${s.currency}</span></div>
+                <div class="sc-change ${isUp ? 'up':'down'}"><i class="ti ${isUp ? 'ti-trending-up':'ti-trending-down'}"></i> ${isUp?'+':''}${s.change_pct.toFixed(2)}%</div>
+                ${plHtml}
+            </div>`;
+    });
+}
+
+// --- PORTFOLIO PŘEHLED (souhrn + alokace) ---
+function renderPortfolioSummary(results) {
+    document.getElementById('ps-toolbar').style.display = 'flex';
+    const box = document.getElementById('port-summary');
+    const positionsList = results.filter(s => myPositions[s.ticker] && myPositions[s.ticker].qty > 0);
+
+    // Dnešní pohyby (top gainer / loser) – vždy
+    const sorted = [...results].sort((a,b) => b.change_pct - a.change_pct);
+    const moversEl = document.getElementById('ps-movers');
+    moversEl.innerHTML = '';
+    if(sorted.length) {
+        const best = sorted[0], worst = sorted[sorted.length-1];
+        [['Nejlepší', best],['Nejhorší', worst]].forEach(([lbl, m]) => {
+            const up = m.change_pct >= 0;
+            moversEl.innerHTML += `<div class="mover-chip" onclick="loadStockDetail('${m.ticker}')">
+                <span style="color:var(--text2); font-size:11px;">${lbl}</span>
+                <b>${m.ticker}</b>
+                <span class="${up?'up':'down'}">${up?'+':''}${m.change_pct.toFixed(2)}%</span></div>`;
+        });
+    }
+
+    if(positionsList.length === 0) {
+        box.style.display = 'block';
+        document.getElementById('ps-value').innerText = '—';
+        document.getElementById('ps-today').innerHTML = '<span style="color:var(--text2)">Zadej pozice (tlačítko Pozice) pro výpočet hodnoty.</span>';
+        document.getElementById('ps-pl').innerText = '—';
+        document.getElementById('ps-pl-pct').innerText = '';
+        if(allocChartInstance){ allocChartInstance.destroy(); allocChartInstance = null; }
+        document.getElementById('allocChart').innerHTML = '<div style="color:var(--text2); font-size:13px; text-align:center;">Žádné pozice</div>';
+        return;
+    }
+    box.style.display = 'block';
+
+    let totalValue = 0, totalInvested = 0, todayChange = 0;
+    const currencies = new Set();
+    const allocLabels = [], allocSeries = [];
+    positionsList.forEach(s => {
+        const pos = myPositions[s.ticker];
+        const val = s.price * pos.qty;
+        totalValue += val;
+        totalInvested += pos.avgPrice * pos.qty;
+        if(s.prev_close) todayChange += (s.price - s.prev_close) * pos.qty;
+        currencies.add(s.currency);
+        allocLabels.push(s.ticker);
+        allocSeries.push(Math.round(val));
+    });
+    const totalPL = totalValue - totalInvested;
+    const totalPLpct = totalInvested ? (totalPL/totalInvested*100) : 0;
+    const todayPct = totalValue ? (todayChange/(totalValue-todayChange)*100) : 0;
+    const mixed = currencies.size > 1;
+    const cur = mixed ? '' : (' '+[...currencies][0]);
+    const warn = mixed ? ' <span title="Smíšené měny – součet je orientační" style="color:#FFC400">⚠</span>' : '';
+
+    document.getElementById('ps-value').innerHTML = totalValue.toLocaleString('cs-CZ',{maximumFractionDigits:0})+cur+warn;
+    const tEl = document.getElementById('ps-today');
+    tEl.className = 'ps-stat-sub ' + (todayChange>=0?'up':'down');
+    tEl.innerText = `${todayChange>=0?'+':''}${todayChange.toFixed(0)}${cur} dnes (${todayChange>=0?'+':''}${todayPct.toFixed(2)}%)`;
+    const plEl = document.getElementById('ps-pl');
+    plEl.className = 'ps-stat-val ' + (totalPL>=0?'up':'down');
+    plEl.innerText = `${totalPL>=0?'+':''}${totalPL.toFixed(0)}${cur}`;
+    const plPctEl = document.getElementById('ps-pl-pct');
+    plPctEl.className = 'ps-stat-sub ' + (totalPL>=0?'up':'down');
+    plPctEl.innerText = `${totalPL>=0?'+':''}${totalPLpct.toFixed(2)}% z investice`;
+
+    renderAllocChart(allocLabels, allocSeries);
+}
+
+function renderAllocChart(labels, series) {
+    if(allocChartInstance) allocChartInstance.destroy();
+    const opts = {
+        series: series,
+        labels: labels,
+        chart: { type: 'donut', height: 220, animations: { enabled: false } },
+        colors: ['#FF7A00','#00E676','#29B6F6','#AB47BC','#FFC400','#FF3D00','#26C6DA','#EC407A'],
+        legend: { position: 'bottom', labels: { colors: '#9ba1b0' }, fontFamily: 'Outfit' },
+        stroke: { width: 0 },
+        dataLabels: { enabled: true, style: { fontFamily: 'Space Grotesk' }, dropShadow:{enabled:false} },
+        plotOptions: { pie: { donut: { size: '62%', labels: { show: true, total: { show: true, label: 'Pozic', color: '#9ba1b0', fontFamily:'Outfit', formatter: () => labels.length } } } } },
+        tooltip: { theme: 'dark', y: { formatter: v => v.toLocaleString('cs-CZ') } },
+        theme: { mode: 'dark' }
+    };
+    allocChartInstance = new ApexCharts(document.querySelector('#allocChart'), opts);
+    allocChartInstance.render();
+}
+
+async function generateDashboardBrief(watchlistData) {
+    const key = localStorage.getItem('mystocks_key');
+    const briefBox = document.getElementById('ai-dashboard-brief');
+    const briefText = document.getElementById('ai-brief-text');
+    const picksGrid = document.getElementById('ai-picks-grid');
+    
+    if(!key) {
+        briefBox.style.display = 'block';
+        briefText.innerHTML = '<span style="color:var(--down)">⚠ Pro zobrazení chytrých tipů na nákup si vložte API klíč v Nastavení.</span>';
+        picksGrid.innerHTML = '';
+        return;
+    }
+
+    briefBox.style.display = 'block';
+    briefText.innerHTML = '<i class="ti ti-loader spin"></i> Analyzuji portfolio...';
+    picksGrid.innerHTML = '';
+    
+    // Nekompromisně vyžadujeme čistý JSON bez markdownu
+    const prompt = `Jsi analytik. Zde jsou dnešní data mého portfolia: ${JSON.stringify(watchlistData)}. 
+Vrať VÝHRADNĚ čistý, validní JSON přesně v tomto formátu (ŽÁDNÝ MARKDOWN, ŽÁDNÉ ZNAČKY \`\`\`json):
+{
+  "summary": "Tvé celkové shrnutí situace na trhu (2 věty).",
+  "top_picks": [
+    { "ticker": "ZDE NAPIŠ TICKER PRVNÍ AKCIE K NÁKUPU", "reason": "Krátký pádný důvod proč koupit." },
+    { "ticker": "ZDE NAPIŠ TICKER DRUHÉ AKCIE K NÁKUPU", "reason": "Krátký pádný důvod proč koupit." }
+  ]
+}`;
+
+    try {
+        const result = await callAI(prompt, true);
+
+        if(!result.ok) {
+            briefText.innerHTML = aiErrorMessage(null, result.status);
+            picksGrid.innerHTML = '';
+            return;
+        }
+
+        // Robustní parsování – extrahuje JSON i z obalených odpovědí
+        const aiData = extractJson(result.content);
+
+        briefText.innerHTML = aiData.summary;
+        picksGrid.innerHTML = '';
+
+        (aiData.top_picks || []).forEach(pick => {
+            picksGrid.innerHTML += `
+                <div class="pick-card" onclick="loadStockDetail('${pick.ticker}')">
+                    <div class="pick-top">
+                        <div class="pick-ticker">${pick.ticker}</div>
+                        <div class="pick-badge">DOPORUČUJE SE KOUPIT</div>
+                    </div>
+                    <div class="pick-reason">${pick.reason}</div>
+                </div>
+            `;
+        });
+
+    } catch(e) {
+        briefText.innerHTML = '<span style="color:var(--down)">Chyba při parsování AI analýzy. Zkuste obnovit stránku.</span>';
+        picksGrid.innerHTML = '';
+    }
+}
+
+// --- DETAIL AKCIE S OVLÁDÁNÍM GRAFU ---
+function setChartType(type) {
+    chartType = type;
+    document.querySelectorAll('#chart-types .c-btn').forEach(b => { if(b.id !== 'ma-toggle') b.classList.remove('active'); });
+    event.target.classList.add('active');
+    if(currentChartData) renderChart(currentChartData);
+}
+
+function setChartPeriod(period) {
+    chartPeriod = period;
+    document.querySelectorAll('#chart-periods .c-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    if(currentStockData) loadStockDetail(currentStockData.ticker, false); // false = negeneruj znovu AI
+}
+
+async function loadStockDetail(ticker, runAI = true) {
+    document.getElementById('dashboard').style.display = 'none';
+    const detail = document.getElementById('detail-view');
+    detail.style.display = 'block';
+    
+    document.getElementById('d-ticker').innerHTML = `<i class="ti ti-loader spin"></i>`;
+    
+    if(runAI) {
+        document.getElementById('ai-output').innerHTML = `<div style="color:var(--text2); display:flex; align-items:center; gap:10px;"><i class="ti ti-loader spin" style="color:var(--accent);"></i> AI generuje analýzu...</div>`;
+    }
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/stock/${ticker}?period=${chartPeriod}`);
+        const data = await res.json();
+        
+        if(!data.ok) { alert(data.error); closeDetail(); return; }
+        
+        currentStockData = data;
+        currentChartData = data.chart;
+        
+        document.getElementById('d-ticker').innerText = data.ticker;
+        document.getElementById('d-name').innerText = data.name;
+        document.getElementById('d-sector').innerText = `${data.sector} | ${data.industry}`;
+        document.getElementById('d-price').innerText = data.price.toFixed(3); // Desetinná místa u hlavní ceny
+        
+        const changeEl = document.getElementById('d-change');
+        const isUp = data.change_pct >= 0;
+        changeEl.className = `dh-change ${isUp ? 'up' : 'down'}`;
+        changeEl.innerHTML = `<i class="ti ${isUp ? 'ti-arrow-up-right' : 'ti-arrow-down-right'}"></i> ${isUp?'+':''}${data.change_pct.toFixed(2)}%`;
+        
+        document.getElementById('d-pe').innerText = (data.pe_ratio !== "N/A" && data.pe_ratio != null) ? parseFloat(data.pe_ratio).toFixed(2) : "N/A";
+        document.getElementById('d-cap').innerText = formatNum(data.market_cap);
+        document.getElementById('d-high').innerText = parseFloat(data.high52).toFixed(3);
+        document.getElementById('d-low').innerText = parseFloat(data.low52).toFixed(3);
+
+        const ind = data.indicators || {};
+        const rsiEl = document.getElementById('d-rsi');
+        if(ind.rsi != null) {
+            rsiEl.innerText = ind.rsi.toFixed(1);
+            rsiEl.style.color = ind.rsi > 70 ? 'var(--down)' : ind.rsi < 30 ? 'var(--up)' : 'var(--text)';
+        } else { rsiEl.innerText = 'N/A'; rsiEl.style.color = 'var(--text)'; }
+        document.getElementById('d-vol').innerText = ind.volatility != null ? ind.volatility.toFixed(1)+'%' : 'N/A';
+        document.getElementById('d-beta').innerText = data.beta != null ? data.beta.toFixed(2) : 'N/A';
+        document.getElementById('d-div').innerText = data.dividend_yield != null ? data.dividend_yield.toFixed(2)+'%' : '—';
+
+        renderSignal(data);
+        resetChat(data.ticker);
+        loadNews(data.ticker);
+        
+        const btnWatch = document.getElementById('btn-toggle-watch');
+        if(myStocks.includes(data.ticker)) {
+            btnWatch.innerHTML = '<i class="ti ti-star-off"></i> Odebrat';
+            btnWatch.style.borderColor = 'var(--accent)'; btnWatch.style.color = 'var(--accent)';
+        } else {
+            btnWatch.innerHTML = '<i class="ti ti-star"></i> Sledovat';
+            btnWatch.style.borderColor = 'var(--text2)'; btnWatch.style.color = 'var(--text)';
+        }
+
+        renderChart(currentChartData);
+        renderDetailPL();
+        renderPeriodPerf(currentChartData);
+        
+        if(runAI) autoGenerateAIReport();
+        
+    } catch(e) {
+        alert("Chyba při stahování dat ze serveru.");
+        closeDetail();
+    }
+}
+
+function renderChart(historyData) {
+    if(chartInstance) chartInstance.destroy();
+
+    const isUp = historyData[0].c <= historyData[historyData.length-1].c;
+    const mainColor = isUp ? '#00E676' : '#FF3D00';
+    const cats = historyData.map(d => d.x);
+
+    // Hlavní série
+    const isCandle = chartType === 'candlestick';
+    const mainData = isCandle
+        ? historyData.map(d => ({ x: d.x, y: [d.o, d.h, d.l, d.c] }))
+        : historyData.map(d => ({ x: d.x, y: d.c }));
+
+    const series = [{ name: 'Cena', type: isCandle ? 'candlestick' : 'area', data: mainData }];
+    const colors = [mainColor];
+
+    // MA overlay (jen pokud zapnuto a máme data)
+    const maOn = showMA && currentStockData && Array.isArray(currentStockData.sma20);
+    document.getElementById('ma-legend').style.display = maOn ? 'flex' : 'none';
+    if(maOn) {
+        const maDefs = [['SMA20','sma20','#FFC400'],['SMA50','sma50','#29B6F6'],['SMA200','sma200','#AB47BC']];
+        maDefs.forEach(([name,key,col]) => {
+            const arr = currentStockData[key];
+            if(arr && arr.some(v => v != null)) {
+                series.push({ name, type: 'line', data: historyData.map((d,i) => ({ x: d.x, y: arr[i] })) });
+                colors.push(col);
+            }
+        });
+    }
+
+    // Combo (více sérií) vyžaduje základní typ 'line'
+    const baseType = (series.length > 1) ? 'line' : (isCandle ? 'candlestick' : 'area');
+
+    const options = {
+        series: series,
+        chart: { type: baseType, height: 360, toolbar: {show: false}, animations: {enabled: false}, id: 'mainChart', group: 'sync' },
+        colors: colors,
+        stroke: { curve: 'smooth', width: series.map((s,i) => i===0 ? (isCandle?1:2) : 1.5) },
+        plotOptions: { candlestick: { colors: { upward: '#00E676', downward: '#FF3D00' }, wick: { useFillColor: true } } },
+        fill: {
+            type: series.map((s,i) => (i===0 && !isCandle) ? 'gradient' : 'solid'),
+            gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.0, stops: [0, 100] }
+        },
+        dataLabels: { enabled: false },
+        legend: { show: false },
+        xaxis: { type: 'category', categories: cats, labels: {show: false}, axisBorder: {show:false}, axisTicks: {show:false}, tooltip: {enabled: false} },
+        yaxis: { labels: { style: { colors: '#9ba1b0', fontFamily: 'Space Grotesk' }, formatter: (value) => value != null ? value.toFixed(3) : '' } },
+        grid: { borderColor: 'rgba(255,255,255,0.05)', strokeDashArray: 4 },
+        theme: { mode: 'dark' },
+        tooltip: { theme: 'dark', shared: true }
+    };
+    chartInstance = new ApexCharts(document.querySelector("#chart"), options);
+    chartInstance.render();
+
+    renderVolumeChart(historyData);
+}
+
+function renderVolumeChart(historyData) {
+    if(volChartInstance) volChartInstance.destroy();
+    const hasVol = historyData.some(d => d.v && d.v > 0);
+    const volWrap = document.getElementById('volChart');
+    if(!hasVol) { volWrap.style.display = 'none'; return; }
+    volWrap.style.display = 'block';
+
+    const volData = historyData.map(d => ({
+        x: d.x,
+        y: d.v || 0,
+        fillColor: (d.c >= d.o) ? 'rgba(0,230,118,0.45)' : 'rgba(255,61,0,0.45)'
+    }));
+
+    const opts = {
+        series: [{ name: 'Objem', data: volData }],
+        chart: { type: 'bar', height: 90, toolbar: {show:false}, animations:{enabled:false}, brush:{enabled:false} },
+        plotOptions: { bar: { columnWidth: '80%' } },
+        dataLabels: { enabled: false },
+        xaxis: { type:'category', categories: historyData.map(d=>d.x), labels:{show:false}, axisBorder:{show:false}, axisTicks:{show:false}, tooltip:{enabled:false} },
+        yaxis: { labels: { show:false }, },
+        grid: { show:false, padding:{top:0,bottom:0} },
+        tooltip: { theme:'dark', y: { formatter: v => formatNum(v) } },
+        theme: { mode: 'dark' }
+    };
+    volChartInstance = new ApexCharts(volWrap, opts);
+    volChartInstance.render();
+}
+
+function toggleMA() {
+    showMA = !showMA;
+    document.getElementById('ma-toggle').classList.toggle('active', showMA);
+    if(currentChartData) renderChart(currentChartData);
+}
+
+// --- TECHNICKÝ SIGNAL PANEL ---
+function renderSignal(data) {
+    const box = document.getElementById('signal-box');
+    if(data.score == null) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+
+    document.getElementById('signal-num').innerText = data.score;
+    document.getElementById('signal-needle').style.left = data.score + '%';
+
+    const verdict = document.getElementById('signal-verdict');
+    verdict.innerText = data.score_label || '';
+    const s = data.score;
+    let vc;
+    if(s >= 58) vc = ['var(--up)','rgba(0,230,118,0.15)'];
+    else if(s >= 43) vc = ['#FFC400','rgba(255,196,0,0.12)'];
+    else vc = ['var(--down)','rgba(255,61,0,0.15)'];
+    verdict.style.color = vc[0]; verdict.style.background = vc[1];
+    document.getElementById('signal-num').style.color = vc[0];
+
+    const comps = document.getElementById('signal-comps');
+    comps.innerHTML = '';
+    (data.score_components || []).forEach(c => {
+        const icon = c.kind === 'bull' ? 'ti-circle-arrow-up-right' : c.kind === 'bear' ? 'ti-circle-arrow-down-right' : 'ti-minus';
+        comps.innerHTML += `<div class="signal-comp"><i class="ti ${icon} sc-${c.kind}"></i> ${c.label}</div>`;
+    });
+}
+
+function renderPeriodPerf(historyData) {
+    const badge = document.getElementById('period-perf-badge');
+    const valEl = document.getElementById('period-perf-val');
+    const labelEl = document.getElementById('period-perf-label');
+    
+    if(!historyData || historyData.length < 2) { badge.style.display = 'none'; return; }
+    
+    const first = historyData[0].c;
+    const last = historyData[historyData.length - 1].c;
+    const pct = ((last - first) / first) * 100;
+    const isUp = pct >= 0;
+    
+    const labelMap = {
+        '1d': 'dnes', '5d': 'za týden', '1mo': 'za měsíc',
+        '3mo': 'za 3 měsíce', '6mo': 'za 6 měsíců', '1y': 'za rok', 'max': 'celkem'
+    };
+    
+    badge.style.display = 'inline-flex';
+    badge.className = `period-perf ${isUp ? 'up' : 'down'}`;
+    badge.querySelector('i').className = `ti ${isUp ? 'ti-trending-up' : 'ti-trending-down'}`;
+    valEl.innerText = `${isUp ? '+' : ''}${pct.toFixed(2)}%`;
+    labelEl.innerText = labelMap[chartPeriod] || '';
+}
+
+function closeDetail() {
+    document.getElementById('detail-view').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('searchInput').value = '';
+    document.getElementById('period-perf-badge').style.display = 'none';
+    
+    // Reset grafu — 6M je index 4 (1D, 1T, 1M, 3M, 6M, 1Y, MAX)
+    chartType = 'area'; chartPeriod = '6mo'; showMA = false;
+    if(volChartInstance) { volChartInstance.destroy(); volChartInstance = null; }
+    document.getElementById('ma-toggle').classList.remove('active');
+    document.getElementById('ma-legend').style.display = 'none';
+    document.querySelectorAll('#chart-types .c-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#chart-types .c-btn')[0].classList.add('active');
+    document.querySelectorAll('#chart-periods .c-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#chart-periods .c-btn')[4].classList.add('active'); // index 4 = 6M
+
+    loadWatchlist();
+}
+
+function toggleWatchlist() {
+    if(!currentStockData) return;
+    const t = currentStockData.ticker;
+    if(myStocks.includes(t)) myStocks = myStocks.filter(s => s !== t);
+    else myStocks.push(t);
+    localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
+    loadStockDetail(t, false);
+}
+
+// --- AUTO-AI ANALÝZA V DETAILU ---
+async function autoGenerateAIReport() {
+    const key = localStorage.getItem('mystocks_key');
+    const out = document.getElementById('ai-output');
+    
+    if(!key) { 
+        out.innerHTML = '<div style="color:var(--text2)">Zadejte API klíč v Nastavení pro zobrazení AI analýzy.</div>'; 
+        return; 
+    }
+    
+    const prompt = `Jsi investiční analytik. Zhodnoť akcii ${currentStockData.ticker}. P/E: ${currentStockData.pe_ratio}, Cena: ${currentStockData.price}, 52W: ${currentStockData.low52}-${currentStockData.high52}. 
+Vrať mi čistě formátovaný text pomocí HTML značek. 
+První věta ať je verdikt obalený ve spanu: <span class="ai-verdict v-buy">BUY</span> (nebo v-sell / v-hold).
+Zbytek textu rozděl do 2 odstavců pomocí <p class="ai-p">. Používej <b> pro zvýraznění čísel. Žádný markdown.`;
+
+    try {
+        const result = await callAI(prompt, false);
+        
+        if(!result.ok) {
+            out.innerHTML = aiErrorMessage(null, result.status);
+            return;
+        }
+
+        const cleanHtml = result.content.replace(/```html/g, '').replace(/```/g, '').trim();
+        
+        out.style.opacity = 0;
+        out.innerHTML = cleanHtml;
+        setTimeout(() => {
+            out.style.transition = "opacity 0.6s ease";
+            out.style.opacity = 1;
+        }, 50);
+
+    } catch(e) {
+        out.innerHTML = aiErrorMessage(e, 0);
+    }
+}
+
+// --- PORTFOLIO HODNOCENÍ: CO PRODAT / PŘIKOUPIT ---
+async function generatePortfolioEval(watchlistData) {
+    const key = localStorage.getItem('mystocks_key');
+    const box = document.getElementById('port-eval-box');
+    const summaryEl = document.getElementById('port-eval-summary');
+    const sellList = document.getElementById('eval-sell-list');
+    const buyList = document.getElementById('eval-buy-list');
+
+    box.style.display = 'block';
+    summaryEl.innerHTML = '<i class="ti ti-loader spin"></i> Analyzuji portfolio...';
+    sellList.innerHTML = '<div class="port-eval-loading"><i class="ti ti-loader spin"></i></div>';
+    buyList.innerHTML = '<div class="port-eval-loading"><i class="ti ti-loader spin"></i></div>';
+
+    if(!key) {
+        summaryEl.innerHTML = '<span style="color:var(--text2)">Vložte AI klíč v Nastavení pro hodnocení portfolia.</span>';
+        sellList.innerHTML = ''; buyList.innerHTML = '';
+        return;
+    }
+
+    // Sestavíme kontext s pozicemi pokud existují
+    const enriched = watchlistData.map(s => {
+        const pos = myPositions[s.ticker];
+        if(pos) {
+            const pl = ((s.price - pos.avgPrice) / pos.avgPrice * 100).toFixed(1);
+            return { ...s, qty: pos.qty, avgPrice: pos.avgPrice, pl_pct: pl };
+        }
+        return s;
+    });
+
+    const prompt = `Jsi zkušený portfolio manažer. Zde jsou aktuální data mého portfolia: ${JSON.stringify(enriched)}.
+    
+Vrať VÝHRADNĚ čistý validní JSON (bez markdownu, bez \`\`\`):
+{
+  "summary": "2 věty — celkové zhodnocení stavu portfolia a nálady trhu.",
+  "sell": [
+    { "ticker": "TICKER", "reason": "Stručný důvod proč prodat nebo snížit pozici.", "urgency": "IHNED nebo ZVÁŽIT" }
+  ],
+  "buy": [
+    { "ticker": "TICKER", "reason": "Stručný důvod proč přikoupit nebo vstoupit.", "upside": "+15%" }
+  ]
+}
+Maximálně 3 položky v každé sekci. Pokud má akcie pl_pct pod -15%, doporuč ji v sekci sell. Buď konkrétní.`;
+
+    try {
+        const result = await callAI(prompt, true);
+        if(!result.ok) {
+            summaryEl.innerHTML = aiErrorMessage(null, result.status);
+            sellList.innerHTML = ''; buyList.innerHTML = '';
+            return;
+        }
+
+        const data = extractJson(result.content);
+        summaryEl.innerHTML = data.summary || '';
+
+        sellList.innerHTML = '';
+        (data.sell || []).forEach(item => {
+            sellList.innerHTML += `
+            <div class="eval-ticker-pill" onclick="loadStockDetail('${item.ticker}')">
+                <div>
+                    <div class="eval-ticker-name">${item.ticker}</div>
+                    <div class="eval-ticker-reason">${item.reason}</div>
+                </div>
+                <span class="eval-ticker-badge">${item.urgency || 'ZVÁŽIT'}</span>
+            </div>`;
+        });
+        if(!data.sell || data.sell.length === 0) {
+            sellList.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0;">Žádná jasná doporučení k prodeji.</div>';
+        }
+
+        buyList.innerHTML = '';
+        (data.buy || []).forEach(item => {
+            buyList.innerHTML += `
+            <div class="eval-ticker-pill" onclick="loadStockDetail('${item.ticker}')">
+                <div>
+                    <div class="eval-ticker-name">${item.ticker}</div>
+                    <div class="eval-ticker-reason">${item.reason}</div>
+                </div>
+                <span class="eval-ticker-badge">${item.upside || '↑'}</span>
+            </div>`;
+        });
+        if(!data.buy || data.buy.length === 0) {
+            buyList.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0;">Žádná jasná doporučení k nákupu.</div>';
+        }
+
+    } catch(e) {
+        summaryEl.innerHTML = '<span style="color:var(--down)">Chyba při generování hodnocení.</span>';
+        sellList.innerHTML = ''; buyList.innerHTML = '';
+    }
+}
+
+// ============ CENOVÁ UPOZORNĚNÍ ============
+function openAlertModal() {
+    if(!currentStockData) return;
+    document.getElementById('alertModal-ticker').innerText = currentStockData.ticker;
+    document.getElementById('alertModal-price').value = currentStockData.price.toFixed(2);
+    setAlertDir('above');
+    renderAlertList();
+    document.getElementById('alertModal').classList.add('open');
+}
+function closeAlertModal() { document.getElementById('alertModal').classList.remove('open'); }
+function setAlertDir(dir) {
+    alertDir = dir;
+    document.getElementById('alert-above').classList.toggle('active', dir==='above');
+    document.getElementById('alert-below').classList.toggle('active', dir==='below');
+}
+function saveAlert() {
+    if(!currentStockData) return;
+    const price = parseFloat(document.getElementById('alertModal-price').value);
+    if(!(price > 0)) { alert('Zadej platnou cenu.'); return; }
+    myAlerts.push({ ticker: currentStockData.ticker, dir: alertDir, price, currency: currentStockData.currency });
+    localStorage.setItem('mystocks_alerts', JSON.stringify(myAlerts));
+    renderAlertList();
+    requestNotif();
+    showToast(`Upozornění nastaveno: ${currentStockData.ticker} ${alertDir==='above'?'≥':'≤'} ${price}`, 'up', 'ti-bell-plus');
+}
+function renderAlertList() {
+    const list = document.getElementById('alertModal-list');
+    const t = currentStockData ? currentStockData.ticker : null;
+    const mine = myAlerts.filter(a => a.ticker === t);
+    if(mine.length === 0) { list.innerHTML = '<div style="color:var(--text2); font-size:13px;">Zatím žádná upozornění pro tento titul.</div>'; return; }
+    list.innerHTML = '';
+    mine.forEach(a => {
+        const idx = myAlerts.indexOf(a);
+        list.innerHTML += `<div class="alert-row">
+            <span><i class="ti ti-arrow-${a.dir==='above'?'up':'down'}"></i> ${a.dir==='above'?'Nad':'Pod'} <b>${a.price} ${a.currency||''}</b></span>
+            <button onclick="removeAlert(${idx})"><i class="ti ti-trash"></i></button></div>`;
+    });
+}
+function removeAlert(idx) {
+    myAlerts.splice(idx, 1);
+    localStorage.setItem('mystocks_alerts', JSON.stringify(myAlerts));
+    renderAlertList();
+}
+function checkAlerts(results) {
+    if(myAlerts.length === 0) return;
+    const triggered = [];
+    myAlerts.forEach(a => {
+        const s = results.find(r => r.ticker === a.ticker);
+        if(!s) return;
+        if((a.dir === 'above' && s.price >= a.price) || (a.dir === 'below' && s.price <= a.price)) {
+            triggered.push(a);
+            const up = a.dir === 'above';
+            showToast(`${a.ticker} ${up?'překročil':'klesl pod'} ${a.price} ${a.currency||''} — nyní ${s.price.toFixed(2)}`, up?'up':'down', 'ti-bell-ringing');
+            notify(`${a.ticker} cílová cena dosažena`, `${up?'≥':'≤'} ${a.price} • aktuálně ${s.price.toFixed(2)} ${s.currency}`);
+        }
+    });
+    if(triggered.length) {
+        myAlerts = myAlerts.filter(a => !triggered.includes(a));
+        localStorage.setItem('mystocks_alerts', JSON.stringify(myAlerts));
+    }
+}
+
+// ============ NOTIFIKACE & TOASTY ============
+function requestNotif() {
+    if(!('Notification' in window)) return;
+    if(Notification.permission === 'default') Notification.requestPermission();
+}
+function notify(title, body) {
+    if(('Notification' in window) && Notification.permission === 'granted') {
+        try { new Notification(title, { body }); } catch(e) {}
+    }
+}
+function showToast(msg, kind='up', icon='ti-bell') {
+    const wrap = document.getElementById('toastWrap');
+    const el = document.createElement('div');
+    el.className = 'toast ' + kind;
+    el.innerHTML = `<i class="ti ${icon}"></i><div style="font-size:14px;">${msg}</div>`;
+    wrap.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(40px)'; el.style.transition='all .4s'; }, 5000);
+    setTimeout(() => el.remove(), 5500);
+}
+
+// ============ NEWS FEED ============
+async function loadNews(ticker) {
+    const list = document.getElementById('news-list');
+    list.innerHTML = '<div style="color:var(--text2); font-size:13px;"><i class="ti ti-loader spin"></i> Načítám zprávy...</div>';
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/news/${encodeURIComponent(ticker)}`);
+        const data = await res.json();
+        if(!data.results || data.results.length === 0) {
+            list.innerHTML = '<div style="color:var(--text2); font-size:13px;">Žádné aktuální zprávy.</div>'; return;
+        }
+        list.innerHTML = '';
+        data.results.forEach(n => {
+            const when = formatNewsTime(n.time);
+            const safeLink = n.link ? `href="${n.link}" target="_blank" rel="noopener noreferrer"` : '';
+            list.innerHTML += `<a class="news-item" ${safeLink}>
+                <div class="news-title">${n.title}</div>
+                <div class="news-meta"><i class="ti ti-building-broadcast-tower"></i> ${n.publisher}${when?` • ${when}`:''}</div>
+            </a>`;
+        });
+    } catch(e) {
+        list.innerHTML = '<div style="color:var(--text2); font-size:13px;">Zprávy se nepodařilo načíst.</div>';
+    }
+}
+function formatNewsTime(ts) {
+    if(!ts) return '';
+    let d;
+    if(typeof ts === 'number') d = new Date(ts * 1000);
+    else d = new Date(ts);
+    if(isNaN(d.getTime())) return '';
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if(diff < 3600) return Math.max(1,Math.round(diff/60)) + ' min';
+    if(diff < 86400) return Math.round(diff/3600) + ' h';
+    return d.toLocaleDateString('cs-CZ');
+}
+
+// ============ AI CHAT O AKCII ============
+function resetChat(ticker) {
+    chatHistory = [];
+    const log = document.getElementById('chat-log');
+    log.innerHTML = `<div class="chat-msg chat-ai">Ahoj! Zeptej se mě na cokoliv ohledně <b>${ticker}</b> — fundamenty, rizika, výhled, srovnání.</div>`;
+    const sug = document.getElementById('chat-suggest');
+    sug.innerHTML = '';
+    ['Je teď dobrý čas nakoupit?','Jaká jsou hlavní rizika?','Shrň poslední vývoj','Pro koho je vhodná?'].forEach(q => {
+        sug.innerHTML += `<span class="chat-chip" onclick="askChat('${q.replace(/'/g,"\\'")}')">${q}</span>`;
+    });
+}
+function askChat(q) { document.getElementById('chat-input').value = q; sendChat(); }
+async function sendChat() {
+    const input = document.getElementById('chat-input');
+    const q = input.value.trim();
+    if(!q || !currentStockData) return;
+    const key = localStorage.getItem('mystocks_key');
+    const log = document.getElementById('chat-log');
+
+    log.innerHTML += `<div class="chat-msg chat-user">${q}</div>`;
+    input.value = '';
+    if(!key) {
+        log.innerHTML += `<div class="chat-msg chat-ai" style="color:var(--down)">Pro AI chat zadej API klíč v Nastavení.</div>`;
+        log.scrollTop = log.scrollHeight; return;
+    }
+    const thinking = document.createElement('div');
+    thinking.className = 'chat-msg chat-ai';
+    thinking.innerHTML = '<i class="ti ti-loader spin"></i> Přemýšlím...';
+    log.appendChild(thinking);
+    log.scrollTop = log.scrollHeight;
+
+    const d = currentStockData;
+    const ind = d.indicators || {};
+    const context = `Akcie ${d.ticker} (${d.name}). Cena ${d.price} ${d.currency}, změna ${d.change_pct}%. Sektor ${d.sector}/${d.industry}. P/E ${d.pe_ratio}, RSI ${ind.rsi}, 52T ${d.low52}-${d.high52}, Technický signál ${d.score}/100 (${d.score_label}). Beta ${d.beta}, dividenda ${d.dividend_yield}%.`;
+    chatHistory.push({ role: 'user', content: q });
+    const prompt = `Jsi stručný investiční asistent. Kontext: ${context}\nHistorie: ${JSON.stringify(chatHistory.slice(-6))}\nOdpověz česky, konkrétně a max 4 věty na poslední dotaz uživatele: "${q}". Nepoužívej markdown ani hvězdičky. Na konci připomeň, že nejde o investiční doporučení (krátce).`;
+
+    try {
+        const result = await callAI(prompt, false);
+        thinking.remove();
+        if(!result.ok) { log.innerHTML += `<div class="chat-msg chat-ai">${aiErrorMessage(null, result.status)}</div>`; log.scrollTop = log.scrollHeight; return; }
+        const answer = result.content.replace(/\*\*/g,'').trim();
+        chatHistory.push({ role: 'assistant', content: answer });
+        log.innerHTML += `<div class="chat-msg chat-ai">${answer.replace(/\n/g,'<br>')}</div>`;
+        log.scrollTop = log.scrollHeight;
+    } catch(e) {
+        thinking.remove();
+        log.innerHTML += `<div class="chat-msg chat-ai">${aiErrorMessage(e, 0)}</div>`;
+        log.scrollTop = log.scrollHeight;
+    }
+}
+
+// ============ EXPORT CSV ============
+function exportCSV() {
+    if(!lastWatchlistData.length) { alert('Žádná data k exportu.'); return; }
+    const rows = [['Ticker','Cena','Měna','Změna %','Počet','Nákupní cena','Hodnota','P/L','P/L %']];
+    lastWatchlistData.forEach(s => {
+        const pos = myPositions[s.ticker];
+        let qty='', avg='', val='', pl='', plpct='';
+        if(pos && pos.qty > 0) {
+            qty = pos.qty; avg = pos.avgPrice;
+            val = (s.price * pos.qty).toFixed(2);
+            pl = ((s.price - pos.avgPrice) * pos.qty).toFixed(2);
+            plpct = ((s.price - pos.avgPrice)/pos.avgPrice*100).toFixed(2);
+        }
+        rows.push([s.ticker, s.price, s.currency, s.change_pct, qty, avg, val, pl, plpct]);
+    });
+    const csv = rows.map(r => r.join(';')).join('\n');
+    const blob = new Blob(["﻿"+csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `portfolio_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+    showToast('Portfolio exportováno do CSV', 'up', 'ti-download');
+}
+</script>
+</body>
+</html>
