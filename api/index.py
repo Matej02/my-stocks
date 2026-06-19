@@ -242,6 +242,79 @@ def signal_score(price, ind, high52, low52):
     return round(score), label, comps
 
 
+def _rating_label(buy, sell, neutral):
+    total = buy + sell + neutral
+    v = (buy - sell) / total if total else 0
+    if v >= 0.5:
+        return "Silně koupit"
+    if v >= 0.15:
+        return "Koupit"
+    if v <= -0.5:
+        return "Silně prodat"
+    if v <= -0.15:
+        return "Prodat"
+    return "Neutrál"
+
+
+def technical_rating(price, ind):
+    """Vlastní souhrnné technické hodnocení (budík Koupit/Prodat) z indikátorů.
+    Hlasy klouzavých průměrů + oscilátorů, žádný externí zdroj."""
+    ma_buy = ma_sell = 0
+    for key in ("sma20", "sma50", "sma200"):
+        v = ind.get(key)
+        if price and v:
+            if price > v:
+                ma_buy += 1
+            elif price < v:
+                ma_sell += 1
+    if ind.get("sma50") and ind.get("sma200"):
+        if ind["sma50"] > ind["sma200"]:
+            ma_buy += 1
+        else:
+            ma_sell += 1
+
+    osc_buy = osc_sell = osc_neu = 0
+    r = ind.get("rsi")
+    if r is not None:
+        if r < 30:
+            osc_buy += 1
+        elif r > 70:
+            osc_sell += 1
+        else:
+            osc_neu += 1
+    mh = ind.get("macd_hist")
+    if mh is not None:
+        if mh > 0:
+            osc_buy += 1
+        elif mh < 0:
+            osc_sell += 1
+        else:
+            osc_neu += 1
+    m1 = ind.get("mom_1m")
+    if m1 is not None:
+        if m1 > 0:
+            osc_buy += 1
+        elif m1 < 0:
+            osc_sell += 1
+        else:
+            osc_neu += 1
+
+    buy = ma_buy + osc_buy
+    sell = ma_sell + osc_sell
+    neutral = osc_neu
+    total = buy + sell + neutral
+    value = (buy - sell) / total if total else 0
+    return {
+        "value": round(value, 3),
+        "label": _rating_label(buy, sell, neutral),
+        "buy": buy, "sell": sell, "neutral": neutral,
+        "ma": {"buy": ma_buy, "sell": ma_sell,
+               "label": _rating_label(ma_buy, ma_sell, 0)},
+        "osc": {"buy": osc_buy, "sell": osc_sell, "neutral": osc_neu,
+                "label": _rating_label(osc_buy, osc_sell, osc_neu)},
+    }
+
+
 def sma_overlay(closes, window):
     out = []
     n = len(closes)
@@ -1097,6 +1170,7 @@ def get_stock_detail(ticker):
             "score": score,
             "score_label": score_label,
             "score_components": score_comps,
+            "tech_rating": technical_rating(price, indicators),
             "chart": chart_data,
             "sma20": sma20,
             "sma50": sma50,

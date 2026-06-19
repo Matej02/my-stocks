@@ -213,6 +213,16 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .lock-card .btn-primary {width:100%; justify-content:center;}
 .lock-error {color:var(--down); font-size:12px; min-height:16px; margin-bottom:10px;}
 
+/* ============ SOUHRNNÉ TECHNICKÉ HODNOCENÍ (budík) ============ */
+.tech-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-bottom:20px;}
+.tech-breakdown {display:flex; gap:10px; margin-top:6px;}
+.tb-cell {flex:1; text-align:center; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:10px 8px;}
+.tb-cell .l {font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;}
+.tb-cell .v {font-family:var(--fh); font-size:20px; font-weight:800;}
+.tech-sub {display:flex; justify-content:space-between; gap:12px; margin-top:14px; flex-wrap:wrap;}
+.tech-sub span {font-size:12.5px; color:var(--text2);}
+.tech-sub b {color:var(--text); font-weight:600;}
+
 /* ============ DOPORUČENÍ ANALYTIKŮ ============ */
 .analyst-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-bottom:20px;}
 .analyst-target {display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap;}
@@ -749,6 +759,11 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
             </div>
           </div>
           <div class="signal-comps" id="signal-comps"></div>
+        </div>
+
+        <div class="tech-box" id="tech-box" style="display:none;">
+          <div class="signal-title" style="margin-bottom:4px;"><i class="ti ti-dashboard" style="color:var(--accent)"></i> Souhrnné technické hodnocení</div>
+          <div id="tech-gauge"></div>
         </div>
 
         <div class="metrics-grid">
@@ -1890,6 +1905,7 @@ async function loadStockDetail(ticker, runAI = true) {
         document.getElementById('d-div').innerText = data.dividend_yield != null ? data.dividend_yield.toFixed(2)+'%' : '—';
 
         renderSignal(data);
+        renderTechRating(data.tech_rating);
         resetChat(data.ticker);
         loadNews(data.ticker);
         loadAnalyst(data.ticker, data.price);
@@ -2307,6 +2323,53 @@ function showToast(msg, kind='up', icon='ti-bell') {
 }
 
 // ============ NEWS FEED ============
+// ====================== SOUHRNNÉ TECHNICKÉ HODNOCENÍ (vlastní budík) ======================
+function renderTechRating(tr) {
+    const box = document.getElementById('tech-box');
+    if (!box) return;
+    if (!tr) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+
+    const cx = 140, cy = 130, r = 100;
+    const polar = (deg, rr) => {
+        const a = deg * Math.PI / 180;
+        return [cx + rr * Math.cos(a), cy - rr * Math.sin(a)];
+    };
+    // 5 barevných segmentů půlkruhu: Silně prodat → Silně koupit
+    const segs = [[180, 144, '#FF3D00'], [144, 108, '#FF7043'], [108, 72, '#FFC400'],
+                  [72, 36, '#69F0AE'], [36, 0, '#00C853']];
+    let arcs = '';
+    segs.forEach(([a1, a2, c]) => {
+        const [x1, y1] = polar(a1, r), [x2, y2] = polar(a2, r);
+        arcs += `<path d="M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" stroke="${c}" stroke-width="16" fill="none"/>`;
+    });
+    const v = Math.max(-1, Math.min(1, tr.value || 0));
+    const theta = 180 - ((v + 1) / 2) * 180;
+    const [nx, ny] = polar(theta, r - 20);
+    const color = v >= 0.15 ? '#00C853' : (v <= -0.15 ? '#FF3D00' : '#FFC400');
+
+    const svg = `<svg viewBox="0 0 280 180" style="width:100%; max-width:300px; display:block; margin:4px auto 0;">
+        ${arcs}
+        <line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="${cx}" cy="${cy}" r="7" fill="var(--text)"/>
+        <text x="${cx}" y="${cy + 36}" text-anchor="middle" fill="${color}" font-family="Space Grotesk" font-weight="800" font-size="22">${tr.label}</text>
+        <text x="34" y="172" fill="var(--text2)" font-size="10" font-family="Outfit">Prodat</text>
+        <text x="246" y="172" text-anchor="end" fill="var(--text2)" font-size="10" font-family="Outfit">Koupit</text>
+    </svg>`;
+
+    const breakdown = `<div class="tech-breakdown">
+        <div class="tb-cell"><div class="l">Prodat</div><div class="v" style="color:var(--down)">${tr.sell}</div></div>
+        <div class="tb-cell"><div class="l">Neutrál</div><div class="v" style="color:var(--text2)">${tr.neutral}</div></div>
+        <div class="tb-cell"><div class="l">Koupit</div><div class="v" style="color:var(--up)">${tr.buy}</div></div>
+    </div>
+    <div class="tech-sub">
+        <span>Oscilátory: <b>${tr.osc.label}</b></span>
+        <span>Klouzavé průměry: <b>${tr.ma.label}</b></span>
+    </div>`;
+
+    document.getElementById('tech-gauge').innerHTML = svg + breakdown;
+}
+
 // ====================== DOPORUČENÍ ANALYTIKŮ + FUNDAMENTY ======================
 async function loadAnalyst(ticker, price) {
     const box = document.getElementById('analyst-box');
