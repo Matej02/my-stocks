@@ -234,6 +234,46 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .rec-num {width:26px; text-align:right; font-size:13px; font-weight:700; flex-shrink:0;}
 .rec-period {font-size:11px; color:var(--text2); margin-top:6px; text-align:right;}
 
+/* ============ PŘEDPLATNÉ & ZÁMKY ============ */
+.locked-card {grid-column:1/-1; text-align:center; padding:40px 24px; background:linear-gradient(135deg, rgba(124,77,255,0.06), rgba(255,122,0,0.04)); border:1px dashed var(--border-accent); border-radius:18px;}
+.locked-icon {width:60px; height:60px; margin:0 auto 14px; border-radius:16px; background:var(--accent-glow); display:flex; align-items:center; justify-content:center;}
+.locked-icon i {font-size:30px; color:var(--accent);}
+.locked-card h3 {font-family:var(--fh); font-size:20px; margin-bottom:8px;}
+.locked-card p {color:var(--text2); font-size:13.5px; max-width:420px; margin:0 auto 18px; line-height:1.6;}
+.sub-badge {display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:700; font-family:var(--fb);}
+.sub-badge.start {background:rgba(255,255,255,0.08); color:var(--text2);}
+.sub-badge.trader {background:rgba(41,182,246,0.15); color:#4FC3F7; border:1px solid rgba(41,182,246,0.3);}
+.sub-badge.pro {background:rgba(124,77,255,0.15); color:#b89bff; border:1px solid rgba(124,77,255,0.35);}
+.sub-status {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
+.sub-status .trial-pill {background:var(--up-glow); color:var(--up); padding:3px 10px; border-radius:10px; font-size:12px; font-weight:600;}
+.plans-grid {display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:8px;}
+@media (max-width:640px){ .plans-grid {grid-template-columns:1fr;} }
+.plan-card {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:18px; padding:20px; display:flex; flex-direction:column;}
+.plan-card.featured {border-color:var(--accent); box-shadow:0 0 0 1px var(--accent-glow);}
+.plan-card.current {border-color:var(--up);}
+.plan-name {font-family:var(--fh); font-size:18px; font-weight:700;}
+.plan-price {font-family:var(--fh); font-size:28px; font-weight:800; margin:6px 0 2px;}
+.plan-price small {font-size:13px; color:var(--text2); font-weight:400;}
+.plan-feats {list-style:none; margin:14px 0; padding:0; display:flex; flex-direction:column; gap:8px; flex:1;}
+.plan-feats li {font-size:13px; color:var(--text); display:flex; align-items:flex-start; gap:8px;}
+.plan-feats li i {color:var(--up); font-size:15px; margin-top:1px; flex-shrink:0;}
+.plan-feats li.no {color:var(--text2);} .plan-feats li.no i {color:var(--text2);}
+.plan-tag {font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--accent); margin-bottom:4px; min-height:14px;}
+.plan-cta {margin-top:6px; padding:10px; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--text2); font-weight:600; cursor:default; text-align:center; font-size:13px;}
+.plan-cta.active {background:var(--up-glow); color:var(--up); border-color:var(--up);}
+
+/* ============ ADMIN ============ */
+.admin-table {width:100%; border-collapse:collapse; font-size:13px; margin-top:10px;}
+.admin-table th {text-align:left; color:var(--text2); font-size:11px; text-transform:uppercase; letter-spacing:.5px; padding:8px 10px; border-bottom:1px solid var(--border);}
+.admin-table td {padding:8px 10px; border-bottom:1px solid var(--border);}
+.admin-table tr:hover {background:rgba(255,255,255,0.02);}
+.admin-table select {background:#12141c; border:1px solid var(--border); color:var(--text); border-radius:8px; padding:5px 8px; font-size:12px;}
+.admin-invites {display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+.invite-chip {font-family:monospace; font-size:13px; padding:6px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,0.03); display:flex; align-items:center; gap:8px;}
+.invite-chip.used {opacity:.5; text-decoration:line-through;}
+.invite-chip .copy {cursor:pointer; color:var(--accent);}
+.admin-sub {display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:18px 0 6px;}
+
 /* ============ NAVIGACE SEKCÍ (taby) ============ */
 .dash-tabs {display:flex; gap:8px; margin-bottom:2rem; background:var(--bg-glass); border:1px solid var(--border); padding:6px; border-radius:18px; overflow-x:auto;}
 .dash-tab {flex:1; min-width:max-content; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px 18px; border:none; background:transparent; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:14px; font-weight:600; border-radius:13px; transition:all .2s; white-space:nowrap;}
@@ -492,6 +532,11 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
           <input type="password" id="auth-password" placeholder="••••••" autocomplete="current-password"
                  onkeydown="if(event.key==='Enter') submitAuth()">
         </div>
+        <div class="pl-field" id="auth-invite-field" style="display:none;">
+          <label>Zvací kód <span style="text-transform:none; letter-spacing:0; color:var(--text2)">(nepovinné)</span></label>
+          <input type="text" id="auth-invite" placeholder="máš-li kód od kamaráda" autocomplete="off"
+                 onkeydown="if(event.key==='Enter') submitAuth()">
+        </div>
         <div class="lock-error" id="auth-error"></div>
         <button class="btn-primary" style="width:100%; justify-content:center;" id="auth-submit" onclick="submitAuth()">
           <i class="ti ti-login-2"></i> <span id="auth-submit-label">Přihlásit se</span>
@@ -515,6 +560,15 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
           <span id="profile-cloud-cta"></span>
         </div>
 
+        <div class="sub-status" id="sub-status" style="display:none;"></div>
+
+        <div class="auth-tabs" id="pf-subtabs" style="display:none;">
+          <button class="auth-tab active" id="pftab-portfolio" onclick="setPfView('portfolio')">Portfolio</button>
+          <button class="auth-tab" id="pftab-plans" onclick="setPfView('plans')">Předplatné</button>
+          <button class="auth-tab" id="pftab-admin" onclick="setPfView('admin')" style="display:none;">Admin</button>
+        </div>
+
+        <div id="pfview-portfolio">
         <div class="ps-toolbar" id="ps-toolbar" style="display:flex;">
           <button class="tool-btn" onclick="requestNotif()"><i class="ti ti-bell"></i> Notifikace</button>
           <button class="tool-btn" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
@@ -548,6 +602,10 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
         <p class="auth-hint" style="text-align:left; margin-top:14px;">
           <i class="ti ti-info-circle"></i> Pozice zadáš v detailu akcie tlačítkem „Pozice“. Hodnota a zisk se přepočítají automaticky.
         </p>
+        </div><!-- /pfview-portfolio -->
+
+        <div id="pfview-plans" style="display:none;"></div>
+        <div id="pfview-admin" style="display:none;"></div>
       </div>
     </div>
   </div>
@@ -562,6 +620,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 
     <!-- SEKCE: AI ANALÝZA -->
     <div class="dash-section" id="section-ai" style="display:none;">
+    <div id="ai-lock" style="display:none;"></div>
     <!-- PORTFOLIO HODNOCENÍ: CO PRODAT / PŘIKOUPIT -->
     <div class="port-eval-box" id="port-eval-box" style="display:none;">
       <div class="port-eval-header"><i class="ti ti-chart-arrows-vertical"></i> Hodnocení Portfolia — Co prodat a přikoupit</div>
@@ -803,6 +862,30 @@ let authUser = localStorage.getItem('mystocks_user') || null;
 let cloudEnabled = false;
 let authTab = 'login';
 let syncTimer = null;
+
+// Předplatné
+let mySub = null;                       // {plan, effective, trial_ends, days_left, is_admin, ...}
+const PLAN_RANK = { start: 0, trader: 1, pro: 2 };
+const PLAN_NAMES = { start: 'Start', trader: 'Trader', pro: 'Pro' };
+const WATCHLIST_LIMIT_START = 5;
+
+// Aktivní plán: bez účtů (cloud vypnutý) = vše odemčeno; nepřihlášen = Start
+function effPlan() {
+    if (!cloudEnabled) return 'pro';
+    if (!authToken) return 'start';
+    return (mySub && mySub.effective) || 'start';
+}
+function hasFeature(minPlan) {
+    return (PLAN_RANK[effPlan()] ?? 0) >= PLAN_RANK[minPlan];
+}
+function lockedCardHTML(title, minPlan, desc) {
+    return `<div class="locked-card">
+        <div class="locked-icon"><i class="ti ti-lock"></i></div>
+        <h3>${title}</h3>
+        <p>${desc || ''} Dostupné v plánu <b>${PLAN_NAMES[minPlan]}</b> a vyšším.</p>
+        <button class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;" onclick="openProfile('plans')"><i class="ti ti-crown"></i> Zobrazit předplatné</button>
+    </div>`;
+}
 // Historie AI chatu pro aktuální akcii
 let chatHistory = [];
 
@@ -1068,8 +1151,27 @@ function switchTab(name) {
         if (sec) sec.style.display = (s === name) ? 'block' : 'none';
         if (tab) tab.classList.toggle('active', s === name);
     });
-    // Scanner načti až při prvním otevření
-    if (name === 'opportunities' && !oppData.length && !oppLoading) loadOpportunities();
+    // Zamykání sekcí podle plánu
+    if (name === 'opportunities') {
+        if (!hasFeature('trader')) {
+            document.getElementById('opp-grid').innerHTML = lockedCardHTML('Scanner příležitostí', 'trader',
+                'Vyhledávání šílených pohybů, objemových spiků a moonshotů.');
+        } else if (!oppData.length && !oppLoading) {
+            loadOpportunities();
+        }
+    }
+    if (name === 'ai') {
+        const lock = document.getElementById('ai-lock');
+        if (!hasFeature('pro')) {
+            lock.innerHTML = lockedCardHTML('AI analýza', 'pro',
+                'Tržní briefing, doporučení „co prodat/přikoupit" a AI chat o akciích.');
+            lock.style.display = 'block';
+            document.getElementById('port-eval-box').style.display = 'none';
+            document.getElementById('ai-dashboard-brief').style.display = 'none';
+        } else {
+            lock.style.display = 'none';
+        }
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1118,9 +1220,14 @@ async function initAccount() {
             if (r.ok) {
                 const d = await r.json();
                 applyPortfolio(d.portfolio);
+                // Stav předplatného
+                try {
+                    const me = await (await fetch(`${BACKEND_URL}/api/me`, { headers: authHeaders() })).json();
+                    if (me.ok) mySub = me.subscription;
+                } catch (e) {}
             } else {
                 // Token neplatný → odhlásit lokálně
-                authToken = null; authUser = null;
+                authToken = null; authUser = null; mySub = null;
                 localStorage.removeItem('mystocks_token');
                 localStorage.removeItem('mystocks_user');
             }
@@ -1141,7 +1248,9 @@ function updateProfileBtn() {
     }
 }
 
-function openProfile() {
+let pendingPfView = 'portfolio';
+function openProfile(view) {
+    pendingPfView = view || 'portfolio';
     document.getElementById('profileModal').classList.add('open');
     renderProfileView();
 }
@@ -1154,6 +1263,7 @@ function renderProfileView() {
     const pfView = document.getElementById('profile-portfolio');
     const acct = document.getElementById('profile-acct');
     const localNote = document.getElementById('profile-local-note');
+    const subTabs = document.getElementById('pf-subtabs');
 
     // Cloud zapnutý, ale nepřihlášen → ukaž jen přihlášení/registraci
     if (cloudEnabled && !authToken) {
@@ -1169,14 +1279,51 @@ function renderProfileView() {
         acct.style.display = 'flex';
         localNote.style.display = 'none';
         document.getElementById('profile-acct-name').textContent = authUser;
+        subTabs.style.display = 'flex';
+        document.getElementById('pftab-admin').style.display = (mySub && mySub.is_admin) ? 'block' : 'none';
+        renderSubStatus();
     } else {
         // Cloud vypnutý → lokální režim
         acct.style.display = 'none';
         localNote.style.display = 'flex';
+        subTabs.style.display = 'none';
+        document.getElementById('sub-status').style.display = 'none';
         document.getElementById('profile-cloud-cta').textContent =
-            ' Synchronizace mezi zařízeními se zapne po připojení úložiště na Vercelu.';
+            ' Synchronizace a předplatné se zapnou po připojení úložiště na Vercelu.';
     }
-    if (lastWatchlistData && lastWatchlistData.length) renderPortfolioSummary(lastWatchlistData);
+    setPfView(authToken ? pendingPfView : 'portfolio');
+}
+
+function setPfView(view) {
+    pendingPfView = view;
+    ['portfolio', 'plans', 'admin'].forEach(v => {
+        const el = document.getElementById('pfview-' + v);
+        const tab = document.getElementById('pftab-' + v);
+        if (el) el.style.display = (v === view) ? 'block' : 'none';
+        if (tab) tab.classList.toggle('active', v === view);
+    });
+    if (view === 'portfolio' && lastWatchlistData && lastWatchlistData.length) renderPortfolioSummary(lastWatchlistData);
+    if (view === 'plans') renderPlans();
+    if (view === 'admin') loadAdmin();
+}
+
+function renderSubStatus() {
+    const el = document.getElementById('sub-status');
+    if (!mySub) { el.style.display = 'none'; return; }
+    el.style.display = 'flex';
+    const eff = mySub.effective || 'start';
+    let extra = '';
+    if (mySub.plan === 'trial' && mySub.trial_active) {
+        extra = `<span class="trial-pill">Zkušební verze · zbývá ${mySub.days_left} ${mySub.days_left === 1 ? 'den' : (mySub.days_left < 5 ? 'dny' : 'dní')}</span>`;
+    } else if (mySub.plan === 'comped') {
+        extra = `<span class="trial-pill">Přístup zdarma (zvací kód)</span>`;
+    } else if (mySub.plan === 'trial' && !mySub.trial_active) {
+        extra = `<span style="color:var(--text2);font-size:12px;">Zkušební verze skončila</span>`;
+    }
+    el.innerHTML = `<span style="font-size:13px;color:var(--text2)">Tvůj plán:</span>
+        <span class="sub-badge ${eff}"><i class="ti ti-crown"></i> ${PLAN_NAMES[eff]}</span>
+        ${extra}
+        ${eff !== 'pro' ? '<button class="btn-primary" style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;padding:8px 14px;flex:none;" onclick="setPfView(\'plans\')"><i class="ti ti-arrow-up"></i> Vylepšit</button>' : ''}`;
 }
 
 function setAuthTab(tab) {
@@ -1184,9 +1331,10 @@ function setAuthTab(tab) {
     document.getElementById('tab-login').classList.toggle('active', tab === 'login');
     document.getElementById('tab-register').classList.toggle('active', tab === 'register');
     document.getElementById('auth-submit-label').textContent = tab === 'login' ? 'Přihlásit se' : 'Vytvořit účet';
+    document.getElementById('auth-invite-field').style.display = tab === 'register' ? 'flex' : 'none';
     document.getElementById('auth-hint').textContent = tab === 'login'
-        ? 'Ještě nemáš účet? Klikni na „Registrovat“.'
-        : 'Jméno 3–20 znaků, heslo aspoň 4 znaky.';
+        ? 'Ještě nemáš účet? Klikni na „Registrovat“. Prvních 7 dní máš plný Pro zdarma.'
+        : 'Jméno 3–20 znaků, heslo aspoň 4 znaky. Získáš 7 dní Pro zdarma.';
     document.getElementById('auth-error').textContent = '';
 }
 
@@ -1199,16 +1347,20 @@ async function submitAuth() {
     if (!u || !p) { errEl.textContent = 'Vyplň jméno i heslo.'; return; }
 
     const endpoint = authTab === 'login' ? 'login' : 'register';
+    const invite = document.getElementById('auth-invite').value.trim();
     btn.disabled = true;
     try {
+        const payload = { username: u, password: p };
+        if (endpoint === 'register' && invite) payload.invite = invite;
         const r = await fetch(`${BACKEND_URL}/api/${endpoint}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: u, password: p })
+            body: JSON.stringify(payload)
         });
         const d = await r.json();
         if (!d.ok) { errEl.textContent = d.error || 'Nepodařilo se.'; return; }
 
         authToken = d.token; authUser = d.user;
+        mySub = d.subscription || null;
         localStorage.setItem('mystocks_token', authToken);
         localStorage.setItem('mystocks_user', authUser);
 
@@ -1231,7 +1383,7 @@ async function submitAuth() {
 }
 
 function doLogout() {
-    authToken = null; authUser = null;
+    authToken = null; authUser = null; mySub = null;
     localStorage.removeItem('mystocks_token');
     localStorage.removeItem('mystocks_user');
     // Vyčistit citlivá data z tohoto zařízení (pozice + upozornění), watchlist na výchozí
@@ -1243,6 +1395,128 @@ function doLogout() {
     renderProfileView();
     showToast('Odhlášeno', 'down', 'ti-logout');
     loadWatchlist();
+}
+
+// ====================== CENÍK PŘEDPLATNÉHO ======================
+const PLANS = [
+    { id: 'start', name: 'Start', price: '0 €', period: 'zdarma', feats: [
+        ['Sledování do 5 titulů', 1], ['Ceny, grafy & náš Signal Score', 1], ['Aktuální zprávy', 1],
+        ['Scanner příležitostí', 0], ['TradingView ručička', 0], ['Analytici & AI analýza', 0] ] },
+    { id: 'trader', name: 'Trader', price: '7,99 €', period: '/ měsíc', featured: true, feats: [
+        ['Neomezený watchlist', 1], ['Scanner příležitostí', 1], ['Cenová upozornění', 1],
+        ['TradingView ručička', 1], ['Sync mezi zařízeními', 1], ['Analytici & AI analýza', 0] ] },
+    { id: 'pro', name: 'Pro', price: '14,99 €', period: '/ měsíc', feats: [
+        ['Vše z plánu Trader', 1], ['Finnhub analytici & cílové ceny', 1], ['Plná AI analýza & chat', 1],
+        ['Doporučení „co prodat/přikoupit"', 1], ['Prioritní novinky', 1] ] },
+];
+
+function renderPlans() {
+    const cur = effPlan();
+    const cards = PLANS.map(pl => {
+        const isCur = pl.id === cur;
+        const feats = pl.feats.map(([t, ok]) =>
+            `<li class="${ok ? '' : 'no'}"><i class="ti ti-${ok ? 'check' : 'x'}"></i> ${t}</li>`).join('');
+        const tag = pl.featured ? 'Nejoblíbenější' : '';
+        const cta = isCur
+            ? '<div class="plan-cta active"><i class="ti ti-check"></i> Tvůj plán</div>'
+            : '<div class="plan-cta">Připravujeme platby</div>';
+        return `<div class="plan-card ${pl.featured ? 'featured' : ''} ${isCur ? 'current' : ''}">
+            <div class="plan-tag">${tag}</div>
+            <div class="plan-name">${pl.name}</div>
+            <div class="plan-price">${pl.price} <small>${pl.period}</small></div>
+            <ul class="plan-feats">${feats}</ul>
+            ${cta}
+        </div>`;
+    }).join('');
+    document.getElementById('pfview-plans').innerHTML = `
+        <div class="plans-grid">${cards}</div>
+        <p class="auth-hint" style="margin-top:16px;">
+            <i class="ti ti-info-circle"></i> Online platby spustíme brzy. Do té doby plán aktivuje admin nebo zvací kód.
+            Každý nový účet má prvních 7 dní plný <b>Pro</b> zdarma.
+        </p>`;
+}
+
+// ====================== ADMIN PANEL ======================
+function fmtDate(ts) {
+    if (!ts) return '—';
+    return new Date(ts * 1000).toLocaleDateString('cs-CZ');
+}
+
+async function loadAdmin() {
+    const el = document.getElementById('pfview-admin');
+    el.innerHTML = '<div style="color:var(--accent); padding:14px;"><i class="ti ti-loader spin"></i> Načítám admin data...</div>';
+    try {
+        const [usersR, invR] = await Promise.all([
+            fetch(`${BACKEND_URL}/api/admin/users`, { headers: authHeaders() }).then(r => r.json()),
+            fetch(`${BACKEND_URL}/api/admin/invites`, { headers: authHeaders() }).then(r => r.json())
+        ]);
+        if (!usersR.ok) { el.innerHTML = `<div style="color:var(--down); padding:14px;">${usersR.error || 'Chyba'}</div>`; return; }
+        renderAdmin(usersR.users || [], invR.invites || []);
+    } catch (e) {
+        el.innerHTML = '<div style="color:var(--down); padding:14px;">Chyba načítání admin dat.</div>';
+    }
+}
+
+function renderAdmin(users, invites) {
+    const planOpts = (cur) => ['trial', 'start', 'trader', 'pro', 'comped']
+        .map(p => `<option value="${p}" ${p === cur ? 'selected' : ''}>${p}</option>`).join('');
+
+    const rows = users.map(u => `
+        <tr>
+            <td><b>${u.username}</b>${u.is_admin ? ' <span style="color:var(--accent)">★</span>' : ''}</td>
+            <td><span class="sub-badge ${u.effective}">${PLAN_NAMES[u.effective]}</span></td>
+            <td>${u.plan}${u.plan === 'trial' && u.days_left != null ? ` (${u.days_left}d)` : ''}</td>
+            <td>${u.watchlist}/${u.positions}</td>
+            <td>${fmtDate(u.created)}</td>
+            <td><select onchange="adminSetPlan('${u.username}', this.value)">${planOpts(u.plan)}</select></td>
+        </tr>`).join('');
+
+    const chips = invites.length ? invites.map(i =>
+        `<div class="invite-chip ${i.used_by ? 'used' : ''}">
+            <span>${i.code}</span>
+            ${i.used_by ? `<span style="font-size:11px;color:var(--text2)">${i.used_by}</span>`
+                       : `<i class="ti ti-copy copy" title="Kopírovat" onclick="copyText('${i.code}')"></i>`}
+        </div>`).join('') : '<span style="color:var(--text2); font-size:13px;">Zatím žádné kódy.</span>';
+
+    document.getElementById('pfview-admin').innerHTML = `
+        <div class="admin-sub"><i class="ti ti-ticket" style="color:var(--accent)"></i> <b>Zvací kódy</b>
+            <button class="tool-btn" style="margin-left:auto;" onclick="genInvites(1)"><i class="ti ti-plus"></i> Vygenerovat kód</button>
+            <button class="tool-btn" onclick="genInvites(5)"><i class="ti ti-plus"></i> 5 kódů</button>
+        </div>
+        <div class="admin-invites">${chips}</div>
+
+        <div class="admin-sub" style="margin-top:24px;"><i class="ti ti-users" style="color:var(--accent)"></i> <b>Uživatelé (${users.length})</b></div>
+        <div style="overflow-x:auto;">
+        <table class="admin-table">
+            <thead><tr><th>Jméno</th><th>Plán</th><th>Stav</th><th>WL/Poz</th><th>Vytvořen</th><th>Změnit plán</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="6" style="color:var(--text2)">Žádní uživatelé.</td></tr>'}</tbody>
+        </table></div>`;
+}
+
+async function genInvites(count) {
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/admin/invites`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ count })
+        });
+        const d = await r.json();
+        if (d.ok) { showToast(`Vygenerováno ${d.created.length} kódů`, 'up', 'ti-ticket'); loadAdmin(); }
+    } catch (e) { showToast('Nepodařilo se vygenerovat kódy', 'down', 'ti-x'); }
+}
+
+async function adminSetPlan(username, plan) {
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/admin/set-plan`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ username, plan })
+        });
+        const d = await r.json();
+        if (d.ok) { showToast(`${username} → ${plan}`, 'up', 'ti-check'); loadAdmin(); }
+        else showToast(d.error || 'Chyba', 'down', 'ti-x');
+    } catch (e) { showToast('Chyba při změně plánu', 'down', 'ti-x'); }
+}
+
+function copyText(t) {
+    navigator.clipboard?.writeText(t);
+    showToast('Kód zkopírován', 'up', 'ti-copy');
 }
 
 // ====================== ZÁMEK (ochrana heslem) ======================
@@ -1323,6 +1597,11 @@ function fmtVol(v) {
 
 async function loadOpportunities() {
     const grid = document.getElementById('opp-grid');
+    if(!hasFeature('trader')) {
+        grid.innerHTML = lockedCardHTML('Scanner příležitostí', 'trader',
+            'Vyhledávání šílených pohybů, objemových spiků a moonshotů.');
+        return;
+    }
     if(oppLoading) return;
     oppLoading = true;
     grid.innerHTML = '<div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh napříč burzami...</div>';
@@ -1807,8 +2086,16 @@ function closeDetail() {
 function toggleWatchlist() {
     if(!currentStockData) return;
     const t = currentStockData.ticker;
-    if(myStocks.includes(t)) myStocks = myStocks.filter(s => s !== t);
-    else myStocks.push(t);
+    if(myStocks.includes(t)) {
+        myStocks = myStocks.filter(s => s !== t);
+    } else {
+        if(!hasFeature('trader') && myStocks.length >= WATCHLIST_LIMIT_START) {
+            showToast(`Plán Start má limit ${WATCHLIST_LIMIT_START} titulů. Odemkni neomezený watchlist v plánu Trader.`, 'down', 'ti-lock');
+            openProfile('plans');
+            return;
+        }
+        myStocks.push(t);
+    }
     localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
     cloudSync();
     loadStockDetail(t, false);
@@ -2043,6 +2330,12 @@ function renderTradingView(ticker) {
     const box = document.getElementById('tv-box');
     const tv = document.getElementById('tv-ta');
     if (!tv) return;
+    if (!hasFeature('trader')) {
+        box.style.display = 'block';
+        tv.innerHTML = lockedCardHTML('TradingView hodnocení', 'trader',
+            'Nezávislá ručička Koupit/Prodat z TradingView.');
+        return;
+    }
     box.style.display = 'block';
     tv.innerHTML = '<div class="tradingview-widget-container__widget"></div>';
     const s = document.createElement('script');
@@ -2061,6 +2354,13 @@ function renderTradingView(ticker) {
 async function loadAnalyst(ticker, price) {
     const box = document.getElementById('analyst-box');
     box.style.display = 'none';
+    if (!hasFeature('pro')) {
+        box.style.display = 'block';
+        document.getElementById('analyst-target').innerHTML = '';
+        document.getElementById('analyst-recs').innerHTML =
+            lockedCardHTML('Doporučení analytiků', 'pro', 'Hodnocení bank, cílové ceny a fundamenty.');
+        return;
+    }
     try {
         const res = await fetch(`${BACKEND_URL}/api/analyst/${encodeURIComponent(ticker)}`);
         const d = await res.json();

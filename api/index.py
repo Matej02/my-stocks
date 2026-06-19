@@ -432,6 +432,57 @@ def _norm_user(u):
     return (u or "").strip().lower()
 
 
+# ---- Předplatné / plány ----
+TRIAL_DAYS = 7
+VALID_PLANS = ("start", "trader", "pro")
+
+
+def admin_users():
+    return set(x.strip().lower() for x in (os.environ.get("ADMIN_USERS", "")).split(",") if x.strip())
+
+
+def effective_plan(rec):
+    """Skutečně aktivní plán dle stavu účtu (trial/expirace)."""
+    plan = (rec or {}).get("plan", "start")
+    now = int(time.time())
+    if plan == "comped":
+        return "pro"
+    if plan == "trial":
+        return "pro" if now <= (rec.get("trial_ends") or 0) else "start"
+    if plan in ("trader", "pro"):
+        pu = rec.get("plan_until")
+        if pu and now > pu:
+            return "start"
+        return plan
+    return "start"
+
+
+def subscription_info(username, rec):
+    rec = rec or {}
+    now = int(time.time())
+    eff = effective_plan(rec)
+    info = {
+        "plan": rec.get("plan", "start"),
+        "effective": eff,
+        "trial_ends": rec.get("trial_ends"),
+        "plan_until": rec.get("plan_until"),
+        "is_admin": username in admin_users(),
+    }
+    if rec.get("plan") == "trial" and rec.get("trial_ends"):
+        info["days_left"] = max(0, (rec["trial_ends"] - now) // 86400 + (1 if (rec["trial_ends"] - now) % 86400 else 0))
+        info["trial_active"] = now <= rec["trial_ends"]
+    return info
+
+
+def kv_sadd(key, member):
+    return _kv_cmd("SADD", key, member)
+
+
+def kv_smembers(key):
+    res = _kv_cmd("SMEMBERS", key)
+    return res if isinstance(res, list) else []
+
+
 @app.route("/api/account/status")
 def account_status():
     return jsonify({"cloud": cloud_enabled()})
@@ -448,14 +499,35 @@ def register():
         return jsonify({"ok": False, "error": "Jméno: 3–20 znaků (a–z, 0–9, . _ -)."}), 400
     if len(password) < 4:
         return jsonify({"ok": False, "error": "Heslo musí mít aspoň 4 znaky."}), 400
+    invite = (body.get("invite") or "").strip().lower()
     try:
         if kv_get_json(f"user:{username}"):
             return jsonify({"ok": False, "error": "Toto jméno už existuje."}), 409
+
+        now = int(time.time())
+        plan, trial_ends = "trial", now + TRIAL_DAYS * 86400
+
+        # Zvací kód → plný přístup (Pro) natrvalo, kód se spotřebuje
+        if invite:
+            inv = kv_get_json(f"invite:{invite}")
+            if not inv:
+                return jsonify({"ok": False, "error": "Neplatný zvací kód."}), 400
+            if inv.get("used_by"):
+                return jsonify({"ok": False, "error": "Tento kód už byl použit."}), 409
+            plan, trial_ends = "comped", None
+            inv["used_by"] = username
+            inv["used_at"] = now
+            kv_set_json(f"invite:{invite}", inv)
+
         salt, ph = hash_password(password)
-        kv_set_json(f"user:{username}", {"salt": salt, "hash": ph,
-                                         "created": int(time.time())})
+        rec = {"salt": salt, "hash": ph, "created": now, "plan": plan}
+        if trial_ends:
+            rec["trial_ends"] = trial_ends
+        kv_set_json(f"user:{username}", rec)
         kv_set_json(f"portfolio:{username}", {"watchlist": [], "positions": {}, "alerts": []})
-        return jsonify({"ok": True, "token": make_token(username), "user": username})
+        kv_sadd("users", username)
+        return jsonify({"ok": True, "token": make_token(username), "user": username,
+                        "subscription": subscription_info(username, rec)})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
@@ -472,8 +544,22 @@ def login():
         if not u or not verify_password(password, u.get("salt", ""), u.get("hash", "")):
             return jsonify({"ok": False, "error": "Špatné jméno nebo heslo."}), 401
         portfolio = kv_get_json(f"portfolio:{username}") or {"watchlist": [], "positions": {}, "alerts": []}
-        return jsonify({"ok": True, "token": make_token(username),
-                        "user": username, "portfolio": portfolio})
+        return jsonify({"ok": True, "token": make_token(username), "user": username,
+                        "portfolio": portfolio, "subscription": subscription_info(username, u)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
+@app.route("/api/me")
+def me():
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    try:
+        rec = kv_get_json(f"user:{user}")
+        if not rec:
+            return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
+        return jsonify({"ok": True, "user": user, "subscription": subscription_info(user, rec)})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
@@ -505,6 +591,92 @@ def save_portfolio():
     try:
         kv_set_json(f"portfolio:{user}", portfolio)
         return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
+# ---------------------------------------------------------------------------
+# Admin (pouze pro uživatele uvedené v env ADMIN_USERS)
+# ---------------------------------------------------------------------------
+def _auth_admin():
+    u = _auth_user()
+    return u if (u and u in admin_users()) else None
+
+
+@app.route("/api/admin/users")
+def admin_list_users():
+    if not _auth_admin():
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    try:
+        out = []
+        for uname in kv_smembers("users"):
+            rec = kv_get_json(f"user:{uname}") or {}
+            pf = kv_get_json(f"portfolio:{uname}") or {}
+            info = subscription_info(uname, rec)
+            info.update({
+                "username": uname,
+                "created": rec.get("created"),
+                "positions": len((pf.get("positions") or {})),
+                "watchlist": len((pf.get("watchlist") or [])),
+            })
+            out.append(info)
+        out.sort(key=lambda x: x.get("created") or 0, reverse=True)
+        return jsonify({"ok": True, "users": out, "count": len(out)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
+@app.route("/api/admin/set-plan", methods=["POST"])
+def admin_set_plan():
+    if not _auth_admin():
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    body = request.get_json(silent=True) or {}
+    username = _norm_user(body.get("username"))
+    plan = (body.get("plan") or "").strip().lower()
+    days = body.get("days")
+    if plan not in VALID_PLANS and plan not in ("comped", "trial"):
+        return jsonify({"ok": False, "error": "Neplatný plán."}), 400
+    try:
+        rec = kv_get_json(f"user:{username}")
+        if not rec:
+            return jsonify({"ok": False, "error": "Uživatel neexistuje."}), 404
+        rec["plan"] = plan
+        now = int(time.time())
+        if plan in ("trader", "pro"):
+            rec["plan_until"] = (now + int(days) * 86400) if days else None
+        elif plan == "trial":
+            rec["trial_ends"] = now + int(days or TRIAL_DAYS) * 86400
+        elif plan == "comped":
+            rec["plan_until"] = None
+        kv_set_json(f"user:{username}", rec)
+        return jsonify({"ok": True, "subscription": subscription_info(username, rec)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
+@app.route("/api/admin/invites", methods=["GET", "POST"])
+def admin_invites():
+    if not _auth_admin():
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    try:
+        if request.method == "POST":
+            count = int((request.get_json(silent=True) or {}).get("count", 1))
+            count = max(1, min(count, 20))
+            created = []
+            for _ in range(count):
+                code = secrets.token_hex(4)  # 8 znaků
+                kv_set_json(f"invite:{code}", {"created": int(time.time()), "used_by": None})
+                kv_sadd("invites", code)
+                created.append(code)
+            return jsonify({"ok": True, "created": created})
+        # GET – seznam kódů
+        out = []
+        for code in kv_smembers("invites"):
+            inv = kv_get_json(f"invite:{code}") or {}
+            out.append({"code": code, "used_by": inv.get("used_by"),
+                        "created": inv.get("created"), "used_at": inv.get("used_at")})
+        out.sort(key=lambda x: x.get("created") or 0, reverse=True)
+        return jsonify({"ok": True, "invites": out})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
