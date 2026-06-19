@@ -626,6 +626,14 @@ def kv_smembers(key):
     return res if isinstance(res, list) else []
 
 
+def kv_srem(key, member):
+    return _kv_cmd("SREM", _pk(key), member)
+
+
+def kv_del(key):
+    return _kv_cmd("DEL", _pk(key))
+
+
 @app.route("/api/account/status")
 def account_status():
     return jsonify({"cloud": cloud_enabled()})
@@ -836,6 +844,23 @@ def admin_set_plan():
             rec["plan_until"] = None
         kv_set_json(f"user:{username}", rec)
         return jsonify({"ok": True, "subscription": subscription_info(username, rec)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
+@app.route("/api/admin/delete-user", methods=["POST"])
+def admin_delete_user():
+    admin = _auth_admin()
+    if not admin:
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    email = _norm_email((request.get_json(silent=True) or {}).get("email"))
+    if email in admin_users():
+        return jsonify({"ok": False, "error": "Admin účet nelze smazat."}), 400
+    try:
+        kv_del(f"user:{email}")
+        kv_del(f"portfolio:{email}")
+        kv_srem("users", email)
+        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 

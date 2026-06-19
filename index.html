@@ -1542,6 +1542,7 @@ function renderAdmin(users, invites) {
             <td>${u.watchlist}/${u.positions}</td>
             <td>${fmtDate(u.created)}</td>
             <td><select onchange="adminSetPlan('${u.username}', this.value)">${planOpts(u.plan)}</select></td>
+            <td>${u.is_admin ? '' : `<button class="tool-btn" style="padding:5px 9px;" title="Smazat účet" onclick="adminDeleteUser('${u.username}')"><i class="ti ti-trash"></i></button>`}</td>
         </tr>`).join('');
 
     const chips = invites.length ? invites.map(i =>
@@ -1561,7 +1562,7 @@ function renderAdmin(users, invites) {
         <div class="admin-sub" style="margin-top:24px;"><i class="ti ti-users" style="color:var(--accent)"></i> <b>Uživatelé (${users.length})</b></div>
         <div style="overflow-x:auto;">
         <table class="admin-table">
-            <thead><tr><th>E-mail</th><th>Plán</th><th>Stav</th><th>WL/Poz</th><th>Vytvořen</th><th>Změnit plán</th></tr></thead>
+            <thead><tr><th>E-mail</th><th>Plán</th><th>Stav</th><th>WL/Poz</th><th>Vytvořen</th><th>Změnit plán</th><th></th></tr></thead>
             <tbody>${rows || '<tr><td colspan="6" style="color:var(--text2)">Žádní uživatelé.</td></tr>'}</tbody>
         </table></div>`;
 }
@@ -1585,6 +1586,18 @@ async function adminSetPlan(username, plan) {
         if (d.ok) { showToast(`${username} → ${plan}`, 'up', 'ti-check'); loadAdmin(); }
         else showToast(d.error || 'Chyba', 'down', 'ti-x');
     } catch (e) { showToast('Chyba při změně plánu', 'down', 'ti-x'); }
+}
+
+async function adminDeleteUser(email) {
+    if (!confirm(`Opravdu smazat účet ${email}? Tahle akce je nevratná.`)) return;
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/admin/delete-user`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ email })
+        });
+        const d = await r.json();
+        if (d.ok) { showToast(`Účet ${email} smazán`, 'down', 'ti-trash'); loadAdmin(); }
+        else showToast(d.error || 'Chyba', 'down', 'ti-x');
+    } catch (e) { showToast('Chyba při mazání', 'down', 'ti-x'); }
 }
 
 function copyText(t) {
