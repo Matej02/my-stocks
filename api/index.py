@@ -14,6 +14,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import requests
 import math
+import os
 from datetime import datetime, timezone
 from urllib.parse import quote
 
@@ -296,6 +297,27 @@ def fetch_fundamentals(ticker):
     except Exception:
         pass
     return out
+
+
+# ---------------------------------------------------------------------------
+# Ochrana heslem (volitelná – aktivuje se nastavením env APP_PASSWORD na Vercelu)
+# ---------------------------------------------------------------------------
+@app.route("/api/auth", methods=["GET"])
+def auth_status():
+    """Řekne frontendu, jestli je appka chráněná heslem."""
+    return jsonify({"protected": bool(os.environ.get("APP_PASSWORD"))})
+
+
+@app.route("/api/auth", methods=["POST"])
+def auth_check():
+    """Ověří heslo proti env APP_PASSWORD. Heslo není nikde v kódu."""
+    real = os.environ.get("APP_PASSWORD")
+    if not real:
+        return jsonify({"ok": True, "protected": False})
+    pw = (request.get_json(silent=True) or {}).get("password", "")
+    if pw == real:
+        return jsonify({"ok": True, "protected": True})
+    return jsonify({"ok": False, "error": "Nesprávné heslo"}), 401
 
 
 # ---------------------------------------------------------------------------

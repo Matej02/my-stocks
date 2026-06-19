@@ -200,6 +200,19 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .tool-btn {background:var(--bg-glass); border:1px solid var(--border); padding:8px 14px; border-radius:12px; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; display:flex; align-items:center; gap:6px; transition:all .2s;}
 .tool-btn:hover {color:var(--accent); border-color:var(--accent);}
 
+/* ============ ZÁMEK ============ */
+.lock-screen {position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; background:rgba(10,10,20,0.85); backdrop-filter:blur(14px); padding:20px;}
+.lock-card {background:var(--bg-glass); border:1px solid var(--border); border-radius:24px; padding:2.5rem; width:100%; max-width:380px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+.lock-icon {width:64px; height:64px; margin:0 auto 16px; border-radius:18px; background:var(--accent-glow); display:flex; align-items:center; justify-content:center;}
+.lock-icon i {font-size:30px; color:var(--accent);}
+.lock-card h2 {font-family:var(--fh); font-size:26px; margin-bottom:6px; color:var(--text);}
+.lock-card h2 span {color:var(--accent);}
+.lock-card p {color:var(--text2); font-size:13px; margin-bottom:20px;}
+.lock-card input {width:100%; padding:13px 16px; border-radius:12px; border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text); font-family:var(--fb); font-size:15px; margin-bottom:12px; text-align:center;}
+.lock-card input:focus {outline:none; border-color:var(--accent);}
+.lock-card .btn-primary {width:100%; justify-content:center;}
+.lock-error {color:var(--down); font-size:12px; min-height:16px; margin-bottom:10px;}
+
 /* ============ SCANNER PŘÍLEŽITOSTÍ ============ */
 .opp-box {background:linear-gradient(135deg, rgba(124,77,255,0.06), rgba(255,77,128,0.04)); border:1px solid var(--border); border-radius:22px; padding:1.6rem; margin-bottom:2.2rem; position:relative; overflow:hidden;}
 .opp-box::before {content:""; position:absolute; top:-40%; right:-10%; width:320px; height:320px; background:radial-gradient(circle, rgba(124,77,255,0.18), transparent 70%); pointer-events:none;}
@@ -307,6 +320,19 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 </style>
 </head>
 <body>
+
+<!-- ZÁMEK – zobrazí se jen když je nastaveno heslo (env APP_PASSWORD) -->
+<div id="lockScreen" class="lock-screen" style="display:none;">
+  <div class="lock-card">
+    <div class="lock-icon"><i class="ti ti-lock"></i></div>
+    <h2>MY <span>STOCKS</span></h2>
+    <p>Tato appka je chráněná heslem.</p>
+    <input type="password" id="lockInput" placeholder="Zadej heslo..." autocomplete="current-password"
+           onkeydown="if(event.key==='Enter') submitLock()">
+    <div class="lock-error" id="lockError"></div>
+    <button class="btn-primary" onclick="submitLock()"><i class="ti ti-key"></i> Odemknout</button>
+  </div>
+</div>
 
 <div class="container">
   
@@ -629,8 +655,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('api-key').value = localStorage.getItem('mystocks_key') || '';
     document.getElementById('api-provider').value = localStorage.getItem('mystocks_prov') || 'groq';
     
-    loadWatchlist();
-    loadOpportunities();
+    initGate();
 
     const searchInput = document.getElementById('searchInput');
     const searchDropdown = document.getElementById('searchDropdown');
@@ -871,6 +896,55 @@ async function loadWatchlistSilent() {
         renderPortfolioSummary(data.results);
         checkAlerts(data.results);
     } catch(e) {}
+}
+
+// ====================== ZÁMEK (ochrana heslem) ======================
+function startApp() {
+    loadWatchlist();
+    loadOpportunities();
+}
+
+async function initGate() {
+    // Pokud appka není chráněná (env APP_PASSWORD není nastaveno), nebo už je odemčeno,
+    // appku rovnou spustíme. Když ověření selže (síť), raději pustíme dál (žádný lockout).
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/auth`);
+        const d = await r.json();
+        if (!d.protected || localStorage.getItem('mystocks_auth') === '1') {
+            startApp();
+            return;
+        }
+    } catch (e) {
+        startApp();
+        return;
+    }
+    const lock = document.getElementById('lockScreen');
+    lock.style.display = 'flex';
+    setTimeout(() => document.getElementById('lockInput').focus(), 100);
+}
+
+async function submitLock() {
+    const input = document.getElementById('lockInput');
+    const err = document.getElementById('lockError');
+    err.textContent = '';
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/auth`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: input.value })
+        });
+        if (r.ok) {
+            localStorage.setItem('mystocks_auth', '1');
+            document.getElementById('lockScreen').style.display = 'none';
+            startApp();
+        } else {
+            err.textContent = 'Nesprávné heslo. Zkus to znovu.';
+            input.value = '';
+            input.focus();
+        }
+    } catch (e) {
+        err.textContent = 'Chyba spojení se serverem.';
+    }
 }
 
 // ====================== SCANNER PŘÍLEŽITOSTÍ ======================
