@@ -213,6 +213,27 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .lock-card .btn-primary {width:100%; justify-content:center;}
 .lock-error {color:var(--down); font-size:12px; min-height:16px; margin-bottom:10px;}
 
+/* ============ TRADINGVIEW & ANALYTICI ============ */
+.tv-box, .analyst-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-bottom:20px;}
+#tv-ta {min-height:400px;}
+.analyst-target {display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap;}
+.at-cell {flex:1; min-width:90px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:12px; text-align:center;}
+.at-cell .l {font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px;}
+.at-cell .v {font-family:var(--fh); font-size:18px; font-weight:700;}
+.at-cell.mean {border-color:var(--accent);}
+.at-up {color:var(--up);} .at-down {color:var(--down);}
+.at-upside {font-size:12px; margin-top:3px;}
+.analyst-recs {display:flex; flex-direction:column; gap:8px;}
+.rec-row {display:flex; align-items:center; gap:10px;}
+.rec-lbl {width:110px; font-size:12.5px; color:var(--text2); flex-shrink:0;}
+.rec-bar-wrap {flex:1; height:14px; background:rgba(255,255,255,0.05); border-radius:7px; overflow:hidden;}
+.rec-bar {height:100%; border-radius:7px; transition:width .4s;}
+.rec-bar.strongBuy {background:#00C853;} .rec-bar.buy {background:#69F0AE;}
+.rec-bar.hold {background:#FFC400;} .rec-bar.sell {background:#FF7043;}
+.rec-bar.strongSell {background:#FF3D00;}
+.rec-num {width:26px; text-align:right; font-size:13px; font-weight:700; flex-shrink:0;}
+.rec-period {font-size:11px; color:var(--text2); margin-top:6px; text-align:right;}
+
 /* ============ NAVIGACE SEKCÍ (taby) ============ */
 .dash-tabs {display:flex; gap:8px; margin-bottom:2rem; background:var(--bg-glass); border:1px solid var(--border); padding:6px; border-radius:18px; overflow-x:auto;}
 .dash-tab {flex:1; min-width:max-content; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px 18px; border:none; background:transparent; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:14px; font-weight:600; border-radius:13px; transition:all .2s; white-space:nowrap;}
@@ -672,6 +693,11 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
           <div class="signal-comps" id="signal-comps"></div>
         </div>
 
+        <div class="tv-box" id="tv-box" style="display:none;">
+          <div class="signal-title" style="margin-bottom:12px;"><i class="ti ti-chart-dots-3" style="color:#2962FF"></i> TradingView — nezávislé hodnocení</div>
+          <div class="tradingview-widget-container" id="tv-ta"></div>
+        </div>
+
         <div class="metrics-grid">
           <div class="metric-box"><div class="metric-lbl">P/E Ratio</div><div class="metric-val" id="d-pe">--</div></div>
           <div class="metric-box"><div class="metric-lbl">Market Cap</div><div class="metric-val" id="d-cap">--</div></div>
@@ -681,6 +707,12 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
           <div class="metric-box"><div class="metric-lbl">52W Low</div><div class="metric-val" id="d-low">--</div></div>
           <div class="metric-box"><div class="metric-lbl">Beta</div><div class="metric-val" id="d-beta">--</div></div>
           <div class="metric-box"><div class="metric-lbl">Dividenda</div><div class="metric-val" id="d-div">--</div></div>
+        </div>
+
+        <div class="analyst-box" id="analyst-box" style="display:none;">
+          <div class="signal-title" style="margin-bottom:14px;"><i class="ti ti-users-group" style="color:var(--accent)"></i> Doporučení analytiků <span style="font-size:11px; color:var(--text2); font-weight:400;">(Finnhub)</span></div>
+          <div class="analyst-target" id="analyst-target"></div>
+          <div class="analyst-recs" id="analyst-recs"></div>
         </div>
 
         <div class="ai-box" id="ai-output">
@@ -1587,7 +1619,9 @@ async function loadStockDetail(ticker, runAI = true) {
         renderSignal(data);
         resetChat(data.ticker);
         loadNews(data.ticker);
-        
+        renderTradingView(data.ticker);
+        loadAnalyst(data.ticker, data.price);
+
         const btnWatch = document.getElementById('btn-toggle-watch');
         if(myStocks.includes(data.ticker)) {
             btnWatch.innerHTML = '<i class="ti ti-star-off"></i> Odebrat';
@@ -1993,6 +2027,94 @@ function showToast(msg, kind='up', icon='ti-bell') {
 }
 
 // ============ NEWS FEED ============
+// ====================== TRADINGVIEW (nezávislé hodnocení) ======================
+// Převede Yahoo ticker na symbol, kterému TradingView rozumí (best-effort).
+function toTVSymbol(ticker) {
+    const t = (ticker || '').toUpperCase();
+    const futures = { 'GC=F': 'COMEX:GC1!', 'SI=F': 'COMEX:SI1!', 'HG=F': 'COMEX:HG1!',
+                      'CL=F': 'NYMEX:CL1!', 'NG=F': 'NYMEX:NG1!' };
+    if (futures[t]) return futures[t];
+    if (t.endsWith('-USD')) return t.replace('-USD', 'USD');   // krypto: BTC-USD -> BTCUSD
+    if (t.includes('.')) return t.split('.')[0];                // burzovní přípony: COLT.PR -> COLT
+    return t;
+}
+
+function renderTradingView(ticker) {
+    const box = document.getElementById('tv-box');
+    const tv = document.getElementById('tv-ta');
+    if (!tv) return;
+    box.style.display = 'block';
+    tv.innerHTML = '<div class="tradingview-widget-container__widget"></div>';
+    const s = document.createElement('script');
+    s.type = 'text/javascript';
+    s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js';
+    s.async = true;
+    s.innerHTML = JSON.stringify({
+        interval: '1D', width: '100%', isTransparent: true, height: 400,
+        symbol: toTVSymbol(ticker), showIntervalTabs: true, displayMode: 'single',
+        locale: 'en', colorTheme: 'dark'
+    });
+    tv.appendChild(s);
+}
+
+// ====================== FINNHUB (analytici + fundamenty) ======================
+async function loadAnalyst(ticker, price) {
+    const box = document.getElementById('analyst-box');
+    box.style.display = 'none';
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/analyst/${encodeURIComponent(ticker)}`);
+        const d = await res.json();
+        if (!d.ok || !d.configured) return;
+
+        // Doplnit P/E a kapitalizaci, pokud je Yahoo nedodal
+        const peEl = document.getElementById('d-pe');
+        if ((peEl.innerText === 'N/A' || peEl.innerText === '--') && d.pe_ratio != null)
+            peEl.innerText = parseFloat(d.pe_ratio).toFixed(2);
+        const capEl = document.getElementById('d-cap');
+        if ((capEl.innerText === 'N/A' || capEl.innerText === '--' || !capEl.innerText) && d.market_cap)
+            capEl.innerText = formatNum(d.market_cap);
+
+        const hasTarget = d.target && d.target.mean;
+        const hasRecs = d.recs && (d.recs.strongBuy + d.recs.buy + d.recs.hold + d.recs.sell + d.recs.strongSell) > 0;
+        if (!hasTarget && !hasRecs) return;
+        box.style.display = 'block';
+
+        // Cílové ceny
+        const tEl = document.getElementById('analyst-target');
+        if (hasTarget) {
+            const cur = price || 0;
+            const upside = cur ? ((d.target.mean - cur) / cur * 100) : null;
+            const upTxt = upside != null
+                ? `<div class="at-upside ${upside>=0?'at-up':'at-down'}">${upside>=0?'+':''}${upside.toFixed(1)}% potenciál</div>` : '';
+            tEl.innerHTML = `
+                <div class="at-cell"><div class="l">Min. cíl</div><div class="v">${d.target.low ?? '—'}</div></div>
+                <div class="at-cell mean"><div class="l">Průměrný cíl</div><div class="v">${d.target.mean}</div>${upTxt}</div>
+                <div class="at-cell"><div class="l">Max. cíl</div><div class="v">${d.target.high ?? '—'}</div></div>`;
+        } else { tEl.innerHTML = ''; }
+
+        // Doporučení (bar)
+        const rEl = document.getElementById('analyst-recs');
+        if (hasRecs) {
+            const r = d.recs;
+            const total = r.strongBuy + r.buy + r.hold + r.sell + r.strongSell;
+            const rows = [
+                ['strongBuy', 'Silně kupovat', r.strongBuy],
+                ['buy', 'Kupovat', r.buy],
+                ['hold', 'Držet', r.hold],
+                ['sell', 'Prodávat', r.sell],
+                ['strongSell', 'Silně prodávat', r.strongSell],
+            ];
+            rEl.innerHTML = rows.map(([cls, lbl, n]) => `
+                <div class="rec-row">
+                    <span class="rec-lbl">${lbl}</span>
+                    <span class="rec-bar-wrap"><span class="rec-bar ${cls}" style="width:${total?(n/total*100):0}%"></span></span>
+                    <span class="rec-num">${n}</span>
+                </div>`).join('') +
+                (r.period ? `<div class="rec-period">Data k ${r.period} • ${total} analytiků</div>` : '');
+        } else { rEl.innerHTML = ''; }
+    } catch (e) { /* tiché selhání – panel zůstane skrytý */ }
+}
+
 async function loadNews(ticker) {
     const list = document.getElementById('news-list');
     list.innerHTML = '<div style="color:var(--text2); font-size:13px;"><i class="ti ti-loader spin"></i> Načítám zprávy...</div>';

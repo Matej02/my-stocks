@@ -738,6 +738,80 @@ def get_news(ticker):
         return jsonify({"ok": True, "results": [], "error": str(e)})
 
 
+@app.route("/api/analyst/<path:ticker>")
+def get_analyst(ticker):
+    """Doporučení analytiků, cílové ceny a fundamenty z Finnhubu (env FINNHUB_KEY).
+    Bez klíče vrací configured=False a frontend panely skryje."""
+    key = os.environ.get("FINNHUB_KEY")
+    if not key:
+        return jsonify({"ok": True, "configured": False})
+
+    sym = ticker.upper()
+    base = "https://finnhub.io/api/v1"
+    out = {"ok": True, "configured": True, "ticker": sym}
+
+    def fh(path, params):
+        params = dict(params or {})
+        params["token"] = key
+        r = requests.get(f"{base}/{path}", params=params, headers=HEADERS, timeout=8)
+        if r.status_code != 200:
+            return None
+        return r.json()
+
+    # Profil (kapitalizace, název, sektor)
+    try:
+        p = fh("stock/profile2", {"symbol": sym}) or {}
+        if p.get("name"):
+            out["name"] = p.get("name")
+        out["industry"] = p.get("finnhubIndustry")
+        mc = p.get("marketCapitalization")  # v milionech USD
+        if mc:
+            out["market_cap"] = int(float(mc) * 1e6)
+        out["currency"] = p.get("currency")
+    except Exception:
+        pass
+
+    # Fundamenty (P/E, EPS, beta, dividenda)
+    try:
+        m = (fh("stock/metric", {"symbol": sym, "metric": "all"}) or {}).get("metric", {}) or {}
+        out["pe_ratio"] = _round(m.get("peTTM") or m.get("peBasicExclExtraTTM"), 2)
+        out["eps"] = _round(m.get("epsTTM"), 2)
+        out["beta"] = _round(m.get("beta"), 2)
+        out["dividend_yield"] = _round(m.get("dividendYieldIndicatedAnnual"), 2)
+    except Exception:
+        pass
+
+    # Doporučení analytiků (poslední období)
+    try:
+        recs = fh("stock/recommendation", {"symbol": sym}) or []
+        if recs:
+            r0 = recs[0]
+            out["recs"] = {
+                "strongBuy": int(r0.get("strongBuy", 0) or 0),
+                "buy": int(r0.get("buy", 0) or 0),
+                "hold": int(r0.get("hold", 0) or 0),
+                "sell": int(r0.get("sell", 0) or 0),
+                "strongSell": int(r0.get("strongSell", 0) or 0),
+                "period": r0.get("period"),
+            }
+    except Exception:
+        pass
+
+    # Cílové ceny
+    try:
+        t = fh("stock/price-target", {"symbol": sym}) or {}
+        if t.get("targetMean"):
+            out["target"] = {
+                "mean": _round(t.get("targetMean"), 2),
+                "high": _round(t.get("targetHigh"), 2),
+                "low": _round(t.get("targetLow"), 2),
+            }
+    except Exception:
+        pass
+
+    return jsonify(out)
+
+
 @app.route("/api/stock/<path:ticker>")
 def get_stock_detail(ticker):
     ticker = ticker.upper()
