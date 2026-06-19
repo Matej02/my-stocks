@@ -364,8 +364,17 @@ def _kv_cmd(*args):
     return (j or {}).get("result")
 
 
+# Prefix všech klíčů – aby šlo bezpečně sdílet jednu Redis databázi s jiným
+# projektem, aniž by se data potkala. Lze přepsat env proměnnou KV_PREFIX.
+KV_PREFIX = os.environ.get("KV_PREFIX", "ms:")
+
+
+def _pk(key):
+    return f"{KV_PREFIX}{key}"
+
+
 def kv_get_json(key):
-    res = _kv_cmd("GET", key)
+    res = _kv_cmd("GET", _pk(key))
     if not res:
         return None
     try:
@@ -375,7 +384,7 @@ def kv_get_json(key):
 
 
 def kv_set_json(key, value):
-    return _kv_cmd("SET", key, json.dumps(value))
+    return _kv_cmd("SET", _pk(key), json.dumps(value))
 
 
 # ---- Hesla (pbkdf2, čistá stdlib) ----
@@ -475,11 +484,11 @@ def subscription_info(username, rec):
 
 
 def kv_sadd(key, member):
-    return _kv_cmd("SADD", key, member)
+    return _kv_cmd("SADD", _pk(key), member)
 
 
 def kv_smembers(key):
-    res = _kv_cmd("SMEMBERS", key)
+    res = _kv_cmd("SMEMBERS", _pk(key))
     return res if isinstance(res, list) else []
 
 
