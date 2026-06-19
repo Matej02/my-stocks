@@ -299,6 +299,158 @@ def fetch_fundamentals(ticker):
 
 
 # ---------------------------------------------------------------------------
+# Scanner příležitostí ("crazy opportunities")
+# ---------------------------------------------------------------------------
+def _qf(node, key, default=None):
+    """Bezpečně vytáhne číslo ze screener quote (může být raw číslo nebo {'raw':...})."""
+    v = node.get(key)
+    if isinstance(v, dict):
+        v = v.get("raw")
+    return _clean(v, default)
+
+
+def yahoo_screener(scr_id, count=30):
+    url = "https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved"
+    r = requests.get(url, headers=HEADERS,
+                     params={"scrIds": scr_id, "count": count, "start": 0}, timeout=10)
+    res = ((r.json() or {}).get("finance") or {}).get("result") or []
+    if not res:
+        return []
+    return res[0].get("quotes", []) or []
+
+
+def opportunity_score(q):
+    """Skóre 'výbušnosti' 0-100 + odznaky. Odměňuje denní výbuch, objemový spike,
+    roční momentum, malou kapitalizaci (prostor 10x) a blízkost průlomu."""
+    day = _qf(q, "regularMarketChangePercent", 0) or 0
+    price = _qf(q, "regularMarketPrice", 0) or 0
+    vol = _qf(q, "regularMarketVolume", 0) or 0
+    avg = _qf(q, "averageDailyVolume3Month", 0) or _qf(q, "averageDailyVolume10Day", 0) or 0
+    yr = _qf(q, "fiftyTwoWeekChangePercent", 0) or 0
+    mcap = _qf(q, "marketCap", 0) or 0
+    hi52 = _qf(q, "fiftyTwoWeekHigh", 0) or 0
+    lo52 = _qf(q, "fiftyTwoWeekLow", 0) or 0
+
+    vol_ratio = (vol / avg) if avg else 0
+    badges = []
+    score = 0.0
+
+    # 1) Denní výbuch (až 35 b.) – 100% za den = strop
+    score += min(abs(day), 100) / 100 * 35
+    if day >= 100:
+        badges.append({"t": f"🚀 +{day:.0f}% DNES", "k": "extreme"})
+    elif day >= 30:
+        badges.append({"t": f"🚀 +{day:.0f}% dnes", "k": "hot"})
+    elif day >= 10:
+        badges.append({"t": f"📈 +{day:.0f}% dnes", "k": "up"})
+    elif day <= -10:
+        badges.append({"t": f"📉 {day:.0f}% dnes", "k": "down"})
+
+    # 2) Objemový spike (až 25 b.) – kolikrát nad průměrem
+    score += min(vol_ratio, 12) / 12 * 25
+    if vol_ratio >= 5:
+        badges.append({"t": f"🔥 Objem {vol_ratio:.0f}× průměr", "k": "hot"})
+    elif vol_ratio >= 2:
+        badges.append({"t": f"🔥 Objem {vol_ratio:.1f}× průměr", "k": "up"})
+
+    # 3) Roční momentum (až 15 b.) – už běží
+    score += max(min(yr, 1000), 0) / 1000 * 15
+    if yr >= 500:
+        badges.append({"t": f"💥 +{yr:.0f}% za rok", "k": "extreme"})
+    elif yr >= 100:
+        badges.append({"t": f"📈 +{yr:.0f}% za rok", "k": "up"})
+
+    # 4) Malá kapitalizace = prostor pro 10x (až 15 b.)
+    if mcap and mcap < 50e6:
+        score += 15; badges.append({"t": "💎 Nano-cap", "k": "gem"})
+    elif mcap and mcap < 300e6:
+        score += 12; badges.append({"t": "💎 Micro-cap", "k": "gem"})
+    elif mcap and mcap < 2e9:
+        score += 8; badges.append({"t": "Small-cap", "k": "neutral"})
+    elif mcap and mcap < 10e9:
+        score += 4
+
+    # 5) Blízkost průlomu / pozice v 52T pásmu (až 10 b.)
+    if hi52 and lo52 and hi52 > lo52 and price:
+        pos = (price - lo52) / (hi52 - lo52)
+        if pos >= 0.9:
+            score += 10; badges.append({"t": "⚡ Průlom k ATH", "k": "hot"})
+        elif pos <= 0.15:
+            score += 5; badges.append({"t": "🩹 U dna 52T", "k": "down"})
+
+    # Moonshot heuristika: malá firma + objemový spike + denní výbuch
+    moonshot = bool(mcap and mcap < 300e6 and vol_ratio >= 3 and day >= 15)
+    if moonshot:
+        badges.append({"t": "🌙 Moonshot potenciál", "k": "extreme"})
+
+    score = max(0, min(100, round(score)))
+    if score >= 80:
+        tier = "EXTRÉMNÍ"
+    elif score >= 65:
+        tier = "VYSOKÁ"
+    elif score >= 50:
+        tier = "ZVÝŠENÁ"
+    else:
+        tier = "SLEDOVAT"
+
+    return score, tier, badges, vol_ratio, moonshot
+
+
+@app.route("/api/opportunities")
+def get_opportunities():
+    """Scanner šílených příležitostí napříč více Yahoo screenery."""
+    mode = request.args.get("mode", "all")
+    screen_map = {
+        "gainers": ["day_gainers"],
+        "small": ["small_cap_gainers", "aggressive_small_caps"],
+        "active": ["most_actives"],
+        "all": ["day_gainers", "small_cap_gainers", "aggressive_small_caps", "most_actives"],
+    }
+    scr_ids = screen_map.get(mode, screen_map["all"])
+
+    seen = {}
+    for scr in scr_ids:
+        try:
+            for q in yahoo_screener(scr, 40):
+                sym = q.get("symbol")
+                if not sym or sym in seen:
+                    continue
+                price = _qf(q, "regularMarketPrice", 0) or 0
+                if price <= 0:
+                    continue
+                score, tier, badges, vol_ratio, moonshot = opportunity_score(q)
+                seen[sym] = {
+                    "ticker": sym,
+                    "name": q.get("shortName") or q.get("displayName") or q.get("longName") or sym,
+                    "price": _round(price, 4),
+                    "change_pct": _round(_qf(q, "regularMarketChangePercent", 0), 2, 0),
+                    "currency": q.get("currency", "USD"),
+                    "market_cap": _qf(q, "marketCap", None),
+                    "volume": int(_qf(q, "regularMarketVolume", 0) or 0),
+                    "vol_ratio": _round(vol_ratio, 1, 0),
+                    "year_pct": _round(_qf(q, "fiftyTwoWeekChangePercent", 0), 1, 0),
+                    "high52": _round(_qf(q, "fiftyTwoWeekHigh", None), 4),
+                    "low52": _round(_qf(q, "fiftyTwoWeekLow", None), 4),
+                    "exchange": q.get("fullExchangeName") or q.get("exchange") or "",
+                    "score": score,
+                    "tier": tier,
+                    "badges": badges,
+                    "moonshot": moonshot,
+                    "source": scr,
+                }
+        except Exception:
+            continue
+
+    items = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
+    return jsonify({
+        "ok": True,
+        "count": len(items),
+        "updated": datetime.now(timezone.utc).strftime("%H:%M:%S UTC"),
+        "results": items[:40],
+    })
+
+
+# ---------------------------------------------------------------------------
 # Endpointy
 # ---------------------------------------------------------------------------
 @app.route("/api/search")

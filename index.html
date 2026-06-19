@@ -200,6 +200,55 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .tool-btn {background:var(--bg-glass); border:1px solid var(--border); padding:8px 14px; border-radius:12px; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; display:flex; align-items:center; gap:6px; transition:all .2s;}
 .tool-btn:hover {color:var(--accent); border-color:var(--accent);}
 
+/* ============ SCANNER PŘÍLEŽITOSTÍ ============ */
+.opp-box {background:linear-gradient(135deg, rgba(124,77,255,0.06), rgba(255,77,128,0.04)); border:1px solid var(--border); border-radius:22px; padding:1.6rem; margin-bottom:2.2rem; position:relative; overflow:hidden;}
+.opp-box::before {content:""; position:absolute; top:-40%; right:-10%; width:320px; height:320px; background:radial-gradient(circle, rgba(124,77,255,0.18), transparent 70%); pointer-events:none;}
+.opp-head {display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; position:relative; z-index:1;}
+.opp-title {font-family:var(--fh); font-size:20px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.opp-title i {color:var(--accent); font-size:24px;}
+.opp-sub {display:block; width:100%; font-family:var(--fb); font-size:12px; font-weight:400; color:var(--text2); margin-top:3px;}
+.opp-actions {display:flex; align-items:center; gap:10px;}
+.opp-updated {font-size:11px; color:var(--text2); font-family:var(--fb);}
+.opp-filters {display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 4px; position:relative; z-index:1; align-items:center;}
+.opp-chip {background:var(--bg-glass); border:1px solid var(--border); padding:7px 14px; border-radius:20px; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; transition:all .2s;}
+.opp-chip:hover {border-color:var(--accent); color:var(--text);}
+.opp-chip.active {background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
+.opp-toggle {display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); cursor:pointer; margin-left:auto; font-family:var(--fb);}
+.opp-toggle input {accent-color:var(--accent); cursor:pointer;}
+.opp-grid {display:grid; grid-template-columns:repeat(auto-fill, minmax(265px, 1fr)); gap:14px; margin-top:16px; position:relative; z-index:1;}
+.opp-loading {color:var(--accent); padding:24px; font-size:14px;}
+.opp-card {background:var(--bg-glass); border:1px solid var(--border); border-radius:18px; padding:16px; cursor:pointer; transition:all .2s; position:relative; overflow:hidden;}
+.opp-card:hover {transform:translateY(-4px); border-color:var(--accent); box-shadow:0 12px 28px var(--accent-glow);}
+.opp-card.moon {border-color:rgba(124,77,255,0.55);}
+.opp-rank {position:absolute; top:12px; right:14px; font-family:var(--fh); font-size:11px; color:var(--text2);}
+.opp-c-top {display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+.opp-score {min-width:46px; height:46px; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:var(--fh); font-weight:800; font-size:18px; line-height:1; color:#fff;}
+.opp-score small {font-size:8px; font-weight:600; opacity:.85; letter-spacing:.5px;}
+.opp-score.t-EXTRÉMNÍ {background:linear-gradient(135deg,#ff2d6e,#ff7a45);}
+.opp-score.t-VYSOKÁ {background:linear-gradient(135deg,#ff7a45,#ffb347);}
+.opp-score.t-ZVÝŠENÁ {background:linear-gradient(135deg,#7c4dff,#9c6bff);}
+.opp-score.t-SLEDOVAT {background:rgba(255,255,255,0.12); color:var(--text2);}
+.opp-c-id {min-width:0;}
+.opp-c-tkr {font-family:var(--fh); font-weight:700; font-size:17px; color:var(--text);}
+.opp-c-name {font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;}
+.opp-c-px {display:flex; align-items:baseline; gap:8px; margin:6px 0 10px;}
+.opp-c-price {font-family:var(--fb); font-weight:700; font-size:18px; color:var(--text);}
+.opp-c-chg {font-size:14px; font-weight:700;}
+.opp-c-chg.up {color:var(--up);} .opp-c-chg.down {color:var(--down);}
+.opp-badges {display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px;}
+.opp-badge {font-size:10.5px; font-weight:600; padding:3px 8px; border-radius:8px; font-family:var(--fb); white-space:nowrap;}
+.opp-badge.extreme {background:rgba(255,45,110,0.15); color:#ff6090; border:1px solid rgba(255,45,110,0.35);}
+.opp-badge.hot {background:rgba(255,122,69,0.15); color:#ff9d6e; border:1px solid rgba(255,122,69,0.3);}
+.opp-badge.up {background:var(--up-glow); color:var(--up); border:1px solid rgba(0,200,150,0.3);}
+.opp-badge.down {background:rgba(255,77,109,0.12); color:var(--down); border:1px solid rgba(255,77,109,0.25);}
+.opp-badge.gem {background:rgba(124,77,255,0.15); color:#b89bff; border:1px solid rgba(124,77,255,0.35);}
+.opp-badge.neutral {background:rgba(255,255,255,0.06); color:var(--text2); border:1px solid var(--border);}
+.opp-c-stats {display:flex; gap:12px; border-top:1px solid var(--border); padding-top:9px; font-family:var(--fb);}
+.opp-stat {display:flex; flex-direction:column; gap:1px;}
+.opp-stat .l {font-size:9px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
+.opp-stat .v {font-size:12px; color:var(--text); font-weight:600;}
+.opp-disclaimer {font-size:10.5px; color:var(--text2); margin-top:14px; position:relative; z-index:1; opacity:.7;}
+
 /* ============ TECHNICKÝ SIGNAL PANEL ============ */
 .signal-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-bottom:20px;}
 .signal-head {display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
@@ -383,6 +432,30 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
         </div>
     </div>
 
+    <!-- SCANNER PŘÍLEŽITOSTÍ ("crazy opportunities") -->
+    <div class="opp-box" id="opp-box">
+      <div class="opp-head">
+        <div class="opp-title">
+          <i class="ti ti-rocket"></i> Scanner příležitostí
+          <span class="opp-sub">Šílené pohyby trhu — výbuchy, objemové spiky &amp; moonshoty</span>
+        </div>
+        <div class="opp-actions">
+          <span class="opp-updated" id="opp-updated"></span>
+          <button class="tool-btn" onclick="loadOpportunities()"><i class="ti ti-refresh"></i> Skenovat</button>
+        </div>
+      </div>
+      <div class="opp-filters" id="opp-filters">
+        <button class="opp-chip active" data-mode="all" onclick="setOppMode('all', this)">🌐 Vše</button>
+        <button class="opp-chip" data-mode="gainers" onclick="setOppMode('gainers', this)">🚀 Raketové pohyby</button>
+        <button class="opp-chip" data-mode="small" onclick="setOppMode('small', this)">💎 Small-cap / Moonshoty</button>
+        <button class="opp-chip" data-mode="active" onclick="setOppMode('active', this)">🔥 Nejaktivnější</button>
+        <label class="opp-toggle"><input type="checkbox" id="opp-moonshot-only" onchange="renderOpportunities()"> Jen moonshoty</label>
+      </div>
+      <div class="opp-grid" id="opp-grid">
+        <div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh napříč burzami...</div>
+      </div>
+    </div>
+
     <div class="section-title">
       <div style="display:flex; align-items:center; gap:10px;">
         Moje Portfolio <span class="live-badge" id="live-badge" style="display:none;"><i class="ti ti-point-filled"></i> LIVE</span>
@@ -557,6 +630,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('api-provider').value = localStorage.getItem('mystocks_prov') || 'groq';
     
     loadWatchlist();
+    loadOpportunities();
 
     const searchInput = document.getElementById('searchInput');
     const searchDropdown = document.getElementById('searchDropdown');
@@ -797,6 +871,95 @@ async function loadWatchlistSilent() {
         renderPortfolioSummary(data.results);
         checkAlerts(data.results);
     } catch(e) {}
+}
+
+// ====================== SCANNER PŘÍLEŽITOSTÍ ======================
+let oppMode = 'all';
+let oppData = [];
+let oppLoading = false;
+
+function setOppMode(mode, el) {
+    oppMode = mode;
+    document.querySelectorAll('.opp-chip').forEach(c => c.classList.remove('active'));
+    if(el) el.classList.add('active');
+    loadOpportunities();
+}
+
+function fmtCap(c) {
+    if(c === null || c === undefined || isNaN(c)) return '—';
+    if(c >= 1e12) return (c/1e12).toFixed(2)+' bil.';
+    if(c >= 1e9)  return (c/1e9).toFixed(2)+' mld.';
+    if(c >= 1e6)  return (c/1e6).toFixed(0)+' mil.';
+    return c.toFixed(0);
+}
+function fmtVol(v) {
+    if(!v) return '—';
+    if(v >= 1e9) return (v/1e9).toFixed(1)+'B';
+    if(v >= 1e6) return (v/1e6).toFixed(1)+'M';
+    if(v >= 1e3) return (v/1e3).toFixed(0)+'k';
+    return ''+v;
+}
+
+async function loadOpportunities() {
+    const grid = document.getElementById('opp-grid');
+    if(oppLoading) return;
+    oppLoading = true;
+    grid.innerHTML = '<div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh napříč burzami...</div>';
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/opportunities?mode=${oppMode}`);
+        const data = await res.json();
+        if(!data.ok) throw new Error();
+        oppData = data.results || [];
+        document.getElementById('opp-updated').textContent = data.count
+            ? `${data.count} kandidátů · ${data.updated}` : '';
+        renderOpportunities();
+    } catch(e) {
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--down)">Scanner se nepodařilo načíst (backend neběží?).</div>`;
+    } finally {
+        oppLoading = false;
+    }
+}
+
+function renderOpportunities() {
+    const grid = document.getElementById('opp-grid');
+    const moonOnly = document.getElementById('opp-moonshot-only')?.checked;
+    let list = oppData.slice();
+    if(moonOnly) list = list.filter(o => o.moonshot);
+
+    if(!list.length) {
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">${moonOnly ? 'Žádné moonshoty zrovna nesvítí. Zkus jiný filtr.' : 'Žádné příležitosti k zobrazení.'}</div>`;
+        return;
+    }
+
+    grid.innerHTML = list.map((o, i) => {
+        const up = (o.change_pct || 0) >= 0;
+        const badges = (o.badges || []).slice(0, 4).map(b =>
+            `<span class="opp-badge ${b.k}">${b.t}</span>`).join('');
+        const yr = o.year_pct;
+        const yrTxt = (yr || yr === 0) ? `${yr >= 0 ? '+' : ''}${yr.toFixed(0)}%` : '—';
+        return `
+        <div class="opp-card ${o.moonshot ? 'moon':''}" onclick="loadStockDetail('${o.ticker}')" title="${o.exchange || ''}">
+            <span class="opp-rank">#${i+1}</span>
+            <div class="opp-c-top">
+                <div class="opp-score t-${o.tier}">${o.score}<small>${o.tier}</small></div>
+                <div class="opp-c-id">
+                    <div class="opp-c-tkr">${o.ticker}</div>
+                    <div class="opp-c-name">${o.name || ''}</div>
+                </div>
+            </div>
+            <div class="opp-c-px">
+                <span class="opp-c-price">${(o.price ?? 0).toFixed(o.price < 10 ? 4 : 2)} <span style="font-size:11px;color:var(--text2)">${o.currency||''}</span></span>
+                <span class="opp-c-chg ${up?'up':'down'}">${up?'▲':'▼'} ${up?'+':''}${(o.change_pct||0).toFixed(1)}%</span>
+            </div>
+            <div class="opp-badges">${badges}</div>
+            <div class="opp-c-stats">
+                <div class="opp-stat"><span class="l">Kapitalizace</span><span class="v">${fmtCap(o.market_cap)}</span></div>
+                <div class="opp-stat"><span class="l">Objem</span><span class="v">${fmtVol(o.volume)}${o.vol_ratio ? ` · ${o.vol_ratio}×` : ''}</span></div>
+                <div class="opp-stat"><span class="l">Za rok</span><span class="v" style="color:${(yr||0)>=0?'var(--up)':'var(--down)'}">${yrTxt}</span></div>
+            </div>
+        </div>`;
+    }).join('') +
+    `<div class="opp-disclaimer" style="grid-column:1/-1;"><i class="ti ti-alert-triangle"></i> Vysoce volatilní tituly — extrémní pohyby znamenají extrémní riziko. Není to investiční doporučení, jen scanner. Vždy si udělej vlastní průzkum.</div>`;
 }
 
 // --- SDÍLENÉ VYKRESLENÍ KARET PORTFOLIA ---
