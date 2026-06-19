@@ -442,6 +442,19 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
+<!-- OBNOVENÍ HESLA (z odkazu v e-mailu ?reset=...) -->
+<div id="resetScreen" class="lock-screen" style="display:none;">
+  <div class="lock-card">
+    <div class="lock-icon"><i class="ti ti-key"></i></div>
+    <h2>Nové heslo</h2>
+    <p>Nastav si nové heslo ke svému účtu.</p>
+    <input type="password" id="resetInput" placeholder="Nové heslo (min. 4 znaky)" autocomplete="new-password"
+           onkeydown="if(event.key==='Enter') submitReset()">
+    <div class="lock-error" id="resetError"></div>
+    <button class="btn-primary" onclick="submitReset()"><i class="ti ti-check"></i> Uložit heslo</button>
+  </div>
+</div>
+
 <div class="container">
   
   <div class="navbar">
@@ -532,8 +545,8 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
           <button id="tab-register" class="auth-tab" onclick="setAuthTab('register')">Registrovat</button>
         </div>
         <div class="pl-field">
-          <label>Uživatelské jméno</label>
-          <input type="text" id="auth-username" placeholder="např. maty" autocomplete="username"
+          <label>E-mail</label>
+          <input type="email" id="auth-email" placeholder="tvuj@email.cz" autocomplete="email"
                  onkeydown="if(event.key==='Enter') submitAuth()">
         </div>
         <div class="pl-field">
@@ -551,6 +564,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
           <i class="ti ti-login-2"></i> <span id="auth-submit-label">Přihlásit se</span>
         </button>
         <p class="auth-hint" id="auth-hint">Ještě nemáš účet? Klikni na „Registrovat“.</p>
+        <p class="auth-hint" id="auth-forgot" style="margin-top:6px;"><a class="profile-cloud-link" onclick="forgotPassword()">Zapomenuté heslo?</a></p>
       </div>
 
       <!-- B) PŘEHLED PORTFOLIA (přihlášený nebo lokální režim) -->
@@ -902,6 +916,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('api-key').value = localStorage.getItem('mystocks_key') || '';
     document.getElementById('api-provider').value = localStorage.getItem('mystocks_prov') || 'groq';
     
+    initResetFromUrl();
     initGate();
 
     const searchInput = document.getElementById('searchInput');
@@ -1250,7 +1265,7 @@ function updateProfileBtn() {
     const label = document.getElementById('profileBtnLabel');
     if (authToken && authUser) {
         btn.classList.add('logged');
-        label.textContent = authUser;
+        label.textContent = authUser.split('@')[0];
     } else {
         btn.classList.remove('logged');
         label.textContent = cloudEnabled ? 'Přihlásit' : 'Portfolio';
@@ -1341,25 +1356,26 @@ function setAuthTab(tab) {
     document.getElementById('tab-register').classList.toggle('active', tab === 'register');
     document.getElementById('auth-submit-label').textContent = tab === 'login' ? 'Přihlásit se' : 'Vytvořit účet';
     document.getElementById('auth-invite-field').style.display = tab === 'register' ? 'flex' : 'none';
+    document.getElementById('auth-forgot').style.display = tab === 'login' ? 'block' : 'none';
     document.getElementById('auth-hint').textContent = tab === 'login'
         ? 'Ještě nemáš účet? Klikni na „Registrovat“. Prvních 7 dní máš plný Pro zdarma.'
-        : 'Jméno 3–20 znaků, heslo aspoň 4 znaky. Získáš 7 dní Pro zdarma.';
+        : 'Zadej e-mail a heslo (min. 4 znaky). Získáš 7 dní Pro zdarma.';
     document.getElementById('auth-error').textContent = '';
 }
 
 async function submitAuth() {
-    const u = document.getElementById('auth-username').value.trim();
+    const u = document.getElementById('auth-email').value.trim();
     const p = document.getElementById('auth-password').value;
     const errEl = document.getElementById('auth-error');
     const btn = document.getElementById('auth-submit');
     errEl.textContent = '';
-    if (!u || !p) { errEl.textContent = 'Vyplň jméno i heslo.'; return; }
+    if (!u || !p) { errEl.textContent = 'Vyplň e-mail i heslo.'; return; }
 
     const endpoint = authTab === 'login' ? 'login' : 'register';
     const invite = document.getElementById('auth-invite').value.trim();
     btn.disabled = true;
     try {
-        const payload = { username: u, password: p };
+        const payload = { email: u, password: p };
         if (endpoint === 'register' && invite) payload.invite = invite;
         const r = await fetch(`${BACKEND_URL}/api/${endpoint}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1404,6 +1420,54 @@ function doLogout() {
     renderProfileView();
     showToast('Odhlášeno', 'down', 'ti-logout');
     loadWatchlist();
+}
+
+async function forgotPassword() {
+    const email = document.getElementById('auth-email').value.trim();
+    const errEl = document.getElementById('auth-error');
+    if (!email) { errEl.textContent = 'Nejdřív zadej svůj e-mail výše.'; return; }
+    errEl.textContent = '';
+    try {
+        await fetch(`${BACKEND_URL}/api/forgot`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+    } catch (e) {}
+    showToast('Pokud účet existuje, poslali jsme odkaz na e-mail.', 'up', 'ti-mail');
+}
+
+// ====================== OBNOVENÍ HESLA (z odkazu) ======================
+let resetToken = null;
+function initResetFromUrl() {
+    const params = new URLSearchParams(location.search);
+    const t = params.get('reset');
+    if (!t) return false;
+    resetToken = t;
+    document.getElementById('resetScreen').style.display = 'flex';
+    setTimeout(() => document.getElementById('resetInput').focus(), 100);
+    return true;
+}
+
+async function submitReset() {
+    const pw = document.getElementById('resetInput').value;
+    const err = document.getElementById('resetError');
+    err.textContent = '';
+    if (!pw || pw.length < 4) { err.textContent = 'Heslo musí mít aspoň 4 znaky.'; return; }
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/reset`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: resetToken, password: pw })
+        });
+        const d = await r.json();
+        if (!d.ok) { err.textContent = d.error || 'Nepodařilo se.'; return; }
+        // Úspěch → odebrat ?reset z URL a otevřít přihlášení
+        history.replaceState(null, '', location.pathname);
+        document.getElementById('resetScreen').style.display = 'none';
+        showToast('Heslo změněno. Přihlas se novým heslem.', 'up', 'ti-check');
+        openProfile();
+    } catch (e) {
+        err.textContent = 'Chyba spojení se serverem.';
+    }
 }
 
 // ====================== CENÍK PŘEDPLATNÉHO ======================
@@ -1497,7 +1561,7 @@ function renderAdmin(users, invites) {
         <div class="admin-sub" style="margin-top:24px;"><i class="ti ti-users" style="color:var(--accent)"></i> <b>Uživatelé (${users.length})</b></div>
         <div style="overflow-x:auto;">
         <table class="admin-table">
-            <thead><tr><th>Jméno</th><th>Plán</th><th>Stav</th><th>WL/Poz</th><th>Vytvořen</th><th>Změnit plán</th></tr></thead>
+            <thead><tr><th>E-mail</th><th>Plán</th><th>Stav</th><th>WL/Poz</th><th>Vytvořen</th><th>Změnit plán</th></tr></thead>
             <tbody>${rows || '<tr><td colspan="6" style="color:var(--text2)">Žádní uživatelé.</td></tr>'}</tbody>
         </table></div>`;
 }

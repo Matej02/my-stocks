@@ -508,10 +508,71 @@ def _auth_user():
 
 
 USERNAME_RE = re.compile(r"^[a-z0-9_.-]{3,20}$")
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _norm_user(u):
     return (u or "").strip().lower()
+
+
+def _norm_email(e):
+    return (e or "").strip().lower()
+
+
+# ---- Odesílání e-mailů přes Brevo (volitelné; bez klíče se jen přeskočí) ----
+def email_enabled():
+    return bool(os.environ.get("BREVO_API_KEY") and os.environ.get("SENDER_EMAIL"))
+
+
+def send_email(to_email, subject, html):
+    """Pošle transakční e-mail přes Brevo. Vrací True/False. Nikdy nevyhodí výjimku."""
+    if not email_enabled():
+        return False
+    try:
+        r = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={"api-key": os.environ["BREVO_API_KEY"],
+                     "Content-Type": "application/json", "accept": "application/json"},
+            data=json.dumps({
+                "sender": {"email": os.environ["SENDER_EMAIL"], "name": "MY STOCKS"},
+                "to": [{"email": to_email}],
+                "subject": subject,
+                "htmlContent": html,
+            }), timeout=8)
+        return r.status_code in (200, 201)
+    except Exception:
+        return False
+
+
+def _email_shell(title, body_html):
+    return f"""<div style="font-family:Arial,sans-serif;background:#0b0d12;padding:32px;color:#e8eaf0">
+      <div style="max-width:520px;margin:0 auto;background:#12141c;border:1px solid #23262f;border-radius:18px;padding:32px">
+        <div style="font-size:24px;font-weight:800;margin-bottom:18px">MY <span style="color:#FF7A00">STOCKS</span></div>
+        <h2 style="font-size:20px;margin:0 0 14px">{title}</h2>
+        {body_html}
+        <p style="color:#9ba1b0;font-size:12px;margin-top:28px">Tento e-mail ti přišel z aplikace MY STOCKS.</p>
+      </div></div>"""
+
+
+def send_welcome_email(email):
+    html = _email_shell(
+        "Vítej v MY STOCKS! 🎉",
+        "<p style='line-height:1.6'>Tvůj účet je připravený a právě ti začala "
+        "<b>7denní zkušební verze plánu Pro</b> — máš odemčené všechny funkce: "
+        "scanner příležitostí, technické hodnocení, doporučení analytiků i AI analýzu.</p>"
+        "<p style='line-height:1.6'>Přejeme šťastnou ruku při investování!</p>")
+    return send_email(email, "Vítej v MY STOCKS 🎉", html)
+
+
+def send_reset_email(email, link):
+    html = _email_shell(
+        "Obnovení hesla",
+        f"<p style='line-height:1.6'>Klikni na tlačítko a nastav si nové heslo. "
+        f"Odkaz platí 1 hodinu.</p>"
+        f"<p style='margin:22px 0'><a href='{link}' style='background:#FF7A00;color:#000;"
+        f"text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:700'>Nastavit nové heslo</a></p>"
+        f"<p style='color:#9ba1b0;font-size:12px'>Pokud jsi o reset nežádal, e-mail ignoruj.</p>")
+    return send_email(email, "Obnovení hesla – MY STOCKS", html)
 
 
 # ---- Předplatné / plány ----
@@ -575,16 +636,16 @@ def register():
     if not cloud_enabled():
         return jsonify({"ok": False, "error": "Účty nejsou nastavené (chybí úložiště)."}), 400
     body = request.get_json(silent=True) or {}
-    username = _norm_user(body.get("username"))
+    email = _norm_email(body.get("email"))
     password = body.get("password") or ""
-    if not USERNAME_RE.match(username):
-        return jsonify({"ok": False, "error": "Jméno: 3–20 znaků (a–z, 0–9, . _ -)."}), 400
+    if not EMAIL_RE.match(email):
+        return jsonify({"ok": False, "error": "Zadej platný e-mail."}), 400
     if len(password) < 4:
         return jsonify({"ok": False, "error": "Heslo musí mít aspoň 4 znaky."}), 400
     invite = (body.get("invite") or "").strip().lower()
     try:
-        if kv_get_json(f"user:{username}"):
-            return jsonify({"ok": False, "error": "Toto jméno už existuje."}), 409
+        if kv_get_json(f"user:{email}"):
+            return jsonify({"ok": False, "error": "Účet s tímto e-mailem už existuje."}), 409
 
         now = int(time.time())
         plan, trial_ends = "trial", now + TRIAL_DAYS * 86400
@@ -597,19 +658,20 @@ def register():
             if inv.get("used_by"):
                 return jsonify({"ok": False, "error": "Tento kód už byl použit."}), 409
             plan, trial_ends = "comped", None
-            inv["used_by"] = username
+            inv["used_by"] = email
             inv["used_at"] = now
             kv_set_json(f"invite:{invite}", inv)
 
         salt, ph = hash_password(password)
-        rec = {"salt": salt, "hash": ph, "created": now, "plan": plan}
+        rec = {"salt": salt, "hash": ph, "created": now, "plan": plan, "email": email}
         if trial_ends:
             rec["trial_ends"] = trial_ends
-        kv_set_json(f"user:{username}", rec)
-        kv_set_json(f"portfolio:{username}", {"watchlist": [], "positions": {}, "alerts": []})
-        kv_sadd("users", username)
-        return jsonify({"ok": True, "token": make_token(username), "user": username,
-                        "subscription": subscription_info(username, rec)})
+        kv_set_json(f"user:{email}", rec)
+        kv_set_json(f"portfolio:{email}", {"watchlist": [], "positions": {}, "alerts": []})
+        kv_sadd("users", email)
+        send_welcome_email(email)
+        return jsonify({"ok": True, "token": make_token(email), "user": email,
+                        "subscription": subscription_info(email, rec)})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
@@ -619,15 +681,57 @@ def login():
     if not cloud_enabled():
         return jsonify({"ok": False, "error": "Účty nejsou nastavené (chybí úložiště)."}), 400
     body = request.get_json(silent=True) or {}
-    username = _norm_user(body.get("username"))
+    email = _norm_email(body.get("email"))
     password = body.get("password") or ""
     try:
-        u = kv_get_json(f"user:{username}")
+        u = kv_get_json(f"user:{email}")
         if not u or not verify_password(password, u.get("salt", ""), u.get("hash", "")):
-            return jsonify({"ok": False, "error": "Špatné jméno nebo heslo."}), 401
-        portfolio = kv_get_json(f"portfolio:{username}") or {"watchlist": [], "positions": {}, "alerts": []}
-        return jsonify({"ok": True, "token": make_token(username), "user": username,
-                        "portfolio": portfolio, "subscription": subscription_info(username, u)})
+            return jsonify({"ok": False, "error": "Špatný e-mail nebo heslo."}), 401
+        portfolio = kv_get_json(f"portfolio:{email}") or {"watchlist": [], "positions": {}, "alerts": []}
+        return jsonify({"ok": True, "token": make_token(email), "user": email,
+                        "portfolio": portfolio, "subscription": subscription_info(email, u)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
+@app.route("/api/forgot", methods=["POST"])
+def forgot_password():
+    if not cloud_enabled():
+        return jsonify({"ok": True})  # nic neprozrazujeme
+    email = _norm_email((request.get_json(silent=True) or {}).get("email"))
+    try:
+        if EMAIL_RE.match(email) and kv_get_json(f"user:{email}"):
+            token = secrets.token_urlsafe(24)
+            kv_set_json(f"reset:{token}", {"email": email, "exp": int(time.time()) + 3600})
+            base = os.environ.get("APP_URL") or request.host_url.rstrip("/")
+            send_reset_email(email, f"{base}/?reset={token}")
+    except Exception:
+        pass
+    # Vždy ok – neprozrazujeme, jestli e-mail existuje
+    return jsonify({"ok": True})
+
+
+@app.route("/api/reset", methods=["POST"])
+def reset_password():
+    if not cloud_enabled():
+        return jsonify({"ok": False, "error": "Účty nejsou nastavené."}), 400
+    body = request.get_json(silent=True) or {}
+    token = (body.get("token") or "").strip()
+    password = body.get("password") or ""
+    if len(password) < 4:
+        return jsonify({"ok": False, "error": "Heslo musí mít aspoň 4 znaky."}), 400
+    try:
+        data = kv_get_json(f"reset:{token}")
+        if not data or data.get("exp", 0) < int(time.time()):
+            return jsonify({"ok": False, "error": "Odkaz je neplatný nebo vypršel."}), 400
+        email = data["email"]
+        rec = kv_get_json(f"user:{email}")
+        if not rec:
+            return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
+        rec["salt"], rec["hash"] = hash_password(password)
+        kv_set_json(f"user:{email}", rec)
+        kv_set_json(f"reset:{token}", {"email": email, "exp": 0})  # zneplatnit
+        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
