@@ -213,6 +213,36 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .lock-card .btn-primary {width:100%; justify-content:center;}
 .lock-error {color:var(--down); font-size:12px; min-height:16px; margin-bottom:10px;}
 
+/* ============ PROFIL & ÚČET ============ */
+.nav-actions {display:flex; align-items:center; gap:10px;}
+.profile-btn {background:var(--bg-glass); border:1px solid var(--border); padding:10px 15px; border-radius:20px; color:var(--text2); cursor:pointer; display:flex; align-items:center; gap:8px; transition:all 0.2s;}
+.profile-btn:hover {color:var(--accent); border-color:var(--accent);}
+.profile-btn.logged {color:var(--up); border-color:var(--up);}
+.profile-btn i {font-size:18px;}
+.profile-box {background:#12141c; border:1px solid var(--accent); border-radius:22px; padding:2rem; width:760px; max-width:94vw; max-height:90vh; overflow-y:auto; position:relative;}
+.profile-close {position:absolute; top:16px; right:16px; background:rgba(255,255,255,0.05); border:1px solid var(--border); color:var(--text2); width:34px; height:34px; border-radius:10px; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center;}
+.profile-close:hover {color:var(--accent); border-color:var(--accent);}
+.profile-box .btn-primary {display:inline-flex; align-items:center; justify-content:center; gap:8px;}
+.profile-hdr {text-align:center; margin-bottom:1.5rem;}
+.profile-avatar {width:64px; height:64px; margin:0 auto 12px; border-radius:20px; background:var(--accent-glow); display:flex; align-items:center; justify-content:center;}
+.profile-avatar i {font-size:32px; color:var(--accent);}
+.profile-avatar.sm {width:42px; height:42px; border-radius:12px; margin:0;}
+.profile-avatar.sm i {font-size:22px;}
+.profile-hdr h3 {font-family:var(--fh); font-size:22px; margin-bottom:4px;}
+.profile-hdr p {color:var(--text2); font-size:13px;}
+.auth-tabs {display:flex; gap:8px; margin-bottom:1.2rem; background:rgba(255,255,255,0.04); padding:5px; border-radius:14px;}
+.auth-tab {flex:1; padding:10px; border-radius:10px; border:none; background:transparent; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:14px; font-weight:600; transition:all .2s;}
+.auth-tab.active {background:var(--accent); color:#000;}
+.auth-hint {font-size:12px; color:var(--text2); text-align:center; margin-top:14px;}
+.profile-acct {display:flex; align-items:center; gap:12px; padding:14px 16px; background:rgba(0,200,150,0.06); border:1px solid rgba(0,200,150,0.25); border-radius:14px; margin-bottom:16px;}
+.profile-acct-name {font-family:var(--fh); font-weight:700; font-size:16px;}
+.profile-acct-sub {font-size:11px; color:var(--up);}
+.profile-acct .btn-ghost {flex:none;}
+.profile-local-note {font-size:12.5px; color:var(--text2); background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:16px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.profile-cloud-link {color:var(--accent); cursor:pointer; text-decoration:underline;}
+#profileModal .port-summary {margin-bottom:0;}
+@media (max-width:600px){ .profile-box .port-summary {grid-template-columns:1fr;} }
+
 /* ============ SCANNER PŘÍLEŽITOSTÍ ============ */
 .opp-box {background:linear-gradient(135deg, rgba(124,77,255,0.06), rgba(255,77,128,0.04)); border:1px solid var(--border); border-radius:22px; padding:1.6rem; margin-bottom:2.2rem; position:relative; overflow:hidden;}
 .opp-box::before {content:""; position:absolute; top:-40%; right:-10%; width:320px; height:320px; background:radial-gradient(circle, rgba(124,77,255,0.18), transparent 70%); pointer-events:none;}
@@ -348,9 +378,15 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
       <div id="searchDropdown" class="search-dropdown"></div>
     </div>
 
-    <button class="settings-btn" onclick="toggleApiPanel()">
-      <i class="ti ti-settings"></i> Nastavení AI
-    </button>
+    <div class="nav-actions">
+      <button class="profile-btn" id="profileBtn" onclick="openProfile()" title="Profil & portfolio">
+        <i class="ti ti-user-circle"></i>
+        <span id="profileBtnLabel">Profil</span>
+      </button>
+      <button class="settings-btn" onclick="toggleApiPanel()">
+        <i class="ti ti-settings"></i> Nastavení AI
+      </button>
+    </div>
   </div>
 
   <div class="api-panel" id="apiPanel">
@@ -401,6 +437,92 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
     </div>
   </div>
 
+  <!-- PROFIL & PORTFOLIO MODAL -->
+  <div class="pl-modal" id="profileModal">
+    <div class="profile-box">
+      <button class="profile-close" onclick="closeProfile()"><i class="ti ti-x"></i></button>
+
+      <!-- A) PŘIHLÁŠENÍ / REGISTRACE (jen když je cloud zapnutý a nejsi přihlášen) -->
+      <div id="profile-auth" style="display:none;">
+        <div class="profile-hdr">
+          <div class="profile-avatar"><i class="ti ti-user"></i></div>
+          <h3>Tvůj účet</h3>
+          <p>Přihlas se a měj své portfolio na všech zařízeních.</p>
+        </div>
+        <div class="auth-tabs">
+          <button id="tab-login" class="auth-tab active" onclick="setAuthTab('login')">Přihlásit</button>
+          <button id="tab-register" class="auth-tab" onclick="setAuthTab('register')">Registrovat</button>
+        </div>
+        <div class="pl-field">
+          <label>Uživatelské jméno</label>
+          <input type="text" id="auth-username" placeholder="např. maty" autocomplete="username"
+                 onkeydown="if(event.key==='Enter') submitAuth()">
+        </div>
+        <div class="pl-field">
+          <label>Heslo</label>
+          <input type="password" id="auth-password" placeholder="••••••" autocomplete="current-password"
+                 onkeydown="if(event.key==='Enter') submitAuth()">
+        </div>
+        <div class="lock-error" id="auth-error"></div>
+        <button class="btn-primary" style="width:100%; justify-content:center;" id="auth-submit" onclick="submitAuth()">
+          <i class="ti ti-login-2"></i> <span id="auth-submit-label">Přihlásit se</span>
+        </button>
+        <p class="auth-hint" id="auth-hint">Ještě nemáš účet? Klikni na „Registrovat“.</p>
+      </div>
+
+      <!-- B) PŘEHLED PORTFOLIA (přihlášený nebo lokální režim) -->
+      <div id="profile-portfolio" style="display:none;">
+        <div class="profile-acct" id="profile-acct" style="display:none;">
+          <div class="profile-avatar sm"><i class="ti ti-user"></i></div>
+          <div>
+            <div class="profile-acct-name" id="profile-acct-name">—</div>
+            <div class="profile-acct-sub" id="profile-acct-sub">Synchronizováno do cloudu</div>
+          </div>
+          <button class="btn-ghost" style="margin-left:auto;" onclick="doLogout()"><i class="ti ti-logout"></i> Odhlásit</button>
+        </div>
+
+        <div class="profile-local-note" id="profile-local-note" style="display:none;">
+          <i class="ti ti-device-laptop"></i> Lokální režim — portfolio je uložené jen v tomto prohlížeči.
+          <span id="profile-cloud-cta"></span>
+        </div>
+
+        <div class="ps-toolbar" id="ps-toolbar" style="display:flex;">
+          <button class="tool-btn" onclick="requestNotif()"><i class="ti ti-bell"></i> Notifikace</button>
+          <button class="tool-btn" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
+          <button class="tool-btn" onclick="loadWatchlist()"><i class="ti ti-refresh"></i> Obnovit</button>
+        </div>
+
+        <div class="port-summary" id="port-summary">
+          <div class="ps-left">
+            <div class="ps-stats">
+              <div class="ps-stat">
+                <div class="ps-stat-lbl"><i class="ti ti-wallet"></i> Hodnota portfolia</div>
+                <div class="ps-stat-val" id="ps-value">--</div>
+                <div class="ps-stat-sub" id="ps-today">--</div>
+              </div>
+              <div class="ps-stat">
+                <div class="ps-stat-lbl"><i class="ti ti-trending-up"></i> Celkový zisk / ztráta</div>
+                <div class="ps-stat-val" id="ps-pl">--</div>
+                <div class="ps-stat-sub" id="ps-pl-pct">--</div>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Dnešní pohyby</div>
+              <div class="ps-movers" id="ps-movers"></div>
+            </div>
+          </div>
+          <div class="ps-right">
+            <h4>Rozložení pozic</h4>
+            <div id="allocChart" style="width:100%; min-height:200px;"></div>
+          </div>
+        </div>
+        <p class="auth-hint" style="text-align:left; margin-top:14px;">
+          <i class="ti ti-info-circle"></i> Pozice zadáš v detailu akcie tlačítkem „Pozice“. Hodnota a zisk se přepočítají automaticky.
+        </p>
+      </div>
+    </div>
+  </div>
+
   <div id="dashboard">
     <!-- PORTFOLIO PŘEHLED -->
     <div class="ps-toolbar" id="ps-toolbar" style="display:none;">
@@ -408,31 +530,6 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
       <button class="tool-btn" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
       <button class="tool-btn" onclick="loadWatchlist()"><i class="ti ti-refresh"></i> Obnovit</button>
     </div>
-    <div class="port-summary" id="port-summary" style="display:none;">
-      <div class="ps-left">
-        <div class="ps-stats">
-          <div class="ps-stat">
-            <div class="ps-stat-lbl"><i class="ti ti-wallet"></i> Hodnota portfolia</div>
-            <div class="ps-stat-val" id="ps-value">--</div>
-            <div class="ps-stat-sub" id="ps-today">--</div>
-          </div>
-          <div class="ps-stat">
-            <div class="ps-stat-lbl"><i class="ti ti-trending-up"></i> Celkový zisk / ztráta</div>
-            <div class="ps-stat-val" id="ps-pl">--</div>
-            <div class="ps-stat-sub" id="ps-pl-pct">--</div>
-          </div>
-        </div>
-        <div>
-          <div style="font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Dnešní pohyby</div>
-          <div class="ps-movers" id="ps-movers"></div>
-        </div>
-      </div>
-      <div class="ps-right">
-        <h4>Rozložení pozic</h4>
-        <div id="allocChart" style="width:100%; min-height:200px;"></div>
-      </div>
-    </div>
-
     <!-- PORTFOLIO HODNOCENÍ: CO PRODAT / PŘIKOUPIT -->
     <div class="port-eval-box" id="port-eval-box" style="display:none;">
       <div class="port-eval-header"><i class="ti ti-chart-arrows-vertical"></i> Hodnocení Portfolia — Co prodat a přikoupit</div>
@@ -648,6 +745,13 @@ let alertDir = 'above';
 
 // Cenová upozornění: [{ticker, dir:'above'|'below', price}]
 let myAlerts = JSON.parse(localStorage.getItem('mystocks_alerts')) || [];
+
+// Účet & cloud synchronizace
+let authToken = localStorage.getItem('mystocks_token') || null;
+let authUser = localStorage.getItem('mystocks_user') || null;
+let cloudEnabled = false;
+let authTab = 'login';
+let syncTimer = null;
 // Historie AI chatu pro aktuální akcii
 let chatHistory = [];
 
@@ -680,6 +784,9 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('alertModal').addEventListener('click', (e) => {
         if(e.target === document.getElementById('alertModal')) closeAlertModal();
     });
+    document.getElementById('profileModal').addEventListener('click', (e) => {
+        if(e.target === document.getElementById('profileModal')) closeProfile();
+    });
 
     // Klávesové zkratky
     document.addEventListener('keydown', (e) => {
@@ -689,6 +796,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if(e.key === 'Escape') {
             if(document.getElementById('plModal').classList.contains('open')) { closePlModal(); return; }
             if(document.getElementById('alertModal').classList.contains('open')) { closeAlertModal(); return; }
+            if(document.getElementById('profileModal').classList.contains('open')) { closeProfile(); return; }
             if(document.getElementById('detail-view').style.display === 'block') closeDetail();
             searchDropdown.style.display = 'none';
         }
@@ -815,6 +923,7 @@ function savePlPosition() {
         delete myPositions[t];
     }
     localStorage.setItem('mystocks_positions', JSON.stringify(myPositions));
+    cloudSync();
     closePlModal();
     renderDetailPL();
     loadWatchlistSilent(); // Obnoví karty s P/L
@@ -898,8 +1007,181 @@ async function loadWatchlistSilent() {
     } catch(e) {}
 }
 
+// ====================== ÚČET & CLOUD SYNCHRONIZACE ======================
+function authHeaders() {
+    const h = { 'Content-Type': 'application/json' };
+    if (authToken) h['Authorization'] = 'Bearer ' + authToken;
+    return h;
+}
+
+// Nastaví lokální stav z cloud portfolia (BEZ zpětného pushe do cloudu)
+function applyPortfolio(pf) {
+    pf = pf || {};
+    myStocks = (Array.isArray(pf.watchlist) && pf.watchlist.length) ? pf.watchlist : DEFAULT_WATCHLIST.slice();
+    myPositions = (pf.positions && typeof pf.positions === 'object') ? pf.positions : {};
+    myAlerts = Array.isArray(pf.alerts) ? pf.alerts : [];
+    localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
+    localStorage.setItem('mystocks_positions', JSON.stringify(myPositions));
+    localStorage.setItem('mystocks_alerts', JSON.stringify(myAlerts));
+}
+
+// Odešle aktuální portfolio do cloudu (jen když jsi přihlášen), s debounce
+function cloudSync() {
+    if (!authToken) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(async () => {
+        try {
+            await fetch(`${BACKEND_URL}/api/portfolio`, {
+                method: 'POST', headers: authHeaders(),
+                body: JSON.stringify({ watchlist: myStocks, positions: myPositions, alerts: myAlerts })
+            });
+        } catch (e) {}
+    }, 600);
+}
+
+// Zjistí, zda je cloud nastavený, a případně natáhne portfolio přihlášeného uživatele
+async function initAccount() {
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/account/status`);
+        cloudEnabled = !!(await r.json()).cloud;
+    } catch (e) { cloudEnabled = false; }
+
+    if (cloudEnabled && authToken) {
+        try {
+            const r = await fetch(`${BACKEND_URL}/api/portfolio`, { headers: authHeaders() });
+            if (r.ok) {
+                const d = await r.json();
+                applyPortfolio(d.portfolio);
+            } else {
+                // Token neplatný → odhlásit lokálně
+                authToken = null; authUser = null;
+                localStorage.removeItem('mystocks_token');
+                localStorage.removeItem('mystocks_user');
+            }
+        } catch (e) {}
+    }
+    updateProfileBtn();
+}
+
+function updateProfileBtn() {
+    const btn = document.getElementById('profileBtn');
+    const label = document.getElementById('profileBtnLabel');
+    if (authToken && authUser) {
+        btn.classList.add('logged');
+        label.textContent = authUser;
+    } else {
+        btn.classList.remove('logged');
+        label.textContent = cloudEnabled ? 'Přihlásit' : 'Portfolio';
+    }
+}
+
+function openProfile() {
+    document.getElementById('profileModal').classList.add('open');
+    renderProfileView();
+}
+function closeProfile() {
+    document.getElementById('profileModal').classList.remove('open');
+}
+
+function renderProfileView() {
+    const authView = document.getElementById('profile-auth');
+    const pfView = document.getElementById('profile-portfolio');
+    const acct = document.getElementById('profile-acct');
+    const localNote = document.getElementById('profile-local-note');
+
+    // Cloud zapnutý, ale nepřihlášen → ukaž jen přihlášení/registraci
+    if (cloudEnabled && !authToken) {
+        authView.style.display = 'block';
+        pfView.style.display = 'none';
+        setAuthTab(authTab);
+        return;
+    }
+
+    authView.style.display = 'none';
+    pfView.style.display = 'block';
+    if (authToken) {
+        acct.style.display = 'flex';
+        localNote.style.display = 'none';
+        document.getElementById('profile-acct-name').textContent = authUser;
+    } else {
+        // Cloud vypnutý → lokální režim
+        acct.style.display = 'none';
+        localNote.style.display = 'flex';
+        document.getElementById('profile-cloud-cta').textContent =
+            ' Synchronizace mezi zařízeními se zapne po připojení úložiště na Vercelu.';
+    }
+    if (lastWatchlistData && lastWatchlistData.length) renderPortfolioSummary(lastWatchlistData);
+}
+
+function setAuthTab(tab) {
+    authTab = tab;
+    document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+    document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+    document.getElementById('auth-submit-label').textContent = tab === 'login' ? 'Přihlásit se' : 'Vytvořit účet';
+    document.getElementById('auth-hint').textContent = tab === 'login'
+        ? 'Ještě nemáš účet? Klikni na „Registrovat“.'
+        : 'Jméno 3–20 znaků, heslo aspoň 4 znaky.';
+    document.getElementById('auth-error').textContent = '';
+}
+
+async function submitAuth() {
+    const u = document.getElementById('auth-username').value.trim();
+    const p = document.getElementById('auth-password').value;
+    const errEl = document.getElementById('auth-error');
+    const btn = document.getElementById('auth-submit');
+    errEl.textContent = '';
+    if (!u || !p) { errEl.textContent = 'Vyplň jméno i heslo.'; return; }
+
+    const endpoint = authTab === 'login' ? 'login' : 'register';
+    btn.disabled = true;
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/${endpoint}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: u, password: p })
+        });
+        const d = await r.json();
+        if (!d.ok) { errEl.textContent = d.error || 'Nepodařilo se.'; return; }
+
+        authToken = d.token; authUser = d.user;
+        localStorage.setItem('mystocks_token', authToken);
+        localStorage.setItem('mystocks_user', authUser);
+
+        if (endpoint === 'login') {
+            applyPortfolio(d.portfolio);
+        } else if (!myStocks || !myStocks.length) {
+            myStocks = DEFAULT_WATCHLIST.slice();
+        }
+        document.getElementById('auth-password').value = '';
+        updateProfileBtn();
+        renderProfileView();
+        showToast(endpoint === 'login' ? `Přihlášen jako ${authUser}` : `Účet ${authUser} vytvořen`, 'up', 'ti-user-check');
+        await loadWatchlist();
+        cloudSync(); // u registrace nahraje startovní portfolio
+    } catch (e) {
+        errEl.textContent = 'Chyba spojení se serverem.';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function doLogout() {
+    authToken = null; authUser = null;
+    localStorage.removeItem('mystocks_token');
+    localStorage.removeItem('mystocks_user');
+    // Vyčistit citlivá data z tohoto zařízení (pozice + upozornění), watchlist na výchozí
+    myPositions = {}; myAlerts = []; myStocks = DEFAULT_WATCHLIST.slice();
+    localStorage.setItem('mystocks_positions', JSON.stringify(myPositions));
+    localStorage.setItem('mystocks_alerts', JSON.stringify(myAlerts));
+    localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
+    updateProfileBtn();
+    renderProfileView();
+    showToast('Odhlášeno', 'down', 'ti-logout');
+    loadWatchlist();
+}
+
 // ====================== ZÁMEK (ochrana heslem) ======================
-function startApp() {
+async function startApp() {
+    await initAccount();
     loadWatchlist();
     loadOpportunities();
 }
@@ -1064,7 +1346,8 @@ function renderWatchCards(results) {
 
 // --- PORTFOLIO PŘEHLED (souhrn + alokace) ---
 function renderPortfolioSummary(results) {
-    document.getElementById('ps-toolbar').style.display = 'flex';
+    // Graf alokace má smysl kreslit jen když je profil modal otevřený (jinak 0px kontejner)
+    const modalOpen = document.getElementById('profileModal').classList.contains('open');
     const box = document.getElementById('port-summary');
     const positionsList = results.filter(s => myPositions[s.ticker] && myPositions[s.ticker].qty > 0);
 
@@ -1090,7 +1373,7 @@ function renderPortfolioSummary(results) {
         document.getElementById('ps-pl').innerText = '—';
         document.getElementById('ps-pl-pct').innerText = '';
         if(allocChartInstance){ allocChartInstance.destroy(); allocChartInstance = null; }
-        document.getElementById('allocChart').innerHTML = '<div style="color:var(--text2); font-size:13px; text-align:center;">Žádné pozice</div>';
+        if(modalOpen) document.getElementById('allocChart').innerHTML = '<div style="color:var(--text2); font-size:13px; text-align:center;">Žádné pozice</div>';
         return;
     }
     box.style.display = 'block';
@@ -1126,7 +1409,7 @@ function renderPortfolioSummary(results) {
     plPctEl.className = 'ps-stat-sub ' + (totalPL>=0?'up':'down');
     plPctEl.innerText = `${totalPL>=0?'+':''}${totalPLpct.toFixed(2)}% z investice`;
 
-    renderAllocChart(allocLabels, allocSeries);
+    if(modalOpen) renderAllocChart(allocLabels, allocSeries);
 }
 
 function renderAllocChart(labels, series) {
@@ -1460,6 +1743,7 @@ function toggleWatchlist() {
     if(myStocks.includes(t)) myStocks = myStocks.filter(s => s !== t);
     else myStocks.push(t);
     localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
+    cloudSync();
     loadStockDetail(t, false);
 }
 
@@ -1611,6 +1895,7 @@ function saveAlert() {
     if(!(price > 0)) { alert('Zadej platnou cenu.'); return; }
     myAlerts.push({ ticker: currentStockData.ticker, dir: alertDir, price, currency: currentStockData.currency });
     localStorage.setItem('mystocks_alerts', JSON.stringify(myAlerts));
+    cloudSync();
     renderAlertList();
     requestNotif();
     showToast(`Upozornění nastaveno: ${currentStockData.ticker} ${alertDir==='above'?'≥':'≤'} ${price}`, 'up', 'ti-bell-plus');
@@ -1631,6 +1916,7 @@ function renderAlertList() {
 function removeAlert(idx) {
     myAlerts.splice(idx, 1);
     localStorage.setItem('mystocks_alerts', JSON.stringify(myAlerts));
+    cloudSync();
     renderAlertList();
 }
 function checkAlerts(results) {
@@ -1649,6 +1935,7 @@ function checkAlerts(results) {
     if(triggered.length) {
         myAlerts = myAlerts.filter(a => !triggered.includes(a));
         localStorage.setItem('mystocks_alerts', JSON.stringify(myAlerts));
+        cloudSync();
     }
 }
 

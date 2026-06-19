@@ -15,6 +15,13 @@ from flask_cors import CORS
 import requests
 import math
 import os
+import json
+import hmac
+import hashlib
+import base64
+import secrets
+import re
+import time
 from datetime import datetime, timezone
 from urllib.parse import quote
 
@@ -318,6 +325,188 @@ def auth_check():
     if pw == real:
         return jsonify({"ok": True, "protected": True})
     return jsonify({"ok": False, "error": "Nesprávné heslo"}), 401
+
+
+# ---------------------------------------------------------------------------
+# Uživatelské účty + cloudová synchronizace portfolia (Vercel KV / Upstash Redis)
+#
+# Data se ukládají do Redis (REST API) – přístupy bere z env proměnných, které
+# Vercel doplní sám po připojení úložiště (Storage). Když úložiště není
+# nastavené, účty se prostě nenabídnou a appka jede lokálně (localStorage).
+# ---------------------------------------------------------------------------
+def _kv_creds():
+    url = (os.environ.get("KV_REST_API_URL")
+           or os.environ.get("UPSTASH_REDIS_REST_URL")
+           or os.environ.get("REDIS_REST_API_URL"))
+    tok = (os.environ.get("KV_REST_API_TOKEN")
+           or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+           or os.environ.get("REDIS_REST_API_TOKEN"))
+    return url, tok
+
+
+def cloud_enabled():
+    u, t = _kv_creds()
+    return bool(u and t)
+
+
+def _kv_cmd(*args):
+    """Spustí jeden Redis příkaz přes Upstash REST API. Vrací 'result' nebo None."""
+    url, tok = _kv_creds()
+    if not (url and tok):
+        return None
+    r = requests.post(url.rstrip("/"),
+                      headers={"Authorization": f"Bearer {tok}",
+                               "Content-Type": "application/json"},
+                      data=json.dumps([str(a) for a in args]), timeout=8)
+    j = r.json()
+    if isinstance(j, dict) and "error" in j and j.get("error"):
+        raise RuntimeError(j["error"])
+    return (j or {}).get("result")
+
+
+def kv_get_json(key):
+    res = _kv_cmd("GET", key)
+    if not res:
+        return None
+    try:
+        return json.loads(res)
+    except Exception:
+        return None
+
+
+def kv_set_json(key, value):
+    return _kv_cmd("SET", key, json.dumps(value))
+
+
+# ---- Hesla (pbkdf2, čistá stdlib) ----
+def hash_password(password, salt=None):
+    salt = salt or secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000)
+    return salt, dk.hex()
+
+
+def verify_password(password, salt, expected_hex):
+    _, calc = hash_password(password, salt)
+    return hmac.compare_digest(calc, expected_hex)
+
+
+# ---- Tokeny (bezstavové, podepsané HMAC) ----
+def _secret():
+    return (os.environ.get("APP_SECRET")
+            or os.environ.get("APP_PASSWORD")
+            or "mystocks-default-secret-change-me")
+
+
+def make_token(username):
+    issued = str(int(time.time()))
+    payload = base64.urlsafe_b64encode(f"{username}|{issued}".encode()).decode().rstrip("=")
+    sig = hmac.new(_secret().encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
+
+
+def verify_token(token):
+    try:
+        payload, sig = token.split(".", 1)
+        exp = hmac.new(_secret().encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, exp):
+            return None
+        pad = "=" * (-len(payload) % 4)
+        raw = base64.urlsafe_b64decode(payload + pad).decode()
+        return raw.split("|", 1)[0]
+    except Exception:
+        return None
+
+
+def _auth_user():
+    """Vytáhne přihlášeného uživatele z hlavičky Authorization: Bearer <token>."""
+    h = request.headers.get("Authorization", "")
+    if not h.startswith("Bearer "):
+        return None
+    return verify_token(h[7:].strip())
+
+
+USERNAME_RE = re.compile(r"^[a-z0-9_.-]{3,20}$")
+
+
+def _norm_user(u):
+    return (u or "").strip().lower()
+
+
+@app.route("/api/account/status")
+def account_status():
+    return jsonify({"cloud": cloud_enabled()})
+
+
+@app.route("/api/register", methods=["POST"])
+def register():
+    if not cloud_enabled():
+        return jsonify({"ok": False, "error": "Účty nejsou nastavené (chybí úložiště)."}), 400
+    body = request.get_json(silent=True) or {}
+    username = _norm_user(body.get("username"))
+    password = body.get("password") or ""
+    if not USERNAME_RE.match(username):
+        return jsonify({"ok": False, "error": "Jméno: 3–20 znaků (a–z, 0–9, . _ -)."}), 400
+    if len(password) < 4:
+        return jsonify({"ok": False, "error": "Heslo musí mít aspoň 4 znaky."}), 400
+    try:
+        if kv_get_json(f"user:{username}"):
+            return jsonify({"ok": False, "error": "Toto jméno už existuje."}), 409
+        salt, ph = hash_password(password)
+        kv_set_json(f"user:{username}", {"salt": salt, "hash": ph,
+                                         "created": int(time.time())})
+        kv_set_json(f"portfolio:{username}", {"watchlist": [], "positions": {}, "alerts": []})
+        return jsonify({"ok": True, "token": make_token(username), "user": username})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
+@app.route("/api/login", methods=["POST"])
+def login():
+    if not cloud_enabled():
+        return jsonify({"ok": False, "error": "Účty nejsou nastavené (chybí úložiště)."}), 400
+    body = request.get_json(silent=True) or {}
+    username = _norm_user(body.get("username"))
+    password = body.get("password") or ""
+    try:
+        u = kv_get_json(f"user:{username}")
+        if not u or not verify_password(password, u.get("salt", ""), u.get("hash", "")):
+            return jsonify({"ok": False, "error": "Špatné jméno nebo heslo."}), 401
+        portfolio = kv_get_json(f"portfolio:{username}") or {"watchlist": [], "positions": {}, "alerts": []}
+        return jsonify({"ok": True, "token": make_token(username),
+                        "user": username, "portfolio": portfolio})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
+@app.route("/api/portfolio", methods=["GET"])
+def get_portfolio():
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    try:
+        portfolio = kv_get_json(f"portfolio:{user}") or {"watchlist": [], "positions": {}, "alerts": []}
+        return jsonify({"ok": True, "user": user, "portfolio": portfolio})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
+@app.route("/api/portfolio", methods=["POST"])
+def save_portfolio():
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    body = request.get_json(silent=True) or {}
+    portfolio = {
+        "watchlist": body.get("watchlist") if isinstance(body.get("watchlist"), list) else [],
+        "positions": body.get("positions") if isinstance(body.get("positions"), dict) else {},
+        "alerts": body.get("alerts") if isinstance(body.get("alerts"), list) else [],
+        "updated": int(time.time()),
+    }
+    try:
+        kv_set_json(f"portfolio:{user}", portfolio)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
 
 # ---------------------------------------------------------------------------
