@@ -634,6 +634,21 @@ def kv_del(key):
     return _kv_cmd("DEL", _pk(key))
 
 
+def kv_rpush(key, value):
+    return _kv_cmd("RPUSH", _pk(key), json.dumps(value))
+
+
+def kv_lrange(key, start=0, stop=-1):
+    res = _kv_cmd("LRANGE", _pk(key), start, stop)
+    out = []
+    for x in (res or []):
+        try:
+            out.append(json.loads(x))
+        except Exception:
+            pass
+    return out
+
+
 @app.route("/api/account/status")
 def account_status():
     return jsonify({"cloud": cloud_enabled()})
@@ -1193,6 +1208,201 @@ def get_analyst(ticker):
         pass
 
     return jsonify(out)
+
+
+# ---------------------------------------------------------------------------
+# HLOUBKOVÁ ANALÝZA (server-side AI) + track record
+# ---------------------------------------------------------------------------
+PRO_DAILY_LIMIT = 30
+
+
+def _llm_creds():
+    return (os.environ.get("ANALYSIS_PROVIDER") or "groq").lower(), os.environ.get("ANALYSIS_API_KEY")
+
+
+def analysis_enabled():
+    return bool(os.environ.get("ANALYSIS_API_KEY"))
+
+
+def call_llm(prompt):
+    prov, key = _llm_creds()
+    if not key:
+        return None
+    if prov == "openai":
+        url = "https://api.openai.com/v1/chat/completions"
+        model = os.environ.get("ANALYSIS_MODEL", "gpt-4o-mini")
+    else:
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        model = os.environ.get("ANALYSIS_MODEL", "llama-3.3-70b-versatile")
+    try:
+        r = requests.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                          data=json.dumps({"model": model,
+                                           "messages": [{"role": "user", "content": prompt}],
+                                           "response_format": {"type": "json_object"},
+                                           "temperature": 0.4}), timeout=28)
+        if r.status_code != 200:
+            return None
+        content = (((r.json() or {}).get("choices") or [{}])[0].get("message") or {}).get("content")
+        return json.loads(content)
+    except Exception:
+        return None
+
+
+def gather_facts(ticker):
+    """Sesbírá tvrdá data o akcii pro analytický model."""
+    ticker = ticker.upper()
+    daily = yahoo_chart(ticker, "1y", "1d")
+    meta = daily.get("meta", {})
+    dq = ((daily.get("indicators") or {}).get("quote") or [{}])[0]
+    closes = [c for c in (dq.get("close") or []) if c is not None]
+    ind = compute_indicators(closes, dq.get("volume") or [])
+    price = meta.get("regularMarketPrice") or (closes[-1] if closes else None)
+    high52 = meta.get("fiftyTwoWeekHigh")
+    low52 = meta.get("fiftyTwoWeekLow")
+    score, score_label, _ = signal_score(price, ind, high52, low52)
+    tr = technical_rating(price, ind)
+    f = {
+        "ticker": ticker, "name": meta.get("shortName") or ticker,
+        "currency": meta.get("currency", "USD"),
+        "price": _round(price, 3), "high52": _round(high52, 3), "low52": _round(low52, 3),
+        "rsi": ind.get("rsi"), "sma50": ind.get("sma50"), "sma200": ind.get("sma200"),
+        "macd_hist": ind.get("macd_hist"), "momentum_1m_pct": ind.get("mom_1m"),
+        "volatility_pct": ind.get("volatility"),
+        "signal_score": score, "signal_label": score_label,
+        "tech_rating": tr["label"],
+    }
+    # Fundamenty + analytici z Finnhubu (best-effort)
+    fk = os.environ.get("FINNHUB_KEY")
+    if fk:
+        try:
+            base = "https://finnhub.io/api/v1"
+            prof = requests.get(f"{base}/stock/profile2", params={"symbol": ticker, "token": fk}, timeout=6).json() or {}
+            metric = (requests.get(f"{base}/stock/metric", params={"symbol": ticker, "metric": "all", "token": fk}, timeout=6).json() or {}).get("metric", {}) or {}
+            recs = requests.get(f"{base}/stock/recommendation", params={"symbol": ticker, "token": fk}, timeout=6).json() or []
+            f["industry"] = prof.get("finnhubIndustry")
+            f["market_cap_musd"] = prof.get("marketCapitalization")
+            f["pe"] = _round(metric.get("peTTM"), 2)
+            f["eps"] = _round(metric.get("epsTTM"), 2)
+            if recs:
+                f["analyst_recs"] = {k: recs[0].get(k) for k in ("strongBuy", "buy", "hold", "sell", "strongSell")}
+        except Exception:
+            pass
+    # Pár titulků zpráv
+    try:
+        nr = requests.get(f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(ticker)}&quotesCount=0&newsCount=5",
+                          headers=HEADERS, timeout=6).json()
+        f["headlines"] = [n.get("title") for n in (nr.get("news") or [])[:5] if n.get("title")]
+    except Exception:
+        f["headlines"] = []
+    return f
+
+
+def build_analysis_prompt(facts):
+    return (
+        "Jsi špičkový akciový analytik. Na základě DAT níže vytvoř hloubkovou, konkrétní a "
+        "vyváženou analýzu v ČEŠTINĚ. Opírej se o čísla z dat, nevymýšlej si fakta. "
+        "Vrať POUZE validní JSON přesně v tomto tvaru (bez markdownu):\n"
+        "{\n"
+        '  "verdict": "Koupit" | "Držet" | "Prodat",\n'
+        '  "confidence": <0-100 celé číslo>,\n'
+        '  "horizon": "<časový horizont, např. 3–6 měsíců>",\n'
+        '  "target_price": <číslo>, "stop_loss": <číslo>, "entry": <číslo>,\n'
+        '  "headline": "<jedna výstižná věta>",\n'
+        '  "thesis": "<2-4 věty investiční teze>",\n'
+        '  "fundamentals": "<rozbor fundamentu: valuace, růst, ziskovost>",\n'
+        '  "technicals": "<rozbor technického obrazu>",\n'
+        '  "sentiment": "<nálada trhu, zprávy, analytici>",\n'
+        '  "scenarios": {"bull": "<býčí scénář + cíl>", "base": "<základní>", "bear": "<medvědí + riziko>"},\n'
+        '  "risks": ["<riziko 1>", "<riziko 2>", "<riziko 3>"],\n'
+        '  "catalysts": ["<katalyzátor 1>", "<katalyzátor 2>"]\n'
+        "}\n\n"
+        "Ceny (target_price, stop_loss, entry) uveď ve stejné měně jako aktuální cena a realisticky vzhledem k 52T pásmu a volatilitě.\n\n"
+        "DATA:\n" + json.dumps(facts, ensure_ascii=False)
+    )
+
+
+def _today():
+    return datetime.now(timezone.utc).strftime("%Y%m%d")
+
+
+@app.route("/api/analysis/<path:ticker>", methods=["POST"])
+def deep_analysis(ticker):
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Pro hloubkovou analýzu se přihlas."}), 401
+    if not analysis_enabled():
+        return jsonify({"ok": False, "error": "Analytický motor zatím není nastavený."}), 503
+    try:
+        rec = kv_get_json(f"user:{user}")
+        if effective_plan(rec) != "pro":
+            return jsonify({"ok": False, "error": "Hloubková analýza je součástí plánu Pro.", "upgrade": True}), 402
+
+        # Denní limit
+        ukey = f"usage:{user}:{_today()}"
+        used = kv_get_json(ukey) or 0
+        if used >= PRO_DAILY_LIMIT:
+            return jsonify({"ok": False, "error": f"Denní limit {PRO_DAILY_LIMIT} analýz vyčerpán. Zkus to zítra."}), 429
+
+        facts = gather_facts(ticker)
+        report = call_llm(build_analysis_prompt(facts))
+        if not report:
+            return jsonify({"ok": False, "error": "Analýzu se nepodařilo vygenerovat, zkus to znovu."}), 502
+
+        kv_set_json(ukey, used + 1)
+
+        # Ulož verdikt pro track record (snapshot ceny v čase)
+        try:
+            kv_rpush("verdicts", {
+                "ticker": facts["ticker"], "ts": int(time.time()),
+                "verdict": report.get("verdict"), "price": facts.get("price"),
+                "target": report.get("target_price"), "currency": facts.get("currency"),
+                "user": user,
+            })
+        except Exception:
+            pass
+
+        return jsonify({"ok": True, "ticker": facts["ticker"], "name": facts.get("name"),
+                        "currency": facts.get("currency"), "price": facts.get("price"),
+                        "report": report, "facts": facts,
+                        "used_today": used + 1, "daily_limit": PRO_DAILY_LIMIT})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba analýzy: {e}"}), 500
+
+
+@app.route("/api/track-record")
+def track_record():
+    """Agregovaná úspěšnost dosavadních verdiktů (re-fetch aktuálních cen)."""
+    try:
+        verdicts = kv_lrange("verdicts", -200, -1)
+        if not verdicts:
+            return jsonify({"ok": True, "count": 0, "items": [], "stats": {}})
+        # Aktuální ceny (unikátní tickery)
+        prices = {}
+        for t in {v.get("ticker") for v in verdicts if v.get("ticker")}:
+            try:
+                res = yahoo_chart(t, "1d", "1d")
+                prices[t] = (res.get("meta") or {}).get("regularMarketPrice")
+            except Exception:
+                prices[t] = None
+        items, buy_rets = [], []
+        for v in verdicts:
+            cur = prices.get(v.get("ticker"))
+            entry = v.get("price")
+            ret = ((cur - entry) / entry * 100) if (cur and entry) else None
+            if v.get("verdict") == "Koupit" and ret is not None:
+                buy_rets.append(ret)
+            items.append({**v, "current": _round(cur, 3), "return_pct": _round(ret, 2)})
+        items = items[-60:][::-1]
+        stats = {}
+        if buy_rets:
+            stats = {
+                "buy_count": len(buy_rets),
+                "buy_avg_return": round(sum(buy_rets) / len(buy_rets), 2),
+                "buy_win_rate": round(sum(1 for r in buy_rets if r > 0) / len(buy_rets) * 100, 1),
+            }
+        return jsonify({"ok": True, "count": len(verdicts), "items": items, "stats": stats})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/stock/<path:ticker>")

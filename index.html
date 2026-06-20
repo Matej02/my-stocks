@@ -213,6 +213,40 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .lock-card .btn-primary {width:100%; justify-content:center;}
 .lock-error {color:var(--down); font-size:12px; min-height:16px; margin-bottom:10px;}
 
+/* ============ HLOUBKOVÁ ANALÝZA ============ */
+.deep-box {background:linear-gradient(135deg, rgba(124,77,255,0.08), rgba(255,122,0,0.05)); border:1px solid var(--border-accent); border-radius:16px; padding:20px; margin-bottom:20px;}
+.deep-head {display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
+.deep-badge {font-size:10px; font-weight:700; background:rgba(124,77,255,0.2); color:#b89bff; padding:2px 8px; border-radius:8px; vertical-align:middle;}
+.deep-btn {flex:none; display:inline-flex; align-items:center; gap:6px; padding:9px 16px;}
+.deep-teaser {color:var(--text2); font-size:13px; margin-top:12px; line-height:1.6;}
+.deep-verdict {display:flex; align-items:center; gap:14px; margin:16px 0; flex-wrap:wrap;}
+.dv-badge {font-family:var(--fh); font-weight:800; font-size:20px; padding:10px 18px; border-radius:14px;}
+.dv-badge.buy {background:var(--up-glow); color:var(--up); border:1px solid var(--up);}
+.dv-badge.hold {background:rgba(255,196,0,0.12); color:#FFC400; border:1px solid rgba(255,196,0,0.4);}
+.dv-badge.sell {background:var(--down-glow); color:var(--down); border:1px solid var(--down);}
+.dv-meta {display:flex; gap:18px; flex-wrap:wrap; font-size:13px;}
+.dv-meta .l {color:var(--text2); font-size:11px; text-transform:uppercase; letter-spacing:.5px;}
+.dv-meta .v {font-family:var(--fh); font-weight:700; font-size:16px;}
+.deep-headline {font-size:15px; font-weight:600; line-height:1.5; margin:6px 0 16px; color:var(--text);}
+.deep-levels {display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap;}
+.dl-cell {flex:1; min-width:90px; text-align:center; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:10px;}
+.dl-cell .l {font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
+.dl-cell .v {font-family:var(--fh); font-weight:700; font-size:17px; margin-top:3px;}
+.deep-sec {margin-bottom:16px;}
+.deep-sec h4 {font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--accent); margin-bottom:6px; display:flex; align-items:center; gap:6px;}
+.deep-sec p {font-size:13.5px; line-height:1.65; color:var(--text); margin:0;}
+.deep-scen {display:grid; grid-template-columns:1fr; gap:8px;}
+.scen-row {border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.5;}
+.scen-row b {display:inline-block; margin-bottom:2px;}
+.scen-row.bull {border-left:3px solid var(--up);}
+.scen-row.base {border-left:3px solid #FFC400;}
+.scen-row.bear {border-left:3px solid var(--down);}
+.deep-list {list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px;}
+.deep-list li {font-size:13px; line-height:1.5; padding-left:20px; position:relative; color:var(--text);}
+.deep-list li::before {content:""; position:absolute; left:4px; top:7px; width:6px; height:6px; border-radius:50%; background:var(--accent);}
+.deep-usage {font-size:11px; color:var(--text2); margin-top:14px; text-align:right;}
+.deep-disclaimer {font-size:11px; color:var(--text2); opacity:.7; margin-top:8px; line-height:1.5;}
+
 /* ============ SOUHRNNÉ TECHNICKÉ HODNOCENÍ (budík) ============ */
 .tech-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-bottom:20px;}
 .tech-breakdown {display:flex; gap:10px; margin-top:6px;}
@@ -762,6 +796,14 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
       </div>
       
       <div class="info-container">
+        <div class="deep-box" id="deep-box">
+          <div class="deep-head">
+            <div class="signal-title"><i class="ti ti-brain" style="color:var(--accent)"></i> Hloubková analýza <span class="deep-badge">PRO</span></div>
+            <button class="btn-primary deep-btn" id="deep-btn" onclick="runDeepAnalysis()"><i class="ti ti-sparkles"></i> Vygenerovat</button>
+          </div>
+          <div id="deep-output"><div class="deep-teaser">Klikni na <b>Vygenerovat</b> pro kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.</div></div>
+        </div>
+
         <div class="signal-box" id="signal-box" style="display:none;">
           <div class="signal-head">
             <div class="signal-title"><i class="ti ti-gauge"></i> Technický signál</div>
@@ -1985,6 +2027,7 @@ async function loadStockDetail(ticker, runAI = true) {
 
         renderSignal(data);
         renderTechRating(data.tech_rating);
+        resetDeep();
         resetChat(data.ticker);
         loadNews(data.ticker);
         loadAnalyst(data.ticker, data.price);
@@ -2447,6 +2490,92 @@ function renderTechRating(tr) {
     </div>`;
 
     document.getElementById('tech-gauge').innerHTML = svg + breakdown;
+}
+
+// ====================== HLOUBKOVÁ ANALÝZA (server-side AI) ======================
+function escapeHtml(s) {
+    return (s == null ? '' : String(s)).replace(/[&<>"]/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function resetDeep() {
+    const out = document.getElementById('deep-output');
+    const btn = document.getElementById('deep-btn');
+    if (btn) btn.disabled = false;
+    if (out) out.innerHTML = '<div class="deep-teaser">Klikni na <b>Vygenerovat</b> pro kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.</div>';
+}
+
+async function runDeepAnalysis() {
+    if (!currentStockData) return;
+    const out = document.getElementById('deep-output');
+    const btn = document.getElementById('deep-btn');
+
+    if (cloudEnabled && !authToken) {
+        out.innerHTML = '<div class="deep-teaser">Pro hloubkovou analýzu se přihlas v profilu.</div>';
+        openProfile(); return;
+    }
+    if (!hasFeature('pro')) {
+        out.innerHTML = lockedCardHTML('Hloubková analýza', 'pro',
+            'Kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.');
+        return;
+    }
+    btn.disabled = true;
+    out.innerHTML = `<div class="deep-teaser"><i class="ti ti-loader spin"></i> Analyzuji ${escapeHtml(currentStockData.ticker)}… může to pár sekund trvat.</div>`;
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/analysis/${encodeURIComponent(currentStockData.ticker)}`,
+            { method: 'POST', headers: authHeaders() });
+        const d = await r.json();
+        if (!d.ok) {
+            out.innerHTML = `<div class="deep-teaser" style="color:var(--down)">${escapeHtml(d.error || 'Nepodařilo se.')}</div>`;
+            if (d.upgrade) setTimeout(() => openProfile('plans'), 900);
+            return;
+        }
+        renderDeepReport(d);
+    } catch (e) {
+        out.innerHTML = '<div class="deep-teaser" style="color:var(--down)">Chyba spojení se serverem.</div>';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function renderDeepReport(d) {
+    const rp = d.report || {};
+    const cur = d.currency || '';
+    const vt = (rp.verdict || '').toLowerCase();
+    const vcls = vt.includes('koup') ? 'buy' : (vt.includes('prod') ? 'sell' : 'hold');
+    const fmt = x => (x != null && !isNaN(x)) ? Number(x).toFixed(2) + ' ' + cur : '—';
+    const scen = rp.scenarios || {};
+    const sec = (icon, title, txt) => txt ? `<div class="deep-sec"><h4><i class="ti ${icon}"></i> ${title}</h4><p>${escapeHtml(txt)}</p></div>` : '';
+    const risks = (rp.risks || []).map(x => `<li>${escapeHtml(x)}</li>`).join('');
+    const cats = (rp.catalysts || []).map(x => `<li>${escapeHtml(x)}</li>`).join('');
+
+    document.getElementById('deep-output').innerHTML = `
+        <div class="deep-verdict">
+            <span class="dv-badge ${vcls}">${escapeHtml(rp.verdict || '—')}</span>
+            <div class="dv-meta">
+                <div><div class="l">Sebejistota</div><div class="v">${rp.confidence != null ? rp.confidence + '%' : '—'}</div></div>
+                <div><div class="l">Horizont</div><div class="v">${escapeHtml(rp.horizon || '—')}</div></div>
+            </div>
+        </div>
+        ${rp.headline ? `<div class="deep-headline">${escapeHtml(rp.headline)}</div>` : ''}
+        <div class="deep-levels">
+            <div class="dl-cell"><div class="l">Vstup</div><div class="v">${fmt(rp.entry)}</div></div>
+            <div class="dl-cell"><div class="l">Cíl</div><div class="v" style="color:var(--up)">${fmt(rp.target_price)}</div></div>
+            <div class="dl-cell"><div class="l">Stop-loss</div><div class="v" style="color:var(--down)">${fmt(rp.stop_loss)}</div></div>
+        </div>
+        ${sec('ti-bulb', 'Investiční teze', rp.thesis)}
+        ${sec('ti-building-bank', 'Fundament', rp.fundamentals)}
+        ${sec('ti-chart-line', 'Technika', rp.technicals)}
+        ${sec('ti-mood-smile', 'Sentiment', rp.sentiment)}
+        ${(scen.bull || scen.base || scen.bear) ? `<div class="deep-sec"><h4><i class="ti ti-arrows-split"></i> Scénáře</h4><div class="deep-scen">
+            ${scen.bull ? `<div class="scen-row bull"><b>📈 Býčí</b><br>${escapeHtml(scen.bull)}</div>` : ''}
+            ${scen.base ? `<div class="scen-row base"><b>➡️ Základní</b><br>${escapeHtml(scen.base)}</div>` : ''}
+            ${scen.bear ? `<div class="scen-row bear"><b>📉 Medvědí</b><br>${escapeHtml(scen.bear)}</div>` : ''}
+        </div></div>` : ''}
+        ${risks ? `<div class="deep-sec"><h4><i class="ti ti-alert-triangle"></i> Rizika</h4><ul class="deep-list">${risks}</ul></div>` : ''}
+        ${cats ? `<div class="deep-sec"><h4><i class="ti ti-rocket"></i> Katalyzátory</h4><ul class="deep-list">${cats}</ul></div>` : ''}
+        <div class="deep-usage">Dnes využito ${d.used_today}/${d.daily_limit} analýz</div>
+        <div class="deep-disclaimer"><i class="ti ti-info-circle"></i> Vygenerováno AI z tržních dat. Není to investiční doporučení — slouží jako podklad k vlastnímu rozhodnutí.</div>`;
 }
 
 // ====================== DOPORUČENÍ ANALYTIKŮ + FUNDAMENTY ======================
