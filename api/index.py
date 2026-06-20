@@ -1340,7 +1340,7 @@ def analysis_enabled():
     return bool(os.environ.get("ANALYSIS_API_KEY"))
 
 
-def call_llm(prompt):
+def call_llm(prompt, json_mode=True):
     prov, key = _llm_creds()
     if not key:
         return None
@@ -1350,15 +1350,17 @@ def call_llm(prompt):
     else:
         url = "https://api.groq.com/openai/v1/chat/completions"
         model = os.environ.get("ANALYSIS_MODEL", "llama-3.3-70b-versatile")
+    payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.4}
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
     try:
         r = requests.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                          data=json.dumps({"model": model,
-                                           "messages": [{"role": "user", "content": prompt}],
-                                           "response_format": {"type": "json_object"},
-                                           "temperature": 0.4}), timeout=28)
+                          data=json.dumps(payload), timeout=28)
         if r.status_code != 200:
             return None
         content = (((r.json() or {}).get("choices") or [{}])[0].get("message") or {}).get("content")
+        if not json_mode:
+            return content
         return json.loads(content)
     except Exception:
         return None
@@ -1520,6 +1522,75 @@ def track_record():
         return jsonify({"ok": True, "count": len(verdicts), "items": items, "stats": stats})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Server-side AI (uživatel nezadává žádný klíč) – Elite plán
+# ---------------------------------------------------------------------------
+def _ai_gate(min_plan="elite"):
+    """Vrátí (user, None) když má přístup, jinak (None, (response, status))."""
+    user = _auth_user()
+    if not user:
+        return None, (jsonify({"ok": False, "error": "Přihlas se."}), 401)
+    if not analysis_enabled():
+        return None, (jsonify({"ok": False, "error": "AI motor zatím není nastavený."}), 503)
+    rec = kv_get_json(f"user:{user}")
+    if user not in admin_users() and PLAN_RANK.get(effective_plan(rec), -1) < PLAN_RANK[min_plan]:
+        return None, (jsonify({"ok": False, "error": f"AI funkce je v plánu {min_plan.capitalize()}.", "upgrade": True}), 402)
+    return user, None
+
+
+@app.route("/api/ai/brief", methods=["POST"])
+def ai_brief():
+    user, err = _ai_gate("elite")
+    if err:
+        return err
+    stocks = (request.get_json(silent=True) or {}).get("stocks") or []
+    compact = [{"t": s.get("ticker"), "price": s.get("price"), "chg": s.get("change_pct")} for s in stocks][:20]
+    prompt = ("Jsi tržní analytik. Data sledovaných akcií: " + json.dumps(compact, ensure_ascii=False) +
+              '. Vrať POUZE validní JSON: {"summary":"2 věty o dnešní náladě trhu a portfoliu",'
+              '"top_picks":[{"ticker":"X","reason":"krátký pádný důvod k nákupu"}]}. Max 2 tipy. Česky.')
+    out = call_llm(prompt)
+    if not isinstance(out, dict):
+        return jsonify({"ok": False, "error": "AI se nepodařilo."}), 502
+    return jsonify({"ok": True, "summary": out.get("summary", ""), "top_picks": out.get("top_picks", [])})
+
+
+@app.route("/api/ai/eval", methods=["POST"])
+def ai_eval():
+    user, err = _ai_gate("elite")
+    if err:
+        return err
+    stocks = (request.get_json(silent=True) or {}).get("stocks") or []
+    compact = [{"t": s.get("ticker"), "price": s.get("price"), "chg": s.get("change_pct")} for s in stocks][:20]
+    prompt = ("Jsi portfolio manažer. Data sledovaných akcií: " + json.dumps(compact, ensure_ascii=False) +
+              '. Vrať POUZE validní JSON: {"summary":"2 věty zhodnocení",'
+              '"sell":[{"ticker":"X","reason":"proč zvážit prodej","urgency":"IHNED nebo ZVÁŽIT"}],'
+              '"buy":[{"ticker":"X","reason":"proč přikoupit/koupit","upside":"+15%"}]}. Max 3 v každé sekci. Česky.')
+    out = call_llm(prompt)
+    if not isinstance(out, dict):
+        return jsonify({"ok": False, "error": "AI se nepodařilo."}), 502
+    return jsonify({"ok": True, "summary": out.get("summary", ""),
+                    "sell": out.get("sell", []), "buy": out.get("buy", [])})
+
+
+@app.route("/api/ai/chat", methods=["POST"])
+def ai_chat():
+    user, err = _ai_gate("elite")
+    if err:
+        return err
+    body = request.get_json(silent=True) or {}
+    context = str(body.get("context", ""))[:1500]
+    history = body.get("history") or []
+    q = str(body.get("q", ""))[:500]
+    prompt = (f"Jsi stručný investiční asistent. Kontext o akcii: {context}\n"
+              f"Historie: {json.dumps(history[-6:], ensure_ascii=False)}\n"
+              f"Odpověz česky, konkrétně a MAX 4 věty na dotaz: \"{q}\". "
+              "Nepoužívej markdown ani hvězdičky. Na konci krátce připomeň, že nejde o investiční doporučení.")
+    answer = call_llm(prompt, json_mode=False)
+    if not answer:
+        return jsonify({"ok": False, "error": "AI se nepodařilo."}), 502
+    return jsonify({"ok": True, "answer": answer})
 
 
 @app.route("/api/stock/<path:ticker>")

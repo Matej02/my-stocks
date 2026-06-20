@@ -541,7 +541,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·f</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·g</div>
 
 <div class="container">
   
@@ -562,16 +562,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
         <i class="ti ti-user-circle"></i>
         <span id="profileBtnLabel">Profil</span>
       </button>
-      <button class="settings-btn" onclick="toggleApiPanel()">
-        <i class="ti ti-settings"></i> Nastavení AI
-      </button>
     </div>
-  </div>
-
-  <div class="api-panel" id="apiPanel">
-    <select id="api-provider"><option value="groq">Groq AI (Zdarma)</option><option value="openai">OpenAI</option></select>
-    <input type="password" id="api-key" placeholder="Vlož svůj API klíč...">
-    <button class="btn-save" onclick="saveApi()">Uložit klíč</button>
   </div>
 
   <!-- TOASTY (upozornění) -->
@@ -850,11 +841,6 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
           <div class="analyst-recs" id="analyst-recs"></div>
         </div>
 
-        <div class="ai-box" id="ai-output">
-           <div style="color:var(--text2); display:flex; align-items:center; gap:10px;">
-             <i class="ti ti-loader spin" style="color:var(--accent);"></i> AI generuje analýzu...
-           </div>
-        </div>
 
         <div class="chat-box" id="chat-box">
           <div class="chat-head"><i class="ti ti-message-chatbot"></i> Zeptej se AI na tuto akcii</div>
@@ -987,9 +973,6 @@ function lockedCardHTML(title, minPlan, desc) {
 let chatHistory = [];
 
 document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById('api-key').value = localStorage.getItem('mystocks_key') || '';
-    document.getElementById('api-provider').value = localStorage.getItem('mystocks_prov') || 'groq';
-    
     initResetFromUrl();
     initGate();
 
@@ -1056,15 +1039,6 @@ function selectSearchItem(ticker) {
     loadStockDetail(ticker);
 }
 
-function toggleApiPanel() {
-    const p = document.getElementById('apiPanel');
-    p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
-}
-function saveApi() {
-    localStorage.setItem('mystocks_key', document.getElementById('api-key').value);
-    localStorage.setItem('mystocks_prov', document.getElementById('api-provider').value);
-    toggleApiPanel();
-}
 function formatNum(num) {
     if(!num || num === "N/A") return "N/A";
     if(num >= 1e12) return (num / 1e12).toFixed(2) + " T";
@@ -1085,43 +1059,18 @@ function extractJson(rawStr) {
     throw new Error("Nelze parsovat JSON z odpovědi modelu");
 }
 
-// --- RATE LIMIT HELPER: Vrátí čitelnou chybovou hlášku ---
-function aiErrorMessage(err, httpStatus) {
-    if(httpStatus === 429) {
-        return `<span style="color:#FFC400"><i class="ti ti-clock-pause"></i> AI si dává pauzu kvůli limitu dotazů. Zkuste to za minutu.</span>`;
+// Server-side AI: zavolá náš endpoint (uživatel nezadává žádný klíč). Vrací data nebo null.
+async function serverAI(path, body) {
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/ai/${path}`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify(body || {})
+        });
+        const d = await r.json();
+        if (!d.ok) { d._status = r.status; return d; }
+        return d;
+    } catch (e) {
+        return { ok: false, error: 'Chyba spojení s AI.' };
     }
-    if(httpStatus === 401) {
-        return `<span style="color:var(--down)"><i class="ti ti-key-off"></i> Neplatný API klíč. Zkontrolujte nastavení.</span>`;
-    }
-    return `<span style="color:var(--down)"><i class="ti ti-alert-circle"></i> Chyba AI: ${err?.message || 'Neznámá chyba'}.</span>`;
-}
-
-// --- VOLÁNÍ AI (sdílená funkce pro Groq i OpenAI) ---
-async function callAI(prompt, jsonMode = false) {
-    const key = localStorage.getItem('mystocks_key');
-    const provider = localStorage.getItem('mystocks_prov') || 'groq';
-    if(!key) return { ok: false, status: 0, error: 'no_key' };
-
-    const body = jsonMode
-        ? { model: provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' } }
-        : { model: provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }] };
-
-    const url = provider === 'groq'
-        ? 'https://api.groq.com/openai/v1/chat/completions'
-        : 'https://api.openai.com/v1/chat/completions';
-
-    // Groq nepodporuje response_format json_object na všech modelech - odebereme ho bezpečně
-    if(provider === 'groq' && jsonMode) delete body.response_format;
-
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-        body: JSON.stringify(body)
-    });
-
-    if(!res.ok) return { ok: false, status: res.status };
-    const data = await res.json();
-    return { ok: true, content: data.choices[0].message.content };
 }
 
 // --- PORTFOLIO & DASHBOARD AI ---
@@ -1904,64 +1853,33 @@ function renderWatchCards(results) {
 }
 
 async function generateDashboardBrief(watchlistData) {
-    const key = localStorage.getItem('mystocks_key');
     const briefBox = document.getElementById('ai-dashboard-brief');
     const briefText = document.getElementById('ai-brief-text');
     const picksGrid = document.getElementById('ai-picks-grid');
-    
-    if(!key) {
-        briefBox.style.display = 'block';
-        briefText.innerHTML = '<span style="color:var(--down)">⚠ Pro zobrazení chytrých tipů na nákup si vložte API klíč v Nastavení.</span>';
-        picksGrid.innerHTML = '';
-        return;
-    }
+    if (!hasFeature('elite')) { briefBox.style.display = 'none'; return; }
 
     briefBox.style.display = 'block';
     briefText.innerHTML = '<i class="ti ti-loader spin"></i> Analyzuji portfolio...';
     picksGrid.innerHTML = '';
-    
-    // Nekompromisně vyžadujeme čistý JSON bez markdownu
-    const prompt = `Jsi analytik. Zde jsou dnešní data mého portfolia: ${JSON.stringify(watchlistData)}. 
-Vrať VÝHRADNĚ čistý, validní JSON přesně v tomto formátu (ŽÁDNÝ MARKDOWN, ŽÁDNÉ ZNAČKY \`\`\`json):
-{
-  "summary": "Tvé celkové shrnutí situace na trhu (2 věty).",
-  "top_picks": [
-    { "ticker": "ZDE NAPIŠ TICKER PRVNÍ AKCIE K NÁKUPU", "reason": "Krátký pádný důvod proč koupit." },
-    { "ticker": "ZDE NAPIŠ TICKER DRUHÉ AKCIE K NÁKUPU", "reason": "Krátký pádný důvod proč koupit." }
-  ]
-}`;
 
-    try {
-        const result = await callAI(prompt, true);
-
-        if(!result.ok) {
-            briefText.innerHTML = aiErrorMessage(null, result.status);
-            picksGrid.innerHTML = '';
-            return;
-        }
-
-        // Robustní parsování – extrahuje JSON i z obalených odpovědí
-        const aiData = extractJson(result.content);
-
-        briefText.innerHTML = aiData.summary;
+    const aiData = await serverAI('brief', { stocks: watchlistData });
+    if (!aiData.ok) {
+        briefText.innerHTML = `<span style="color:var(--down)">${aiData.error || 'AI se nepodařilo.'}</span>`;
         picksGrid.innerHTML = '';
-
-        (aiData.top_picks || []).forEach(pick => {
-            picksGrid.innerHTML += `
-                <div class="pick-card" onclick="loadStockDetail('${pick.ticker}')">
-                    <div class="pick-top">
-                        <div class="pick-ticker">${pick.ticker}</div>
-                        <div class="pick-badge">DOPORUČUJE SE KOUPIT</div>
-                    </div>
-                    <div class="pick-reason">${pick.reason}</div>
-                </div>
-            `;
-        });
-
-    } catch(e) {
-        briefText.innerHTML = '<span style="color:var(--down)">Chyba při parsování AI analýzy. Zkuste obnovit stránku.</span>';
-        picksGrid.innerHTML = '';
+        return;
     }
+    briefText.innerHTML = aiData.summary || '';
+    picksGrid.innerHTML = '';
+    (aiData.top_picks || []).forEach(pick => {
+        picksGrid.innerHTML += `
+            <div class="pick-card" onclick="loadStockDetail('${pick.ticker}')">
+                <div class="pick-top">
+                    <div class="pick-ticker">${pick.ticker}</div>
+                    <div class="pick-badge">DOPORUČUJE SE KOUPIT</div>
+                </div>
+                <div class="pick-reason">${pick.reason}</div>
+            </div>`;
+    });
 }
 
 // --- DETAIL AKCIE S OVLÁDÁNÍM GRAFU ---
@@ -1983,13 +1901,9 @@ async function loadStockDetail(ticker, runAI = true) {
     document.getElementById('dashboard').style.display = 'none';
     const detail = document.getElementById('detail-view');
     detail.style.display = 'block';
-    
+
     document.getElementById('d-ticker').innerHTML = `<i class="ti ti-loader spin"></i>`;
-    
-    if(runAI) {
-        document.getElementById('ai-output').innerHTML = `<div style="color:var(--text2); display:flex; align-items:center; gap:10px;"><i class="ti ti-loader spin" style="color:var(--accent);"></i> AI generuje analýzu...</div>`;
-    }
-    
+
     try {
         const res = await fetch(`${BACKEND_URL}/api/stock/${ticker}?period=${chartPeriod}`);
         const data = await res.json();
@@ -2042,9 +1956,6 @@ async function loadStockDetail(ticker, runAI = true) {
 
         renderChart(currentChartData);
         renderPeriodPerf(currentChartData);
-        
-        if(runAI) autoGenerateAIReport();
-        
     } catch(e) {
         alert("Chyba při stahování dat ze serveru.");
         closeDetail();
@@ -2226,120 +2137,48 @@ function toggleWatchlist() {
 }
 
 // --- AUTO-AI ANALÝZA V DETAILU ---
-async function autoGenerateAIReport() {
-    const key = localStorage.getItem('mystocks_key');
-    const out = document.getElementById('ai-output');
-    
-    if(!key) { 
-        out.innerHTML = '<div style="color:var(--text2)">Zadejte API klíč v Nastavení pro zobrazení AI analýzy.</div>'; 
-        return; 
-    }
-    
-    const prompt = `Jsi investiční analytik. Zhodnoť akcii ${currentStockData.ticker}. P/E: ${currentStockData.pe_ratio}, Cena: ${currentStockData.price}, 52W: ${currentStockData.low52}-${currentStockData.high52}. 
-Vrať mi čistě formátovaný text pomocí HTML značek. 
-První věta ať je verdikt obalený ve spanu: <span class="ai-verdict v-buy">BUY</span> (nebo v-sell / v-hold).
-Zbytek textu rozděl do 2 odstavců pomocí <p class="ai-p">. Používej <b> pro zvýraznění čísel. Žádný markdown.`;
-
-    try {
-        const result = await callAI(prompt, false);
-        
-        if(!result.ok) {
-            out.innerHTML = aiErrorMessage(null, result.status);
-            return;
-        }
-
-        const cleanHtml = result.content.replace(/```html/g, '').replace(/```/g, '').trim();
-        
-        out.style.opacity = 0;
-        out.innerHTML = cleanHtml;
-        setTimeout(() => {
-            out.style.transition = "opacity 0.6s ease";
-            out.style.opacity = 1;
-        }, 50);
-
-    } catch(e) {
-        out.innerHTML = aiErrorMessage(e, 0);
-    }
-}
-
-// --- PORTFOLIO HODNOCENÍ: CO PRODAT / PŘIKOUPIT ---
+// --- PORTFOLIO HODNOCENÍ: CO PRODAT / PŘIKOUPIT (server-side AI) ---
 async function generatePortfolioEval(watchlistData) {
-    const key = localStorage.getItem('mystocks_key');
     const box = document.getElementById('port-eval-box');
     const summaryEl = document.getElementById('port-eval-summary');
     const sellList = document.getElementById('eval-sell-list');
     const buyList = document.getElementById('eval-buy-list');
+    if (!hasFeature('elite')) { box.style.display = 'none'; return; }
 
     box.style.display = 'block';
     summaryEl.innerHTML = '<i class="ti ti-loader spin"></i> Analyzuji portfolio...';
     sellList.innerHTML = '<div class="port-eval-loading"><i class="ti ti-loader spin"></i></div>';
     buyList.innerHTML = '<div class="port-eval-loading"><i class="ti ti-loader spin"></i></div>';
 
-    if(!key) {
-        summaryEl.innerHTML = '<span style="color:var(--text2)">Vložte AI klíč v Nastavení pro hodnocení portfolia.</span>';
+    const data = await serverAI('eval', { stocks: watchlistData });
+    if (!data.ok) {
+        summaryEl.innerHTML = `<span style="color:var(--down)">${data.error || 'AI se nepodařilo.'}</span>`;
         sellList.innerHTML = ''; buyList.innerHTML = '';
         return;
     }
+    summaryEl.innerHTML = data.summary || '';
 
-    const prompt = `Jsi zkušený portfolio manažer. Zde jsou aktuální data mého sledovaného seznamu akcií: ${JSON.stringify(watchlistData)}.
-    
-Vrať VÝHRADNĚ čistý validní JSON (bez markdownu, bez \`\`\`):
-{
-  "summary": "2 věty — celkové zhodnocení stavu portfolia a nálady trhu.",
-  "sell": [
-    { "ticker": "TICKER", "reason": "Stručný důvod proč prodat nebo snížit pozici.", "urgency": "IHNED nebo ZVÁŽIT" }
-  ],
-  "buy": [
-    { "ticker": "TICKER", "reason": "Stručný důvod proč přikoupit nebo vstoupit.", "upside": "+15%" }
-  ]
-}
-Maximálně 3 položky v každé sekci. Pokud má akcie pl_pct pod -15%, doporuč ji v sekci sell. Buď konkrétní.`;
+    sellList.innerHTML = '';
+    (data.sell || []).forEach(item => {
+        sellList.innerHTML += `
+        <div class="eval-ticker-pill" onclick="loadStockDetail('${item.ticker}')">
+            <div><div class="eval-ticker-name">${item.ticker}</div><div class="eval-ticker-reason">${item.reason}</div></div>
+            <span class="eval-ticker-badge">${item.urgency || 'ZVÁŽIT'}</span>
+        </div>`;
+    });
+    if(!data.sell || data.sell.length === 0)
+        sellList.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0;">Žádná jasná doporučení k prodeji.</div>';
 
-    try {
-        const result = await callAI(prompt, true);
-        if(!result.ok) {
-            summaryEl.innerHTML = aiErrorMessage(null, result.status);
-            sellList.innerHTML = ''; buyList.innerHTML = '';
-            return;
-        }
-
-        const data = extractJson(result.content);
-        summaryEl.innerHTML = data.summary || '';
-
-        sellList.innerHTML = '';
-        (data.sell || []).forEach(item => {
-            sellList.innerHTML += `
-            <div class="eval-ticker-pill" onclick="loadStockDetail('${item.ticker}')">
-                <div>
-                    <div class="eval-ticker-name">${item.ticker}</div>
-                    <div class="eval-ticker-reason">${item.reason}</div>
-                </div>
-                <span class="eval-ticker-badge">${item.urgency || 'ZVÁŽIT'}</span>
-            </div>`;
-        });
-        if(!data.sell || data.sell.length === 0) {
-            sellList.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0;">Žádná jasná doporučení k prodeji.</div>';
-        }
-
-        buyList.innerHTML = '';
-        (data.buy || []).forEach(item => {
-            buyList.innerHTML += `
-            <div class="eval-ticker-pill" onclick="loadStockDetail('${item.ticker}')">
-                <div>
-                    <div class="eval-ticker-name">${item.ticker}</div>
-                    <div class="eval-ticker-reason">${item.reason}</div>
-                </div>
-                <span class="eval-ticker-badge">${item.upside || '↑'}</span>
-            </div>`;
-        });
-        if(!data.buy || data.buy.length === 0) {
-            buyList.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0;">Žádná jasná doporučení k nákupu.</div>';
-        }
-
-    } catch(e) {
-        summaryEl.innerHTML = '<span style="color:var(--down)">Chyba při generování hodnocení.</span>';
-        sellList.innerHTML = ''; buyList.innerHTML = '';
-    }
+    buyList.innerHTML = '';
+    (data.buy || []).forEach(item => {
+        buyList.innerHTML += `
+        <div class="eval-ticker-pill" onclick="loadStockDetail('${item.ticker}')">
+            <div><div class="eval-ticker-name">${item.ticker}</div><div class="eval-ticker-reason">${item.reason}</div></div>
+            <span class="eval-ticker-badge">${item.upside || '↑'}</span>
+        </div>`;
+    });
+    if(!data.buy || data.buy.length === 0)
+        buyList.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0;">Žádná jasná doporučení k nákupu.</div>';
 }
 
 // ============ CENOVÁ UPOZORNĚNÍ ============
@@ -2676,13 +2515,12 @@ async function sendChat() {
     const input = document.getElementById('chat-input');
     const q = input.value.trim();
     if(!q || !currentStockData) return;
-    const key = localStorage.getItem('mystocks_key');
     const log = document.getElementById('chat-log');
 
-    log.innerHTML += `<div class="chat-msg chat-user">${q}</div>`;
+    log.innerHTML += `<div class="chat-msg chat-user">${escapeHtml(q)}</div>`;
     input.value = '';
-    if(!key) {
-        log.innerHTML += `<div class="chat-msg chat-ai" style="color:var(--down)">Pro AI chat zadej API klíč v Nastavení.</div>`;
+    if(!hasFeature('elite')) {
+        log.innerHTML += `<div class="chat-msg chat-ai" style="color:var(--text2)">AI chat je součástí plánu Elite. <a class="profile-cloud-link" onclick="openProfile('plans')">Zobrazit předplatné</a></div>`;
         log.scrollTop = log.scrollHeight; return;
     }
     const thinking = document.createElement('div');
@@ -2695,21 +2533,17 @@ async function sendChat() {
     const ind = d.indicators || {};
     const context = `Akcie ${d.ticker} (${d.name}). Cena ${d.price} ${d.currency}, změna ${d.change_pct}%. Sektor ${d.sector}/${d.industry}. P/E ${d.pe_ratio}, RSI ${ind.rsi}, 52T ${d.low52}-${d.high52}, Technický signál ${d.score}/100 (${d.score_label}). Beta ${d.beta}, dividenda ${d.dividend_yield}%.`;
     chatHistory.push({ role: 'user', content: q });
-    const prompt = `Jsi stručný investiční asistent. Kontext: ${context}\nHistorie: ${JSON.stringify(chatHistory.slice(-6))}\nOdpověz česky, konkrétně a max 4 věty na poslední dotaz uživatele: "${q}". Nepoužívej markdown ani hvězdičky. Na konci připomeň, že nejde o investiční doporučení (krátce).`;
 
-    try {
-        const result = await callAI(prompt, false);
-        thinking.remove();
-        if(!result.ok) { log.innerHTML += `<div class="chat-msg chat-ai">${aiErrorMessage(null, result.status)}</div>`; log.scrollTop = log.scrollHeight; return; }
-        const answer = result.content.replace(/\*\*/g,'').trim();
-        chatHistory.push({ role: 'assistant', content: answer });
-        log.innerHTML += `<div class="chat-msg chat-ai">${answer.replace(/\n/g,'<br>')}</div>`;
-        log.scrollTop = log.scrollHeight;
-    } catch(e) {
-        thinking.remove();
-        log.innerHTML += `<div class="chat-msg chat-ai">${aiErrorMessage(e, 0)}</div>`;
-        log.scrollTop = log.scrollHeight;
+    const result = await serverAI('chat', { q, context, history: chatHistory.slice(-6) });
+    thinking.remove();
+    if(!result.ok) {
+        log.innerHTML += `<div class="chat-msg chat-ai" style="color:var(--down)">${result.error || 'AI se nepodařilo.'}</div>`;
+        log.scrollTop = log.scrollHeight; return;
     }
+    const answer = (result.answer || '').replace(/\*\*/g,'').trim();
+    chatHistory.push({ role: 'assistant', content: answer });
+    log.innerHTML += `<div class="chat-msg chat-ai">${escapeHtml(answer).replace(/\n/g,'<br>')}</div>`;
+    log.scrollTop = log.scrollHeight;
 }
 
 // ============ EXPORT CSV ============
