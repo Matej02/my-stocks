@@ -1782,12 +1782,12 @@ def build_morning_summary_html(email, top_opps):
 
 @app.route("/api/cron/morning")
 def cron_morning():
-    # Ochrana: Vercel Cron posílá Authorization: Bearer <CRON_SECRET>
+    # Ochrana (fail-closed): vyžaduje env CRON_SECRET. Vercel Cron posílá
+    # Authorization: Bearer <CRON_SECRET>. Bez nastaveného secretu endpoint nic nedělá.
     secret = os.environ.get("CRON_SECRET")
-    if secret:
-        auth = request.headers.get("Authorization", "")
-        if auth != f"Bearer {secret}" and request.args.get("secret") != secret:
-            return jsonify({"ok": False, "error": "Neautorizováno."}), 401
+    auth = request.headers.get("Authorization", "")
+    if not secret or (auth != f"Bearer {secret}" and request.args.get("secret") != secret):
+        return jsonify({"ok": False, "error": "Neautorizováno."}), 401
     if not (cloud_enabled() and email_enabled()):
         return jsonify({"ok": False, "error": "Chybí úložiště nebo e-mail."}), 503
     sent = 0
