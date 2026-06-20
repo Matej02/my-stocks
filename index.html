@@ -352,7 +352,37 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .risk-pill.active {background:var(--accent); border-color:var(--accent); color:#000; font-weight:600;}
 .risk-desc {font-size:12px; color:var(--text2); margin-bottom:14px; display:flex; align-items:center; gap:6px;}
 
-/* ============ NAVIGACE SEKCÍ (taby) ============ */
+/* Přepínač (switch) */
+.switch {position:relative; display:inline-block; width:42px; height:24px;}
+.switch input {opacity:0; width:0; height:0;}
+.slider {position:absolute; inset:0; cursor:pointer; background:rgba(255,255,255,0.15); border-radius:24px; transition:.2s;}
+.slider:before {content:""; position:absolute; height:18px; width:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.2s;}
+.switch input:checked + .slider {background:var(--accent);}
+.switch input:checked + .slider:before {transform:translateX(18px);}
+
+/* Zjednodušený režim */
+.simple-banner {background:var(--accent-glow); border:1px solid var(--border-accent); border-radius:14px; padding:12px 16px; margin-bottom:18px; font-size:13.5px;}
+.simple-mode .dash-tabs {display:none !important;}
+.simple-mode #section-opportunities, .simple-mode #section-ai {display:none !important;}
+.simple-mode #dt-analysis, .simple-mode #dt-ai {display:none !important;}
+.simple-buy-box {background:var(--bg-glass); border:1px solid var(--border); border-radius:18px; padding:20px; margin-bottom:22px;}
+.simple-buy-head {font-family:var(--fh); font-size:18px; font-weight:700; display:flex; align-items:center; gap:10px; margin-bottom:4px;}
+.simple-buy-head i {color:var(--accent);}
+.simple-buy-sub {font-size:12.5px; color:var(--text2); margin-bottom:14px;}
+.sbuy-item {display:flex; align-items:center; gap:12px; padding:12px; border:1px solid var(--border); border-radius:12px; margin-bottom:8px; cursor:pointer; transition:all .2s;}
+.sbuy-item:hover {border-color:var(--accent); transform:translateX(3px);}
+.sbuy-up {font-family:var(--fh); font-weight:800; font-size:20px; color:var(--up); min-width:64px;}
+.sbuy-tkr {font-family:var(--fh); font-weight:700; font-size:15px;}
+.sbuy-why {font-size:12px; color:var(--text2); line-height:1.4;}
+
+/* ============ ZÁLOŽKY V DETAILU AKCIE ============ */
+.detail-tabs {display:flex; gap:6px; margin-bottom:16px; background:var(--bg-glass); border:1px solid var(--border); padding:5px; border-radius:14px; overflow-x:auto;}
+.dtab {flex:1; min-width:max-content; display:flex; align-items:center; justify-content:center; gap:6px; padding:10px 12px; border:none; background:transparent; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; font-weight:600; border-radius:10px; transition:all .2s; white-space:nowrap;}
+.dtab i {font-size:16px;}
+.dtab:hover {color:var(--text);}
+.dtab.active {background:var(--accent); color:#000;}
+.dpane {animation:fadeIn .25s ease;}
+@keyframes fadeIn {from{opacity:0} to{opacity:1}}
 
 /* ============ NAVIGACE SEKCÍ (taby) ============ */
 .dash-tabs {display:flex; gap:8px; margin-bottom:2rem; background:var(--bg-glass); border:1px solid var(--border); padding:6px; border-radius:18px; overflow-x:auto;}
@@ -541,7 +571,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·g</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·h</div>
 
 <div class="container">
   
@@ -652,6 +682,18 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
         </div>
         <p class="auth-hint" id="level-hint" style="text-align:left; margin:0 0 8px;"></p>
 
+        <div class="level-row">
+          <span class="level-lbl"><i class="ti ti-wand"></i> Zjednodušený režim:</span>
+          <label class="switch"><input type="checkbox" id="simple-toggle" onchange="setSimple(this.checked)"><span class="slider"></span></label>
+          <span style="font-size:12px; color:var(--text2);">jen to podstatné — co koupit teď</span>
+        </div>
+
+        <div class="level-row" id="notif-row" style="display:none;">
+          <span class="level-lbl"><i class="ti ti-mail"></i> Ranní souhrn e-mailem:</span>
+          <label class="switch"><input type="checkbox" id="notif-morning" onchange="saveNotif()"><span class="slider"></span></label>
+          <span style="font-size:12px; color:var(--text2);">pohyby + tipy + hodnocení každé ráno</span>
+        </div>
+
         <div class="auth-tabs" id="pf-subtabs" style="display:none;">
           <button class="auth-tab active" id="pftab-plans" onclick="setPfView('plans')">Předplatné</button>
           <button class="auth-tab" id="pftab-admin" onclick="setPfView('admin')" style="display:none;">Admin</button>
@@ -728,6 +770,10 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 
     <!-- SEKCE: MOJE PORTFOLIO -->
     <div class="dash-section" id="section-portfolio">
+      <div id="simple-banner" class="simple-banner" style="display:none;">
+        <div><i class="ti ti-wand" style="color:var(--accent)"></i> <b>Zjednodušený režim</b> — vidíš jen to podstatné. Vypneš ho v profilu.</div>
+      </div>
+      <div id="simple-buy"></div>
       <div id="starter-card"></div>
       <div class="ps-toolbar" id="ps-toolbar">
         <span class="live-badge" id="live-badge" style="display:none;"><i class="ti ti-point-filled"></i> LIVE</span>
@@ -796,65 +842,82 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
       </div>
       
       <div class="info-container">
-        <div class="deep-box" id="deep-box">
-          <div class="deep-head">
-            <div class="signal-title"><i class="ti ti-brain" style="color:var(--accent)"></i> Hloubková analýza <span class="deep-badge">ELITE</span></div>
-            <button class="btn-primary deep-btn" id="deep-btn" onclick="runDeepAnalysis()"><i class="ti ti-sparkles"></i> Vygenerovat</button>
-          </div>
-          <div id="deep-output"><div class="deep-teaser">Klikni na <b>Vygenerovat</b> pro kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.</div></div>
+        <div class="detail-tabs">
+          <button class="dtab active" id="dt-overview" onclick="detailTab('overview')"><i class="ti ti-layout-dashboard"></i> Přehled</button>
+          <button class="dtab" id="dt-analysis" onclick="detailTab('analysis')"><i class="ti ti-brain"></i> Analýza</button>
+          <button class="dtab" id="dt-news" onclick="detailTab('news')"><i class="ti ti-news"></i> Zprávy</button>
+          <button class="dtab" id="dt-ai" onclick="detailTab('ai')"><i class="ti ti-message-chatbot"></i> AI chat</button>
         </div>
 
-        <div class="signal-box" id="signal-box" style="display:none;">
-          <div class="signal-head">
-            <div class="signal-title"><i class="ti ti-gauge"></i> Technický signál</div>
-            <div class="signal-verdict" id="signal-verdict">--</div>
+        <!-- PŘEHLED -->
+        <div class="dpane" id="dpane-overview">
+          <div class="signal-box" id="signal-box" style="display:none;">
+            <div class="signal-head">
+              <div class="signal-title"><i class="ti ti-gauge"></i> Technický signál</div>
+              <div class="signal-verdict" id="signal-verdict">--</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:16px; margin-bottom:6px;">
+              <div class="signal-score-num" id="signal-num">--</div>
+              <div style="flex:1;">
+                <div class="signal-gauge"><div class="signal-needle" id="signal-needle" style="left:50%;"></div></div>
+                <div class="signal-scale"><span>Prodávat</span><span>Neutrál</span><span>Nakupovat</span></div>
+              </div>
+            </div>
+            <div class="signal-comps" id="signal-comps"></div>
           </div>
-          <div style="display:flex; align-items:center; gap:16px; margin-bottom:6px;">
-            <div class="signal-score-num" id="signal-num">--</div>
-            <div style="flex:1;">
-              <div class="signal-gauge"><div class="signal-needle" id="signal-needle" style="left:50%;"></div></div>
-              <div class="signal-scale"><span>Prodávat</span><span>Neutrál</span><span>Nakupovat</span></div>
+
+          <div class="tech-box" id="tech-box" style="display:none;">
+            <div class="signal-title" style="margin-bottom:4px;"><i class="ti ti-dashboard" style="color:var(--accent)"></i> Souhrnné technické hodnocení</div>
+            <div id="tech-gauge"></div>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-box"><div class="metric-lbl">P/E Ratio</div><div class="metric-val" id="d-pe">--</div></div>
+            <div class="metric-box"><div class="metric-lbl">Market Cap</div><div class="metric-val" id="d-cap">--</div></div>
+            <div class="metric-box"><div class="metric-lbl">RSI (14)</div><div class="metric-val" id="d-rsi">--</div></div>
+            <div class="metric-box"><div class="metric-lbl">Volatilita</div><div class="metric-val" id="d-vol">--</div></div>
+            <div class="metric-box"><div class="metric-lbl">52W High</div><div class="metric-val" id="d-high">--</div></div>
+            <div class="metric-box"><div class="metric-lbl">52W Low</div><div class="metric-val" id="d-low">--</div></div>
+            <div class="metric-box"><div class="metric-lbl">Beta</div><div class="metric-val" id="d-beta">--</div></div>
+            <div class="metric-box"><div class="metric-lbl">Dividenda</div><div class="metric-val" id="d-div">--</div></div>
+          </div>
+        </div>
+
+        <!-- ANALÝZA -->
+        <div class="dpane" id="dpane-analysis" style="display:none;">
+          <div class="deep-box" id="deep-box">
+            <div class="deep-head">
+              <div class="signal-title"><i class="ti ti-brain" style="color:var(--accent)"></i> Hloubková analýza <span class="deep-badge">ELITE</span></div>
+              <button class="btn-primary deep-btn" id="deep-btn" onclick="runDeepAnalysis()"><i class="ti ti-sparkles"></i> Vygenerovat</button>
+            </div>
+            <div id="deep-output"><div class="deep-teaser">Klikni na <b>Vygenerovat</b> pro kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.</div></div>
+          </div>
+
+          <div class="analyst-box" id="analyst-box" style="display:none;">
+            <div class="signal-title" style="margin-bottom:14px;"><i class="ti ti-users-group" style="color:var(--accent)"></i> Doporučení analytiků</div>
+            <div class="analyst-target" id="analyst-target"></div>
+            <div class="analyst-recs" id="analyst-recs"></div>
+          </div>
+        </div>
+
+        <!-- ZPRÁVY -->
+        <div class="dpane" id="dpane-news" style="display:none;">
+          <div class="news-box" id="news-box">
+            <div id="news-list"><div style="color:var(--text2); font-size:13px;"><i class="ti ti-loader spin"></i> Načítám zprávy...</div></div>
+          </div>
+        </div>
+
+        <!-- AI CHAT -->
+        <div class="dpane" id="dpane-ai" style="display:none;">
+          <div class="chat-box" id="chat-box">
+            <div class="chat-head"><i class="ti ti-message-chatbot"></i> Zeptej se AI na tuto akcii</div>
+            <div class="chat-log" id="chat-log"></div>
+            <div class="chat-suggest" id="chat-suggest"></div>
+            <div class="chat-input-row">
+              <input type="text" id="chat-input" placeholder="Napiš dotaz..." onkeydown="if(event.key==='Enter')sendChat()">
+              <button class="chat-send" onclick="sendChat()"><i class="ti ti-send"></i></button>
             </div>
           </div>
-          <div class="signal-comps" id="signal-comps"></div>
-        </div>
-
-        <div class="tech-box" id="tech-box" style="display:none;">
-          <div class="signal-title" style="margin-bottom:4px;"><i class="ti ti-dashboard" style="color:var(--accent)"></i> Souhrnné technické hodnocení</div>
-          <div id="tech-gauge"></div>
-        </div>
-
-        <div class="metrics-grid">
-          <div class="metric-box"><div class="metric-lbl">P/E Ratio</div><div class="metric-val" id="d-pe">--</div></div>
-          <div class="metric-box"><div class="metric-lbl">Market Cap</div><div class="metric-val" id="d-cap">--</div></div>
-          <div class="metric-box"><div class="metric-lbl">RSI (14)</div><div class="metric-val" id="d-rsi">--</div></div>
-          <div class="metric-box"><div class="metric-lbl">Volatilita</div><div class="metric-val" id="d-vol">--</div></div>
-          <div class="metric-box"><div class="metric-lbl">52W High</div><div class="metric-val" id="d-high">--</div></div>
-          <div class="metric-box"><div class="metric-lbl">52W Low</div><div class="metric-val" id="d-low">--</div></div>
-          <div class="metric-box"><div class="metric-lbl">Beta</div><div class="metric-val" id="d-beta">--</div></div>
-          <div class="metric-box"><div class="metric-lbl">Dividenda</div><div class="metric-val" id="d-div">--</div></div>
-        </div>
-
-        <div class="analyst-box" id="analyst-box" style="display:none;">
-          <div class="signal-title" style="margin-bottom:14px;"><i class="ti ti-users-group" style="color:var(--accent)"></i> Doporučení analytiků</div>
-          <div class="analyst-target" id="analyst-target"></div>
-          <div class="analyst-recs" id="analyst-recs"></div>
-        </div>
-
-
-        <div class="chat-box" id="chat-box">
-          <div class="chat-head"><i class="ti ti-message-chatbot"></i> Zeptej se AI na tuto akcii</div>
-          <div class="chat-log" id="chat-log"></div>
-          <div class="chat-suggest" id="chat-suggest"></div>
-          <div class="chat-input-row">
-            <input type="text" id="chat-input" placeholder="Napiš dotaz..." onkeydown="if(event.key==='Enter')sendChat()">
-            <button class="chat-send" onclick="sendChat()"><i class="ti ti-send"></i></button>
-          </div>
-        </div>
-
-        <div class="news-box" id="news-box">
-          <div style="font-size:12px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin:20px 0 10px; display:flex; align-items:center; gap:8px;"><i class="ti ti-news" style="color:var(--accent)"></i> Aktuální zprávy</div>
-          <div id="news-list"><div style="color:var(--text2); font-size:13px;"><i class="ti ti-loader spin"></i> Načítám zprávy...</div></div>
         </div>
 
         <div class="action-bar">
@@ -919,6 +982,7 @@ let syncTimer = null;
 // Úroveň investora (začátečník/pokročilý) + diverzifikované začátečnické portfolio
 let investorLevel = localStorage.getItem('mystocks_level') || 'advanced';
 let investorRisk = localStorage.getItem('mystocks_risk') || 'balanced';
+let investorSimple = localStorage.getItem('mystocks_simple') === '1';
 // Diverzifikované začátečnické sady – každá akcie jiný sektor, dle agresivity
 const STARTER_SETS = {
     conservative: [
@@ -947,6 +1011,7 @@ const RISK_LABELS = { conservative: 'Opatrná', balanced: 'Vyvážená', aggress
 
 // Předplatné
 let mySub = null;                       // {plan, effective, trial_ends, days_left, is_admin, ...}
+let myNotif = { morning: false };       // nastavení notifikací
 const PLAN_RANK = { none: -1, start: 0, pro: 1, elite: 2 };
 const PLAN_NAMES = { none: 'Bez přístupu', start: 'Start', pro: 'Pro', elite: 'Elite' };
 
@@ -1208,7 +1273,7 @@ async function initAccount() {
                 // Stav předplatného
                 try {
                     const me = await (await fetch(`${BACKEND_URL}/api/me`, { headers: authHeaders() })).json();
-                    if (me.ok) mySub = me.subscription;
+                    if (me.ok) { mySub = me.subscription; if (me.notif) myNotif = me.notif; }
                 } catch (e) {}
             } else {
                 // Token neplatný → odhlásit lokálně
@@ -1261,6 +1326,12 @@ function renderProfileView() {
     authView.style.display = 'none';
     pfView.style.display = 'block';
     renderLevelButtons();
+    const st = document.getElementById('simple-toggle'); if (st) st.checked = investorSimple;
+    const nrow = document.getElementById('notif-row');
+    if (nrow) {
+        nrow.style.display = authToken ? 'flex' : 'none';
+        document.getElementById('notif-morning').checked = !!(myNotif && myNotif.morning);
+    }
     if (authToken) {
         acct.style.display = 'flex';
         localNote.style.display = 'none';
@@ -1464,6 +1535,71 @@ function setRisk(r) {
     investorRisk = r;
     localStorage.setItem('mystocks_risk', r);
     renderStarter();
+}
+
+// ===== Notifikace (ranní souhrn e-mailem) =====
+async function saveNotif() {
+    const on = document.getElementById('notif-morning').checked;
+    myNotif = { morning: on };
+    try {
+        await fetch(`${BACKEND_URL}/api/notifications`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ morning: on })
+        });
+        showToast(on ? 'Ranní souhrn zapnut' : 'Ranní souhrn vypnut', 'up', 'ti-mail');
+    } catch (e) { showToast('Nepodařilo se uložit', 'down', 'ti-x'); }
+}
+
+// ===== Zjednodušený režim pro začátečníky =====
+function setSimple(on) {
+    investorSimple = !!on;
+    localStorage.setItem('mystocks_simple', investorSimple ? '1' : '0');
+    applySimple();
+}
+
+function applySimple() {
+    document.body.classList.toggle('simple-mode', investorSimple);
+    const banner = document.getElementById('simple-banner');
+    if (banner) banner.style.display = investorSimple ? 'block' : 'none';
+    const t = document.getElementById('simple-toggle');
+    if (t) t.checked = investorSimple;
+    if (investorSimple) {
+        switchTab('portfolio');
+        renderSimpleBuy();
+    } else {
+        const sb = document.getElementById('simple-buy');
+        if (sb) sb.innerHTML = '';
+    }
+}
+
+async function renderSimpleBuy() {
+    const box = document.getElementById('simple-buy');
+    if (!box || !investorSimple) { if (box) box.innerHTML = ''; return; }
+    if (!hasFeature('pro')) {
+        box.innerHTML = `<div class="simple-buy-box">
+            <div class="simple-buy-head"><i class="ti ti-shopping-cart"></i> Co koupit teď</div>
+            <div class="simple-buy-sub">Tipy na akcie s potenciálem jsou v plánu Pro a vyšším.</div>
+            <button class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;" onclick="openProfile('plans')"><i class="ti ti-crown"></i> Zobrazit předplatné</button>
+        </div>`;
+        return;
+    }
+    box.innerHTML = `<div class="simple-buy-box"><div class="simple-buy-head"><i class="ti ti-shopping-cart"></i> Co koupit teď</div>
+        <div class="simple-buy-sub"><i class="ti ti-loader spin"></i> Hledám příležitosti...</div></div>`;
+    try {
+        if (!oppData.length) {
+            const res = await fetch(`${BACKEND_URL}/api/opportunities?mode=all`);
+            const d = await res.json();
+            oppData = d.results || [];
+        }
+        const items = oppData.slice(0, 5).map(o => `
+            <div class="sbuy-item" onclick="loadStockDetail('${o.ticker}')">
+                <span class="sbuy-up">+${(o.upside ?? 0).toFixed(0)}%</span>
+                <div><div class="sbuy-tkr">${o.ticker} <span style="font-size:11px;color:var(--text2)">${o.name || ''}</span></div>
+                <div class="sbuy-why">${o.why ? escapeHtml(o.why) : 'Potenciál ' + (o.upside ?? 0).toFixed(0) + '% k ročnímu maximu'}</div></div>
+            </div>`).join('');
+        box.innerHTML = `<div class="simple-buy-box">
+            <div class="simple-buy-head"><i class="ti ti-shopping-cart"></i> Co koupit teď</div>
+            <div class="simple-buy-sub">Akcie s největším prostorem vyrůst. Klikni pro detail.</div>${items}</div>`;
+    } catch (e) { box.innerHTML = ''; }
 }
 
 function renderStarter() {
@@ -1705,6 +1841,7 @@ function copyText(t) {
 let mainStarted = false;
 function startMain() {
     renderStarter();
+    applySimple();
     loadWatchlist();
     mainStarted = true;
 }
@@ -1897,10 +2034,20 @@ function setChartPeriod(period) {
     if(currentStockData) loadStockDetail(currentStockData.ticker, false); // false = negeneruj znovu AI
 }
 
+function detailTab(name) {
+    ['overview', 'analysis', 'news', 'ai'].forEach(t => {
+        const p = document.getElementById('dpane-' + t);
+        const b = document.getElementById('dt-' + t);
+        if (p) p.style.display = (t === name) ? 'block' : 'none';
+        if (b) b.classList.toggle('active', t === name);
+    });
+}
+
 async function loadStockDetail(ticker, runAI = true) {
     document.getElementById('dashboard').style.display = 'none';
     const detail = document.getElementById('detail-view');
     detail.style.display = 'block';
+    detailTab('overview');
 
     document.getElementById('d-ticker').innerHTML = `<i class="ti ti-loader spin"></i>`;
 

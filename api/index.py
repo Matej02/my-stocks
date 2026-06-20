@@ -798,7 +798,26 @@ def me():
         rec = kv_get_json(f"user:{user}")
         if not rec:
             return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
-        return jsonify({"ok": True, "user": user, "subscription": subscription_info(user, rec)})
+        return jsonify({"ok": True, "user": user, "subscription": subscription_info(user, rec),
+                        "notif": rec.get("notif", {"morning": False})})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
+@app.route("/api/notifications", methods=["GET", "POST"])
+def notifications():
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    try:
+        rec = kv_get_json(f"user:{user}")
+        if not rec:
+            return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
+        if request.method == "POST":
+            body = request.get_json(silent=True) or {}
+            rec["notif"] = {"morning": bool(body.get("morning"))}
+            kv_set_json(f"user:{user}", rec)
+        return jsonify({"ok": True, "notif": rec.get("notif", {"morning": False})})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
@@ -1705,6 +1724,88 @@ def get_stock_detail(ticker):
         })
     except Exception as e:
         return jsonify({"ok": False, "error": f"Nepodařilo se stáhnout detail: {e}"})
+
+
+# ---------------------------------------------------------------------------
+# Ranní souhrn e-mailem (Vercel Cron volá /api/cron/morning)
+# ---------------------------------------------------------------------------
+def _top_opps_for_summary(n=3):
+    out = []
+    try:
+        for q in yahoo_screener("undervalued_growth_stocks", 25):
+            price = _qf(q, "regularMarketPrice", 0) or 0
+            hi52 = _qf(q, "fiftyTwoWeekHigh", 0) or 0
+            up = ((hi52 - price) / price * 100) if (hi52 and price) else 0
+            if price < 1.5 or up < 8:
+                continue
+            score, tier, badges, upside, vr = potential_score(q)
+            out.append((score, q.get("symbol"), q.get("shortName") or q.get("symbol"), upside,
+                        q.get("currency", "USD"), _round(price, 2)))
+        out.sort(reverse=True)
+    except Exception:
+        pass
+    return out[:n]
+
+
+def build_morning_summary_html(email, top_opps):
+    pf = kv_get_json(f"portfolio:{email}") or {}
+    watch = (pf.get("watchlist") or [])[:8]
+    rows = ""
+    for t in watch:
+        try:
+            res = yahoo_chart(t, "1d", "1d")
+            meta = res.get("meta", {})
+            price = meta.get("regularMarketPrice")
+            prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
+            chg = ((price - prev) / prev * 100) if prev else 0
+            col = "#00C853" if chg >= 0 else "#FF3D00"
+            rows += (f"<tr><td style='padding:6px 0'><b>{t}</b></td>"
+                     f"<td style='padding:6px 0;text-align:right'>{round(price,2)} {meta.get('currency','')}</td>"
+                     f"<td style='padding:6px 0;text-align:right;color:{col}'>{'+' if chg>=0 else ''}{chg:.2f}%</td></tr>")
+        except Exception:
+            continue
+    watch_html = (f"<h3 style='font-size:16px;margin:18px 0 8px'>📊 Tvé sledované akcie</h3>"
+                  f"<table style='width:100%;border-collapse:collapse;font-size:14px'>{rows}</table>") if rows else ""
+    opp_html = ""
+    if top_opps:
+        items = "".join(
+            f"<div style='padding:8px 0;border-top:1px solid #23262f'><b style='color:#00C853'>+{up:.0f}%</b> "
+            f"&nbsp;<b>{sym}</b> <span style='color:#9ba1b0'>{name}</span></div>"
+            for (sc, sym, name, up, cur, pr) in top_opps)
+        opp_html = f"<h3 style='font-size:16px;margin:22px 0 8px'>🎯 Příležitosti s potenciálem</h3>{items}"
+    return _email_shell("Ranní přehled trhu ☀️",
+                        "<p style='line-height:1.6'>Dobré ráno! Tady je tvůj dnešní přehled:</p>" +
+                        watch_html + opp_html +
+                        "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>Notifikace vypneš v appce v profilu. "
+                        "Není to investiční doporučení.</p>")
+
+
+@app.route("/api/cron/morning")
+def cron_morning():
+    # Ochrana: Vercel Cron posílá Authorization: Bearer <CRON_SECRET>
+    secret = os.environ.get("CRON_SECRET")
+    if secret:
+        auth = request.headers.get("Authorization", "")
+        if auth != f"Bearer {secret}" and request.args.get("secret") != secret:
+            return jsonify({"ok": False, "error": "Neautorizováno."}), 401
+    if not (cloud_enabled() and email_enabled()):
+        return jsonify({"ok": False, "error": "Chybí úložiště nebo e-mail."}), 503
+    sent = 0
+    try:
+        top_opps = _top_opps_for_summary(3)
+        for email in kv_smembers("users")[:200]:
+            rec = kv_get_json(f"user:{email}") or {}
+            if not (rec.get("notif") or {}).get("morning"):
+                continue
+            try:
+                send_email(email, "☀️ Ranní přehled trhu – MY STOCKS",
+                           build_morning_summary_html(email, top_opps))
+                sent += 1
+            except Exception:
+                continue
+        return jsonify({"ok": True, "sent": sent})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # Lokální test: python api/index.py -> http://127.0.0.1:5001
