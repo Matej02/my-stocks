@@ -1440,7 +1440,8 @@ def deep_analysis(ticker):
         return jsonify({"ok": False, "error": "Analytický motor zatím není nastavený."}), 503
     try:
         rec = kv_get_json(f"user:{user}")
-        if PLAN_RANK.get(effective_plan(rec), -1) < PLAN_RANK["elite"]:
+        is_admin = user in admin_users()
+        if not is_admin and PLAN_RANK.get(effective_plan(rec), -1) < PLAN_RANK["elite"]:
             return jsonify({"ok": False, "error": "Hloubková analýza je součástí plánu Elite.", "upgrade": True}), 402
 
         # Denní limit
