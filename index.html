@@ -346,6 +346,11 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .starter-add:hover {background:var(--accent-glow); border-color:var(--accent);}
 .starter-add.added {color:var(--up); border-color:var(--up); cursor:default;}
 .starter-actions {margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;}
+.risk-row {display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 8px;}
+.risk-pill {padding:7px 14px; border-radius:20px; border:1px solid var(--border); background:var(--bg-glass); color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; transition:all .2s;}
+.risk-pill:hover {border-color:var(--accent); color:var(--text);}
+.risk-pill.active {background:var(--accent); border-color:var(--accent); color:#000; font-weight:600;}
+.risk-desc {font-size:12px; color:var(--text2); margin-bottom:14px; display:flex; align-items:center; gap:6px;}
 
 /* ============ NAVIGACE SEKCÍ (taby) ============ */
 
@@ -536,7 +541,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·e</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·f</div>
 
 <div class="container">
   
@@ -567,25 +572,6 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
     <select id="api-provider"><option value="groq">Groq AI (Zdarma)</option><option value="openai">OpenAI</option></select>
     <input type="password" id="api-key" placeholder="Vlož svůj API klíč...">
     <button class="btn-save" onclick="saveApi()">Uložit klíč</button>
-  </div>
-
-  <!-- PORTFOLIO P/L MODAL -->
-  <div class="pl-modal" id="plModal">
-    <div class="pl-modal-box">
-      <h3><i class="ti ti-coins" style="color:var(--accent)"></i> Zadat pozici: <span id="plModal-ticker"></span></h3>
-      <div class="pl-field">
-        <label>Počet akcií / kusů</label>
-        <input type="number" id="plModal-qty" placeholder="např. 10" min="0" step="any">
-      </div>
-      <div class="pl-field">
-        <label>Průměrná nákupní cena</label>
-        <input type="number" id="plModal-price" placeholder="např. 450.00" min="0" step="any">
-      </div>
-      <div class="pl-modal-btns">
-        <button class="btn-ghost" onclick="closePlModal()">Zrušit</button>
-        <button class="btn-primary" onclick="savePlPosition()">Uložit pozici</button>
-      </div>
-    </div>
   </div>
 
   <!-- TOASTY (upozornění) -->
@@ -759,47 +745,12 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
         <button class="tool-btn" onclick="loadWatchlist()"><i class="ti ti-refresh"></i> Obnovit</button>
       </div>
 
-      <!-- SOUHRN (jen když máš zadané pozice) -->
-      <div class="port-summary" id="port-summary" style="display:none;">
-        <div class="ps-left">
-          <div class="ps-stats">
-            <div class="ps-stat">
-              <div class="ps-stat-lbl"><i class="ti ti-wallet"></i> Hodnota portfolia</div>
-              <div class="ps-stat-val" id="ps-value">--</div>
-              <div class="ps-stat-sub" id="ps-today">--</div>
-            </div>
-            <div class="ps-stat">
-              <div class="ps-stat-lbl"><i class="ti ti-trending-up"></i> Celkový zisk / ztráta</div>
-              <div class="ps-stat-val" id="ps-pl">--</div>
-              <div class="ps-stat-sub" id="ps-pl-pct">--</div>
-            </div>
-          </div>
-          <div>
-            <div style="font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Dnešní pohyby</div>
-            <div class="ps-movers" id="ps-movers"></div>
-          </div>
-        </div>
-        <div class="ps-right">
-          <h4>Rozložení pozic</h4>
-          <div id="allocChart" style="width:100%; min-height:200px;"></div>
-        </div>
-      </div>
-
-      <!-- MOJE POZICE -->
+      <!-- SLEDOVANÉ AKCIE -->
       <div class="section-title">
-        <div style="display:flex; align-items:center; gap:10px;"><i class="ti ti-briefcase" style="color:var(--accent)"></i> Moje pozice</div>
-      </div>
-      <div class="grid-watchlist" id="positions-grid"></div>
-      <div id="positions-empty" class="port-empty" style="display:none;">
-        Zatím nemáš žádnou pozici. Otevři akcii a tlačítkem <b>„Pozice"</b> zadej, kolik a za kolik vlastníš — uvidíš tu hodnotu a zisk.
-      </div>
-
-      <!-- SLEDOVANÉ -->
-      <div class="section-title" style="margin-top:2rem;">
-        <div style="display:flex; align-items:center; gap:10px;"><i class="ti ti-eye" style="color:var(--text2)"></i> Sledované</div>
+        <div style="display:flex; align-items:center; gap:10px;"><i class="ti ti-eye" style="color:var(--accent)"></i> Moje sledované akcie</div>
       </div>
       <div class="grid-watchlist" id="watch-grid"></div>
-      <div id="watch-empty" class="port-empty" style="display:none;">Nic dalšího nesleduješ. Akcie přidáš tlačítkem „Sledovat" v detailu.</div>
+      <div id="watch-empty" class="port-empty" style="display:none;">Zatím nic nesleduješ. Najdi akcii a přidej ji tlačítkem „Sledovat" v detailu.</div>
     </div><!-- /section-portfolio -->
   </div>
 
@@ -920,18 +871,9 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
           <div id="news-list"><div style="color:var(--text2); font-size:13px;"><i class="ti ti-loader spin"></i> Načítám zprávy...</div></div>
         </div>
 
-        <div class="detail-pl-box" id="detail-pl-box" style="display:none;">
-          <div style="font-size:12px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px;">Moje pozice</div>
-          <div class="detail-pl-row"><span>Počet kusů</span><span id="dpl-qty">--</span></div>
-          <div class="detail-pl-row"><span>Nákupní cena</span><span id="dpl-buy">--</span></div>
-          <div class="detail-pl-row"><span>Aktuální hodnota</span><span id="dpl-cur">--</span></div>
-          <div class="detail-pl-row"><span>Zisk / Ztráta</span><span id="dpl-pl" class="pl-val">--</span></div>
-        </div>
-
         <div class="action-bar">
           <button class="btn-outline" onclick="closeDetail()"><i class="ti ti-arrow-left"></i> Zpět</button>
           <button class="btn-outline" id="btn-toggle-watch" onclick="toggleWatchlist()"><i class="ti ti-star"></i> Sledovat</button>
-          <button class="btn-outline" onclick="openPlModal()"><i class="ti ti-coins"></i> Pozice</button>
           <button class="btn-outline" onclick="openAlertModal()"><i class="ti ti-bell"></i> Upozornit</button>
         </div>
       </div>
@@ -961,7 +903,7 @@ if (!localStorage.getItem('mystocks_seed_v3')) {
     localStorage.setItem('mystocks_seed_v3', '1');
 }
 // Portfolio pozice: { "NVDA": { qty: 10, avgPrice: 450.00 }, ... }
-let myPositions = JSON.parse(localStorage.getItem('mystocks_positions')) || {};
+const myPositions = {};   // pozice odstraněny – appka je asistent, ne broker
 
 let currentStockData = null;
 let currentChartData = null;
@@ -990,13 +932,32 @@ let syncTimer = null;
 
 // Úroveň investora (začátečník/pokročilý) + diverzifikované začátečnické portfolio
 let investorLevel = localStorage.getItem('mystocks_level') || 'advanced';
-const STARTER = [
-    { t: 'AAPL', s: 'Technologie', n: 'Apple' },
-    { t: 'JNJ', s: 'Zdravotnictví', n: 'Johnson & Johnson' },
-    { t: 'JPM', s: 'Finance', n: 'JPMorgan Chase' },
-    { t: 'PG', s: 'Spotřební zboží', n: 'Procter & Gamble' },
-    { t: 'XOM', s: 'Energie', n: 'Exxon Mobil' },
-];
+let investorRisk = localStorage.getItem('mystocks_risk') || 'balanced';
+// Diverzifikované začátečnické sady – každá akcie jiný sektor, dle agresivity
+const STARTER_SETS = {
+    conservative: [
+        { t: 'VOO', s: 'Index S&P 500', n: 'Vanguard S&P 500 ETF' },
+        { t: 'JNJ', s: 'Zdravotnictví', n: 'Johnson & Johnson' },
+        { t: 'PG', s: 'Spotřební zboží', n: 'Procter & Gamble' },
+        { t: 'KO', s: 'Nápoje', n: 'Coca-Cola' },
+        { t: 'NEE', s: 'Energetika / utility', n: 'NextEra Energy' },
+    ],
+    balanced: [
+        { t: 'AAPL', s: 'Technologie', n: 'Apple' },
+        { t: 'JNJ', s: 'Zdravotnictví', n: 'Johnson & Johnson' },
+        { t: 'JPM', s: 'Finance', n: 'JPMorgan Chase' },
+        { t: 'PG', s: 'Spotřební zboží', n: 'Procter & Gamble' },
+        { t: 'XOM', s: 'Energie', n: 'Exxon Mobil' },
+    ],
+    aggressive: [
+        { t: 'NVDA', s: 'Polovodiče', n: 'Nvidia' },
+        { t: 'TSLA', s: 'Elektromobily', n: 'Tesla' },
+        { t: 'AMZN', s: 'E-commerce', n: 'Amazon' },
+        { t: 'CRWD', s: 'Kyberbezpečnost', n: 'CrowdStrike' },
+        { t: 'AMD', s: 'Čipy', n: 'AMD' },
+    ],
+};
+const RISK_LABELS = { conservative: 'Opatrná', balanced: 'Vyvážená', aggressive: 'Agresivní' };
 
 // Předplatné
 let mySub = null;                       // {plan, effective, trial_ends, days_left, is_admin, ...}
@@ -1049,9 +1010,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     // Close modals on backdrop click
-    document.getElementById('plModal').addEventListener('click', (e) => {
-        if(e.target === document.getElementById('plModal')) closePlModal();
-    });
     document.getElementById('alertModal').addEventListener('click', (e) => {
         if(e.target === document.getElementById('alertModal')) closeAlertModal();
     });
@@ -1065,7 +1023,6 @@ document.addEventListener("DOMContentLoaded", () => {
             e.preventDefault(); searchInput.focus();
         }
         if(e.key === 'Escape') {
-            if(document.getElementById('plModal').classList.contains('open')) { closePlModal(); return; }
             if(document.getElementById('alertModal').classList.contains('open')) { closeAlertModal(); return; }
             if(document.getElementById('profileModal').classList.contains('open')) { closeProfile(); return; }
             if(document.getElementById('detail-view').style.display === 'block') closeDetail();
@@ -1167,77 +1124,16 @@ async function callAI(prompt, jsonMode = false) {
     return { ok: true, content: data.choices[0].message.content };
 }
 
-// --- PORTFOLIO P/L MODAL ---
-function openPlModal() {
-    if(!currentStockData) return;
-    const t = currentStockData.ticker;
-    const pos = myPositions[t] || {};
-    document.getElementById('plModal-ticker').innerText = t;
-    document.getElementById('plModal-qty').value = pos.qty || '';
-    document.getElementById('plModal-price').value = pos.avgPrice || '';
-    document.getElementById('plModal').classList.add('open');
-}
-
-function closePlModal() {
-    document.getElementById('plModal').classList.remove('open');
-}
-
-function savePlPosition() {
-    if(!currentStockData) return;
-    const t = currentStockData.ticker;
-    const qty = parseFloat(document.getElementById('plModal-qty').value);
-    const avgPrice = parseFloat(document.getElementById('plModal-price').value);
-    
-    if(qty > 0 && avgPrice > 0) {
-        myPositions[t] = { qty, avgPrice };
-    } else {
-        delete myPositions[t];
-    }
-    localStorage.setItem('mystocks_positions', JSON.stringify(myPositions));
-    cloudSync();
-    closePlModal();
-    renderDetailPL();
-    loadWatchlistSilent(); // Obnoví karty s P/L
-}
-
-function renderDetailPL() {
-    if(!currentStockData) return;
-    const t = currentStockData.ticker;
-    const pos = myPositions[t];
-    const box = document.getElementById('detail-pl-box');
-    if(!pos) { box.style.display = 'none'; return; }
-    
-    box.style.display = 'block';
-    const cur = currentStockData.price;
-    const currency = currentStockData.currency || 'USD';
-    const curVal = pos.qty * cur;
-    const buyVal = pos.qty * pos.avgPrice;
-    const pl = curVal - buyVal;
-    const plPct = ((pl / buyVal) * 100).toFixed(2);
-    const isPlus = pl >= 0;
-    
-    document.getElementById('dpl-qty').innerText = pos.qty;
-    document.getElementById('dpl-buy').innerText = `${pos.avgPrice.toFixed(3)} ${currency}`;
-    document.getElementById('dpl-cur').innerText = `${curVal.toFixed(2)} ${currency}`;
-    const plEl = document.getElementById('dpl-pl');
-    plEl.className = `pl-val ${isPlus ? 'up' : 'down'}`;
-    plEl.innerText = `${isPlus ? '+' : ''}${pl.toFixed(2)} ${currency} (${isPlus ? '+' : ''}${plPct}%)`;
-}
-
 // --- PORTFOLIO & DASHBOARD AI ---
 async function loadWatchlist() {
-    const posGrid = document.getElementById('positions-grid');
     const watchGrid = document.getElementById('watch-grid');
     const badge = document.getElementById('live-badge');
     const dbrief = document.getElementById('ai-dashboard-brief');
 
-    if(myStocks.length === 0 && Object.keys(myPositions).length === 0) {
-        posGrid.innerHTML = '';
+    if(myStocks.length === 0) {
         watchGrid.innerHTML = '';
-        document.getElementById('positions-empty').style.display = 'block';
         document.getElementById('watch-empty').style.display = 'block';
         dbrief.style.display = 'none';
-        document.getElementById('port-summary').style.display = 'none';
         return;
     }
 
@@ -1247,11 +1143,10 @@ async function loadWatchlist() {
         const res = await fetch(`${BACKEND_URL}/api/watchlist?tickers=${myStocks.join(',')}`);
         const data = await res.json();
         if(!data.ok) throw new Error();
-        
+
         badge.style.display = 'inline-block';
         lastWatchlistData = data.results;
         renderWatchCards(data.results);
-        renderPortfolioSummary(data.results);
         checkAlerts(data.results);
 
         // AI Analýza trhu (Čistý JSON!)
@@ -1276,7 +1171,6 @@ async function loadWatchlistSilent() {
         if(!data.ok) return;
         lastWatchlistData = data.results;
         renderWatchCards(data.results);
-        renderPortfolioSummary(data.results);
         checkAlerts(data.results);
     } catch(e) {}
 }
@@ -1291,10 +1185,9 @@ function switchTab(name) {
         if (sec) sec.style.display = (s === name) ? 'block' : 'none';
         if (tab) tab.classList.toggle('active', s === name);
     });
-    // Portfolio: překresli souhrn (graf alokace potřebuje viditelný kontejner) + začátečnické portfolio
+    // Portfolio: překresli začátečnické portfolio
     if (name === 'portfolio') {
         renderStarter();
-        if (lastWatchlistData && lastWatchlistData.length) renderPortfolioSummary(lastWatchlistData);
     }
     // Zamykání sekcí podle plánu
     if (name === 'opportunities') {
@@ -1331,10 +1224,8 @@ function authHeaders() {
 function applyPortfolio(pf) {
     pf = pf || {};
     myStocks = (Array.isArray(pf.watchlist) && pf.watchlist.length) ? pf.watchlist : DEFAULT_WATCHLIST.slice();
-    myPositions = (pf.positions && typeof pf.positions === 'object') ? pf.positions : {};
     myAlerts = Array.isArray(pf.alerts) ? pf.alerts : [];
     localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
-    localStorage.setItem('mystocks_positions', JSON.stringify(myPositions));
     localStorage.setItem('mystocks_alerts', JSON.stringify(myAlerts));
 }
 
@@ -1346,7 +1237,7 @@ function cloudSync() {
         try {
             await fetch(`${BACKEND_URL}/api/portfolio`, {
                 method: 'POST', headers: authHeaders(),
-                body: JSON.stringify({ watchlist: myStocks, positions: myPositions, alerts: myAlerts })
+                body: JSON.stringify({ watchlist: myStocks, alerts: myAlerts })
             });
         } catch (e) {}
     }, 600);
@@ -1614,11 +1505,28 @@ function setLevel(lvl) {
     showToast(lvl === 'beginner' ? 'Úroveň: Začátečník' : 'Úroveň: Pokročilý', 'up', 'ti-stairs');
 }
 
+const RISK_DESC = {
+    conservative: 'Nejbezpečnější: index S&P 500 + stabilní dividendové firmy. Nižší výkyvy.',
+    balanced: 'Vyvážený mix napříč hlavními sektory. Rozumný poměr riziko/výnos.',
+    aggressive: 'Růstové tituly (tech, čipy). Vyšší potenciál, ale i vyšší výkyvy.',
+};
+
+function setRisk(r) {
+    investorRisk = r;
+    localStorage.setItem('mystocks_risk', r);
+    renderStarter();
+}
+
 function renderStarter() {
     const box = document.getElementById('starter-card');
     if (!box) return;
     if (investorLevel !== 'beginner') { box.innerHTML = ''; return; }
-    const items = STARTER.map(x => {
+    const set = STARTER_SETS[investorRisk] || STARTER_SETS.balanced;
+
+    const pills = ['conservative', 'balanced', 'aggressive'].map(r =>
+        `<button class="risk-pill ${r === investorRisk ? 'active' : ''}" onclick="setRisk('${r}')">${RISK_LABELS[r]}</button>`).join('');
+
+    const items = set.map(x => {
         const owned = myStocks.includes(x.t);
         return `<div class="starter-item">
             <div class="starter-sector">${x.s}</div>
@@ -1629,9 +1537,12 @@ function renderStarter() {
             </button>
         </div>`;
     }).join('');
+
     box.innerHTML = `<div class="starter-box">
         <div class="starter-head"><i class="ti ti-seeding"></i> Začni tady — portfolio pro začátečníky</div>
-        <div class="starter-sub">5 ověřených firem, každá z <b>jiného sektoru</b> (diverzifikace = nižší riziko). Přidej si je do sledování a sleduj, jak se vyvíjejí.</div>
+        <div class="starter-sub">5 titulů, každý z <b>jiného sektoru</b> (diverzifikace = nižší riziko). Zvol si agresivitu strategie:</div>
+        <div class="risk-row">${pills}</div>
+        <div class="risk-desc"><i class="ti ti-info-circle"></i> ${RISK_DESC[investorRisk]}</div>
         <div class="starter-grid">${items}</div>
         <div class="starter-actions">
             <button class="btn-primary" style="flex:none; display:inline-flex; align-items:center; gap:6px;" onclick="addAllStarter()"><i class="ti ti-stack-2"></i> Přidat všech 5</button>
@@ -1652,7 +1563,9 @@ function addStarter(ticker) {
 
 function addAllStarter() {
     let added = 0;
-    STARTER.forEach(x => { if (!myStocks.includes(x.t)) { myStocks.push(x.t); added++; } });
+    (STARTER_SETS[investorRisk] || STARTER_SETS.balanced).forEach(x => {
+        if (!myStocks.includes(x.t)) { myStocks.push(x.t); added++; }
+    });
     if (added) {
         localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
         cloudSync();
@@ -1975,116 +1888,19 @@ function renderOpportunities() {
 // --- VYKRESLENÍ KARET: rozdělení na Moje pozice vs Sledované ---
 function stockCardHTML(s) {
     const isUp = s.change_pct >= 0;
-    const pos = myPositions[s.ticker];
-    let plHtml = '';
-    if(pos && pos.qty > 0) {
-        const pl = (s.price - pos.avgPrice) * pos.qty;
-        const plPct = ((pl / (pos.avgPrice * pos.qty)) * 100).toFixed(1);
-        const plClass = pl >= 0 ? 'up' : 'down';
-        plHtml = `<div class="sc-pl"><span>P/L:</span><span class="pl-val ${plClass}">${pl >= 0 ? '+' : ''}${pl.toFixed(2)} (${pl >= 0 ? '+' : ''}${plPct}%)</span></div>`;
-    }
     const hasAlert = myAlerts.some(a => a.ticker === s.ticker);
     const bell = hasAlert ? '<i class="ti ti-bell-ringing" style="color:var(--accent); font-size:14px; float:right;"></i>' : '';
     return `<div class="stock-card" onclick="loadStockDetail('${s.ticker}')">
         <div class="sc-ticker">${s.ticker} ${bell}</div>
         <div class="sc-price">${s.price.toFixed(3)} <span style="font-size:12px;color:var(--text2)">${s.currency}</span></div>
         <div class="sc-change ${isUp ? 'up':'down'}"><i class="ti ${isUp ? 'ti-trending-up':'ti-trending-down'}"></i> ${isUp?'+':''}${s.change_pct.toFixed(2)}%</div>
-        ${plHtml}
     </div>`;
 }
 
 function renderWatchCards(results) {
-    const posGrid = document.getElementById('positions-grid');
     const watchGrid = document.getElementById('watch-grid');
-    const positions = results.filter(s => myPositions[s.ticker] && myPositions[s.ticker].qty > 0);
-    const watched = results.filter(s => !(myPositions[s.ticker] && myPositions[s.ticker].qty > 0));
-
-    posGrid.innerHTML = positions.map(stockCardHTML).join('');
-    watchGrid.innerHTML = watched.map(stockCardHTML).join('');
-    document.getElementById('positions-empty').style.display = positions.length ? 'none' : 'block';
-    document.getElementById('watch-empty').style.display = watched.length ? 'none' : 'block';
-}
-
-// --- PORTFOLIO PŘEHLED (souhrn + alokace) ---
-function renderPortfolioSummary(results) {
-    // Graf alokace kresli jen když je záložka portfolia vidět (jinak 0px kontejner)
-    const modalOpen = document.getElementById('section-portfolio').style.display !== 'none';
-    const box = document.getElementById('port-summary');
-    const positionsList = results.filter(s => myPositions[s.ticker] && myPositions[s.ticker].qty > 0);
-
-    // Dnešní pohyby (top gainer / loser) – vždy
-    const sorted = [...results].sort((a,b) => b.change_pct - a.change_pct);
-    const moversEl = document.getElementById('ps-movers');
-    moversEl.innerHTML = '';
-    if(sorted.length) {
-        const best = sorted[0], worst = sorted[sorted.length-1];
-        [['Nejlepší', best],['Nejhorší', worst]].forEach(([lbl, m]) => {
-            const up = m.change_pct >= 0;
-            moversEl.innerHTML += `<div class="mover-chip" onclick="loadStockDetail('${m.ticker}')">
-                <span style="color:var(--text2); font-size:11px;">${lbl}</span>
-                <b>${m.ticker}</b>
-                <span class="${up?'up':'down'}">${up?'+':''}${m.change_pct.toFixed(2)}%</span></div>`;
-        });
-    }
-
-    if(positionsList.length === 0) {
-        // Bez pozic souhrn skryjeme – prázdný stav řeší sekce „Moje pozice"
-        box.style.display = 'none';
-        if(allocChartInstance){ allocChartInstance.destroy(); allocChartInstance = null; }
-        return;
-    }
-    box.style.display = 'grid';
-
-    let totalValue = 0, totalInvested = 0, todayChange = 0;
-    const currencies = new Set();
-    const allocLabels = [], allocSeries = [];
-    positionsList.forEach(s => {
-        const pos = myPositions[s.ticker];
-        const val = s.price * pos.qty;
-        totalValue += val;
-        totalInvested += pos.avgPrice * pos.qty;
-        if(s.prev_close) todayChange += (s.price - s.prev_close) * pos.qty;
-        currencies.add(s.currency);
-        allocLabels.push(s.ticker);
-        allocSeries.push(Math.round(val));
-    });
-    const totalPL = totalValue - totalInvested;
-    const totalPLpct = totalInvested ? (totalPL/totalInvested*100) : 0;
-    const todayPct = totalValue ? (todayChange/(totalValue-todayChange)*100) : 0;
-    const mixed = currencies.size > 1;
-    const cur = mixed ? '' : (' '+[...currencies][0]);
-    const warn = mixed ? ' <span title="Smíšené měny – součet je orientační" style="color:#FFC400">⚠</span>' : '';
-
-    document.getElementById('ps-value').innerHTML = totalValue.toLocaleString('cs-CZ',{maximumFractionDigits:0})+cur+warn;
-    const tEl = document.getElementById('ps-today');
-    tEl.className = 'ps-stat-sub ' + (todayChange>=0?'up':'down');
-    tEl.innerText = `${todayChange>=0?'+':''}${todayChange.toFixed(0)}${cur} dnes (${todayChange>=0?'+':''}${todayPct.toFixed(2)}%)`;
-    const plEl = document.getElementById('ps-pl');
-    plEl.className = 'ps-stat-val ' + (totalPL>=0?'up':'down');
-    plEl.innerText = `${totalPL>=0?'+':''}${totalPL.toFixed(0)}${cur}`;
-    const plPctEl = document.getElementById('ps-pl-pct');
-    plPctEl.className = 'ps-stat-sub ' + (totalPL>=0?'up':'down');
-    plPctEl.innerText = `${totalPL>=0?'+':''}${totalPLpct.toFixed(2)}% z investice`;
-
-    if(modalOpen) renderAllocChart(allocLabels, allocSeries);
-}
-
-function renderAllocChart(labels, series) {
-    if(allocChartInstance) allocChartInstance.destroy();
-    const opts = {
-        series: series,
-        labels: labels,
-        chart: { type: 'donut', height: 220, animations: { enabled: false } },
-        colors: ['#FF7A00','#00E676','#29B6F6','#AB47BC','#FFC400','#FF3D00','#26C6DA','#EC407A'],
-        legend: { position: 'bottom', labels: { colors: '#9ba1b0' }, fontFamily: 'Outfit' },
-        stroke: { width: 0 },
-        dataLabels: { enabled: true, style: { fontFamily: 'Space Grotesk' }, dropShadow:{enabled:false} },
-        plotOptions: { pie: { donut: { size: '62%', labels: { show: true, total: { show: true, label: 'Pozic', color: '#9ba1b0', fontFamily:'Outfit', formatter: () => labels.length } } } } },
-        tooltip: { theme: 'dark', y: { formatter: v => v.toLocaleString('cs-CZ') } },
-        theme: { mode: 'dark' }
-    };
-    allocChartInstance = new ApexCharts(document.querySelector('#allocChart'), opts);
-    allocChartInstance.render();
+    watchGrid.innerHTML = results.map(stockCardHTML).join('');
+    document.getElementById('watch-empty').style.display = results.length ? 'none' : 'block';
 }
 
 async function generateDashboardBrief(watchlistData) {
@@ -2225,7 +2041,6 @@ async function loadStockDetail(ticker, runAI = true) {
         }
 
         renderChart(currentChartData);
-        renderDetailPL();
         renderPeriodPerf(currentChartData);
         
         if(runAI) autoGenerateAIReport();
@@ -2466,17 +2281,7 @@ async function generatePortfolioEval(watchlistData) {
         return;
     }
 
-    // Sestavíme kontext s pozicemi pokud existují
-    const enriched = watchlistData.map(s => {
-        const pos = myPositions[s.ticker];
-        if(pos) {
-            const pl = ((s.price - pos.avgPrice) / pos.avgPrice * 100).toFixed(1);
-            return { ...s, qty: pos.qty, avgPrice: pos.avgPrice, pl_pct: pl };
-        }
-        return s;
-    });
-
-    const prompt = `Jsi zkušený portfolio manažer. Zde jsou aktuální data mého portfolia: ${JSON.stringify(enriched)}.
+    const prompt = `Jsi zkušený portfolio manažer. Zde jsou aktuální data mého sledovaného seznamu akcií: ${JSON.stringify(watchlistData)}.
     
 Vrať VÝHRADNĚ čistý validní JSON (bez markdownu, bez \`\`\`):
 {
@@ -2910,17 +2715,9 @@ async function sendChat() {
 // ============ EXPORT CSV ============
 function exportCSV() {
     if(!lastWatchlistData.length) { alert('Žádná data k exportu.'); return; }
-    const rows = [['Ticker','Cena','Měna','Změna %','Počet','Nákupní cena','Hodnota','P/L','P/L %']];
+    const rows = [['Ticker','Cena','Měna','Změna %']];
     lastWatchlistData.forEach(s => {
-        const pos = myPositions[s.ticker];
-        let qty='', avg='', val='', pl='', plpct='';
-        if(pos && pos.qty > 0) {
-            qty = pos.qty; avg = pos.avgPrice;
-            val = (s.price * pos.qty).toFixed(2);
-            pl = ((s.price - pos.avgPrice) * pos.qty).toFixed(2);
-            plpct = ((s.price - pos.avgPrice)/pos.avgPrice*100).toFixed(2);
-        }
-        rows.push([s.ticker, s.price, s.currency, s.change_pct, qty, avg, val, pl, plpct]);
+        rows.push([s.ticker, s.price, s.currency, s.change_pct]);
     });
     const csv = rows.map(r => r.join(';')).join('\n');
     const blob = new Blob(["﻿"+csv], { type: 'text/csv;charset=utf-8;' });
