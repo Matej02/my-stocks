@@ -1174,18 +1174,28 @@ def search_ticker():
     if len(query) < 1:
         return jsonify({"ok": True, "results": []})
     try:
-        url = f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(query)}&quotesCount=8&newsCount=0"
+        url = (f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(query)}"
+               f"&quotesCount=20&newsCount=0&enableFuzzyQuery=true&listsCount=0")
         r = requests.get(url, headers=HEADERS, timeout=8)
         data = r.json()
-        results = []
+        # Povolené typy – širší (přidány MUTUALFUND, OPTION vynechán). Neznámé typy taky pustíme,
+        # pokud mají symbol, aby se našlo víc titulů napříč burzami.
+        allowed = {'EQUITY', 'ETF', 'CRYPTOCURRENCY', 'INDEX', 'FUTURE', 'CURRENCY', 'MUTUALFUND'}
+        results, seen = [], set()
         for q in data.get('quotes', []):
-            if q.get('quoteType') in ['EQUITY', 'ETF', 'CRYPTOCURRENCY', 'INDEX', 'FUTURE', 'CURRENCY']:
-                results.append({
-                    "ticker": q.get('symbol'),
-                    "name": q.get('shortname', q.get('longname', 'Neznámý název')),
-                    "exchange": q.get('exchDisp', 'Trh'),
-                    "type": q.get('quoteType')
-                })
+            sym = q.get('symbol')
+            if not sym or sym in seen:
+                continue
+            qt = q.get('quoteType')
+            if qt and qt not in allowed:
+                continue
+            seen.add(sym)
+            results.append({
+                "ticker": sym,
+                "name": q.get('shortname') or q.get('longname') or q.get('symbol'),
+                "exchange": q.get('exchDisp', 'Trh'),
+                "type": qt or 'EQUITY'
+            })
         return jsonify({"ok": True, "results": results})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
