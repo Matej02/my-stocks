@@ -284,9 +284,10 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .locked-card h3 {font-family:var(--fh); font-size:20px; margin-bottom:8px;}
 .locked-card p {color:var(--text2); font-size:13.5px; max-width:420px; margin:0 auto 18px; line-height:1.6;}
 .sub-badge {display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:700; font-family:var(--fb);}
-.sub-badge.start {background:rgba(255,255,255,0.08); color:var(--text2);}
-.sub-badge.trader {background:rgba(41,182,246,0.15); color:#4FC3F7; border:1px solid rgba(41,182,246,0.3);}
+.sub-badge.none {background:rgba(255,77,109,0.12); color:var(--down); border:1px solid rgba(255,77,109,0.25);}
+.sub-badge.start {background:rgba(41,182,246,0.15); color:#4FC3F7; border:1px solid rgba(41,182,246,0.3);}
 .sub-badge.pro {background:rgba(124,77,255,0.15); color:#b89bff; border:1px solid rgba(124,77,255,0.35);}
+.sub-badge.elite {background:linear-gradient(135deg,rgba(255,122,0,0.2),rgba(124,77,255,0.2)); color:#ffb066; border:1px solid rgba(255,122,0,0.35);}
 .sub-status {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
 .sub-status .trial-pill {background:var(--up-glow); color:var(--up); padding:3px 10px; border-radius:10px; font-size:12px; font-weight:600;}
 .plans-grid {display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:8px;}
@@ -316,6 +317,13 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .invite-chip.used {opacity:.5; text-decoration:line-through;}
 .invite-chip .copy {cursor:pointer; color:var(--accent);}
 .admin-sub {display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:18px 0 6px;}
+.admin-input {flex:1; min-width:150px; padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text); font-family:var(--fb);}
+.admin-mk {flex:none; display:inline-flex; align-items:center; gap:6px;}
+.promo-block {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:12px 14px;}
+.promo-count {margin-left:auto; font-size:11px; font-weight:700; background:var(--accent-glow); color:var(--accent); padding:2px 9px; border-radius:10px;}
+
+/* Přístupová zeď nad obsahem, ale POD profilovým modalem (aby šlo přihlásit) */
+#gateWall {z-index:900;}
 
 .port-empty {color:var(--text2); font-size:13.5px; line-height:1.6; background:rgba(255,255,255,0.03); border:1px dashed var(--border); border-radius:14px; padding:18px 20px;}
 
@@ -498,15 +506,20 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 <body>
 
 <!-- ZÁMEK – zobrazí se jen když je nastaveno heslo (env APP_PASSWORD) -->
-<div id="lockScreen" class="lock-screen" style="display:none;">
+<!-- PŘÍSTUPOVÁ ZEĎ – přihlášení / vybrat plán -->
+<div id="gateWall" class="lock-screen" style="display:none;">
   <div class="lock-card">
-    <div class="lock-icon"><i class="ti ti-lock"></i></div>
+    <div class="lock-icon"><i class="ti ti-chart-candle"></i></div>
     <h2>MY <span>STOCKS</span></h2>
-    <p>Tato appka je chráněná heslem.</p>
-    <input type="password" id="lockInput" placeholder="Zadej heslo..." autocomplete="current-password"
-           onkeydown="if(event.key==='Enter') submitLock()">
-    <div class="lock-error" id="lockError"></div>
-    <button class="btn-primary" onclick="submitLock()"><i class="ti ti-key"></i> Odemknout</button>
+    <div id="gate-auth">
+      <p>Tvůj investiční asistent. Přihlas se nebo si vytvoř účet.</p>
+      <button class="btn-primary" onclick="openProfile()"><i class="ti ti-login-2"></i> Přihlásit / Registrovat</button>
+    </div>
+    <div id="gate-noaccess" style="display:none;">
+      <p>Tvůj účet zatím nemá aktivní plán. Pro přístup si vyber předplatné.</p>
+      <button class="btn-primary" onclick="openProfile('plans')"><i class="ti ti-crown"></i> Vybrat předplatné</button>
+      <p class="auth-hint" style="margin-top:10px;"><a class="profile-cloud-link" onclick="doLogout()">Odhlásit se</a></p>
+    </div>
   </div>
 </div>
 
@@ -523,7 +536,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·c</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·d</div>
 
 <div class="container">
   
@@ -843,7 +856,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
       <div class="info-container">
         <div class="deep-box" id="deep-box">
           <div class="deep-head">
-            <div class="signal-title"><i class="ti ti-brain" style="color:var(--accent)"></i> Hloubková analýza <span class="deep-badge">PRO</span></div>
+            <div class="signal-title"><i class="ti ti-brain" style="color:var(--accent)"></i> Hloubková analýza <span class="deep-badge">ELITE</span></div>
             <button class="btn-primary deep-btn" id="deep-btn" onclick="runDeepAnalysis()"><i class="ti ti-sparkles"></i> Vygenerovat</button>
           </div>
           <div id="deep-output"><div class="deep-teaser">Klikni na <b>Vygenerovat</b> pro kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.</div></div>
@@ -987,18 +1000,18 @@ const STARTER = [
 
 // Předplatné
 let mySub = null;                       // {plan, effective, trial_ends, days_left, is_admin, ...}
-const PLAN_RANK = { start: 0, trader: 1, pro: 2 };
-const PLAN_NAMES = { start: 'Start', trader: 'Trader', pro: 'Pro' };
-const WATCHLIST_LIMIT_START = 5;
+const PLAN_RANK = { none: -1, start: 0, pro: 1, elite: 2 };
+const PLAN_NAMES = { none: 'Bez přístupu', start: 'Start', pro: 'Pro', elite: 'Elite' };
 
-// Aktivní plán: bez účtů (cloud vypnutý) = vše odemčeno; nepřihlášen = Start
+// Aktivní plán: bez účtů (cloud vypnutý) = vše odemčeno (dev); nepřihlášen = bez přístupu
 function effPlan() {
-    if (!cloudEnabled) return 'pro';
-    if (!authToken) return 'start';
-    return (mySub && mySub.effective) || 'start';
+    if (!cloudEnabled) return 'elite';
+    if (!authToken) return 'none';
+    return (mySub && mySub.effective) || 'none';
 }
+function hasAccess() { return effPlan() !== 'none'; }
 function hasFeature(minPlan) {
-    return (PLAN_RANK[effPlan()] ?? 0) >= PLAN_RANK[minPlan];
+    return (PLAN_RANK[effPlan()] ?? -1) >= PLAN_RANK[minPlan];
 }
 function lockedCardHTML(title, minPlan, desc) {
     return `<div class="locked-card">
@@ -1284,17 +1297,17 @@ function switchTab(name) {
     }
     // Zamykání sekcí podle plánu
     if (name === 'opportunities') {
-        if (!hasFeature('trader')) {
-            document.getElementById('opp-grid').innerHTML = lockedCardHTML('Scanner příležitostí', 'trader',
-                'Vyhledávání šílených pohybů, objemových spiků a moonshotů.');
+        if (!hasFeature('pro')) {
+            document.getElementById('opp-grid').innerHTML = lockedCardHTML('Příležitosti s potenciálem', 'pro',
+                'Náš model akcií s největším prostorem vyrůst + AI proč.');
         } else if (!oppData.length && !oppLoading) {
             loadOpportunities();
         }
     }
     if (name === 'ai') {
         const lock = document.getElementById('ai-lock');
-        if (!hasFeature('pro')) {
-            lock.innerHTML = lockedCardHTML('AI analýza', 'pro',
+        if (!hasFeature('elite')) {
+            lock.innerHTML = lockedCardHTML('AI analýza', 'elite',
                 'Tržní briefing, doporučení „co prodat/přikoupit" a AI chat o akciích.');
             lock.style.display = 'block';
             document.getElementById('port-eval-box').style.display = 'none';
@@ -1455,7 +1468,7 @@ function renderSubStatus() {
     el.innerHTML = `<span style="font-size:13px;color:var(--text2)">Tvůj plán:</span>
         <span class="sub-badge ${eff}"><i class="ti ti-crown"></i> ${PLAN_NAMES[eff]}</span>
         ${extra}
-        ${eff !== 'pro' ? '<button class="btn-primary" style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;padding:8px 14px;flex:none;" onclick="setPfView(\'plans\')"><i class="ti ti-arrow-up"></i> Vylepšit</button>' : ''}`;
+        ${eff !== 'elite' ? '<button class="btn-primary" style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;padding:8px 14px;flex:none;" onclick="setPfView(\'plans\')"><i class="ti ti-arrow-up"></i> Vylepšit</button>' : ''}`;
 }
 
 function setAuthTab(tab) {
@@ -1466,8 +1479,8 @@ function setAuthTab(tab) {
     document.getElementById('auth-invite-field').style.display = tab === 'register' ? 'flex' : 'none';
     document.getElementById('auth-forgot').style.display = tab === 'login' ? 'block' : 'none';
     document.getElementById('auth-hint').textContent = tab === 'login'
-        ? 'Ještě nemáš účet? Klikni na „Registrovat“. Prvních 7 dní máš plný Pro zdarma.'
-        : 'Zadej e-mail a heslo (min. 4 znaky). Získáš 7 dní Pro zdarma.';
+        ? 'Ještě nemáš účet? Klikni na „Registrovat“.'
+        : 'S promo kódem máš 7 dní Pro zdarma + slevu. Bez kódu si po registraci vybereš plán.';
     document.getElementById('auth-error').textContent = '';
 }
 
@@ -1503,11 +1516,17 @@ async function submitAuth() {
             myStocks = DEFAULT_WATCHLIST.slice();
         }
         document.getElementById('auth-password').value = '';
+        document.getElementById('auth-invite').value = '';
         updateProfileBtn();
-        renderProfileView();
         showToast(endpoint === 'login' ? `Přihlášen jako ${authUser}` : `Účet ${authUser} vytvořen`, 'up', 'ti-user-check');
-        await loadWatchlist();
-        cloudSync(); // u registrace nahraje startovní portfolio
+
+        // Vyhodnotit přístup: má plán → spustit appku, nemá → ukázat „vyber plán"
+        if (refreshGate()) {
+            closeProfile();
+            if (!mainStarted) startMain(); else { await loadWatchlist(); cloudSync(); }
+        } else {
+            closeProfile();   // zeď „bez přístupu" se ukáže sama
+        }
     } catch (e) {
         errEl.textContent = 'Chyba spojení se serverem.';
     } finally {
@@ -1520,14 +1539,13 @@ function doLogout() {
     localStorage.removeItem('mystocks_token');
     localStorage.removeItem('mystocks_user');
     // Vyčistit citlivá data z tohoto zařízení (pozice + upozornění), watchlist na výchozí
-    myPositions = {}; myAlerts = []; myStocks = DEFAULT_WATCHLIST.slice();
-    localStorage.setItem('mystocks_positions', JSON.stringify(myPositions));
+    myAlerts = []; myStocks = DEFAULT_WATCHLIST.slice();
     localStorage.setItem('mystocks_alerts', JSON.stringify(myAlerts));
     localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
     updateProfileBtn();
-    renderProfileView();
+    closeProfile();
     showToast('Odhlášeno', 'down', 'ti-logout');
-    loadWatchlist();
+    refreshGate();   // ukáže přihlašovací zeď
 }
 
 async function forgotPassword() {
@@ -1645,15 +1663,15 @@ function addAllStarter() {
 
 // ====================== CENÍK PŘEDPLATNÉHO ======================
 const PLANS = [
-    { id: 'start', name: 'Start', price: '0 €', period: 'zdarma', feats: [
-        ['Sledování do 5 titulů', 1], ['Ceny, grafy & náš Signal Score', 1], ['Aktuální zprávy', 1],
-        ['Scanner příležitostí', 0], ['Cenová upozornění', 0], ['Analytici & AI analýza', 0] ] },
-    { id: 'trader', name: 'Trader', price: '7,99 €', period: '/ měsíc', featured: true, feats: [
-        ['Neomezený watchlist', 1], ['Scanner příležitostí', 1], ['Cenová upozornění', 1],
-        ['Sync mezi zařízeními', 1], ['Export CSV', 1], ['Analytici & AI analýza', 0] ] },
-    { id: 'pro', name: 'Pro', price: '14,99 €', period: '/ měsíc', feats: [
-        ['Vše z plánu Trader', 1], ['Doporučení analytiků & cílové ceny', 1], ['Plná AI analýza & chat', 1],
-        ['Doporučení „co prodat/přikoupit"', 1], ['Prioritní novinky', 1] ] },
+    { id: 'start', name: 'Start', price: '7,99 €', period: '/ měsíc', feats: [
+        ['Neomezené sledování', 1], ['Grafy, Signal Score & technický budík', 1], ['Aktuální zprávy', 1],
+        ['Cenová upozornění + sync', 1], ['Příležitosti & analytici', 0], ['Hloubková AI analýza', 0] ] },
+    { id: 'pro', name: 'Pro', price: '14,99 €', period: '/ měsíc', featured: true, feats: [
+        ['Vše ze Start', 1], ['🎯 Příležitosti s potenciálem', 1], ['Doporučení analytiků & cílové ceny', 1],
+        ['Fundamenty (P/E, kapitalizace)', 1], ['Hloubková AI analýza', 0] ] },
+    { id: 'elite', name: 'Elite', price: '24,99 €', period: '/ měsíc', feats: [
+        ['Vše z Pro', 1], ['🧠 Hloubková AI analýza (neomezeně)', 1], ['AI „proč" u příležitostí', 1],
+        ['Track record signálů', 1], ['Prioritní novinky', 1] ] },
 ];
 
 function renderPlans() {
@@ -1704,56 +1722,78 @@ async function loadAdmin() {
 }
 
 function renderAdmin(users, invites) {
-    const planOpts = (cur) => ['trial', 'start', 'trader', 'pro', 'comped']
+    const planOpts = (cur) => ['none', 'trial', 'start', 'pro', 'elite', 'comped']
         .map(p => `<option value="${p}" ${p === cur ? 'selected' : ''}>${p}</option>`).join('');
 
     const rows = users.map(u => `
         <tr>
             <td><b>${u.username}</b>${u.is_admin ? ' <span style="color:var(--accent)">★</span>' : ''}</td>
-            <td><span class="sub-badge ${u.effective}">${PLAN_NAMES[u.effective]}</span></td>
+            <td><span class="sub-badge ${u.effective}">${PLAN_NAMES[u.effective] || u.effective}</span></td>
             <td>${u.plan}${u.plan === 'trial' && u.days_left != null ? ` (${u.days_left}d)` : ''}</td>
-            <td>${u.watchlist}/${u.positions}</td>
             <td>${fmtDate(u.created)}</td>
             <td><select onchange="adminSetPlan('${u.username}', this.value)">${planOpts(u.plan)}</select></td>
             <td>${u.is_admin ? '' : `<button class="tool-btn" style="padding:5px 9px;" title="Smazat účet" onclick="adminDeleteUser('${u.username}')"><i class="ti ti-trash"></i></button>`}</td>
         </tr>`).join('');
 
-    const chips = invites.length ? invites.map(i =>
+    const comped = invites.filter(i => i.type === 'comped');
+    const promos = invites.filter(i => i.type === 'promo');
+
+    const compedChips = comped.length ? comped.map(i =>
         `<div class="invite-chip ${i.used_by ? 'used' : ''}">
             <span>${i.code}</span>
             ${i.used_by ? `<span style="font-size:11px;color:var(--text2)">${i.used_by}</span>`
                        : `<i class="ti ti-copy copy" title="Kopírovat" onclick="copyText('${i.code}')"></i>`}
-        </div>`).join('') : '<span style="color:var(--text2); font-size:13px;">Zatím žádné kódy.</span>';
+        </div>`).join('') : '<span style="color:var(--text2); font-size:13px;">Žádné.</span>';
+
+    const promoBlocks = promos.length ? promos.map(i => {
+        const refs = (i.referrals || []).map(r =>
+            `<div style="display:flex; justify-content:space-between; font-size:12px; padding:3px 0; border-top:1px solid var(--border);">
+                <span>${r.email}</span><span class="sub-badge ${r.plan}">${PLAN_NAMES[r.plan] || r.plan}</span></div>`).join('');
+        return `<div class="promo-block">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <b style="font-family:monospace; font-size:14px;">${i.code}</b>
+                <i class="ti ti-copy copy" onclick="copyText('${i.code}')" style="cursor:pointer; color:var(--accent)"></i>
+                <span style="font-size:11px; color:var(--text2);">7 dní Pro${i.discount_pct ? ` + ${i.discount_pct}% sleva` : ''}</span>
+                <span class="promo-count">${i.referral_count} pozvaných</span>
+            </div>
+            ${refs || '<div style="font-size:12px; color:var(--text2); margin-top:4px;">Zatím nikdo nepřišel.</div>'}
+        </div>`;
+    }).join('') : '<span style="color:var(--text2); font-size:13px;">Žádné promo kódy.</span>';
 
     document.getElementById('pfview-admin').innerHTML = `
-        <div class="admin-sub"><i class="ti ti-ticket" style="color:var(--accent)"></i> <b>Zvací kódy</b>
-            <button class="tool-btn" style="margin-left:auto;" onclick="genInvites(1)"><i class="ti ti-dice"></i> Náhodný</button>
-            <button class="tool-btn" onclick="genInvites(5)"><i class="ti ti-plus"></i> 5 náhodných</button>
+        <div class="admin-sub"><i class="ti ti-infinity" style="color:var(--accent)"></i> <b>Kódy plného přístupu</b> <span style="font-size:11px;color:var(--text2)">(Elite natrvalo, rodina/kamarádi, 1 použití)</span></div>
+        <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap;">
+            <input id="invite-name" placeholder="vlastní název, např. tom" maxlength="24" class="admin-input"
+                   onkeydown="if(event.key==='Enter') genNamedInvite('comped')">
+            <button class="btn-primary admin-mk" onclick="genNamedInvite('comped')"><i class="ti ti-plus"></i> Vytvořit</button>
+            <button class="tool-btn" onclick="genInvites('comped',1)"><i class="ti ti-dice"></i> Náhodný</button>
         </div>
-        <div style="display:flex; gap:8px; margin:10px 0; flex-wrap:wrap;">
-            <input id="invite-name" placeholder="vlastní název, např. tom5" maxlength="24"
-                   style="flex:1; min-width:160px; padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text); font-family:var(--fb);"
-                   onkeydown="if(event.key==='Enter') genNamedInvite()">
-            <button class="btn-primary" style="flex:none; display:inline-flex; align-items:center; gap:6px;" onclick="genNamedInvite()"><i class="ti ti-plus"></i> Vytvořit kód</button>
+        <div class="admin-invites">${compedChips}</div>
+
+        <div class="admin-sub" style="margin-top:22px;"><i class="ti ti-discount-2" style="color:var(--accent)"></i> <b>Promo kódy ke sdílení</b> <span style="font-size:11px;color:var(--text2)">(7 dní Pro + 20% sleva 3 měsíce, vícenásobné)</span></div>
+        <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap;">
+            <input id="promo-name" placeholder="vlastní název, např. leto2026" maxlength="24" class="admin-input"
+                   onkeydown="if(event.key==='Enter') genNamedInvite('promo')">
+            <button class="btn-primary admin-mk" onclick="genNamedInvite('promo')"><i class="ti ti-plus"></i> Vytvořit promo</button>
         </div>
-        <div class="admin-invites">${chips}</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">${promoBlocks}</div>
 
         <div class="admin-sub" style="margin-top:24px;"><i class="ti ti-users" style="color:var(--accent)"></i> <b>Uživatelé (${users.length})</b></div>
         <div style="overflow-x:auto;">
         <table class="admin-table">
-            <thead><tr><th>E-mail</th><th>Plán</th><th>Stav</th><th>WL/Poz</th><th>Vytvořen</th><th>Změnit plán</th><th></th></tr></thead>
+            <thead><tr><th>E-mail</th><th>Plán</th><th>Stav</th><th>Vytvořen</th><th>Změnit plán</th><th></th></tr></thead>
             <tbody>${rows || '<tr><td colspan="6" style="color:var(--text2)">Žádní uživatelé.</td></tr>'}</tbody>
         </table></div>`;
 }
 
-async function genInvites(count) {
+async function genInvites(type, count) {
     try {
         const r = await fetch(`${BACKEND_URL}/api/admin/invites`, {
-            method: 'POST', headers: authHeaders(), body: JSON.stringify({ count })
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ type, count })
         });
         const d = await r.json();
-        if (d.ok) { showToast(`Vygenerováno ${d.created.length} kódů`, 'up', 'ti-ticket'); loadAdmin(); }
-    } catch (e) { showToast('Nepodařilo se vygenerovat kódy', 'down', 'ti-x'); }
+        if (d.ok) { showToast(`Vytvořeno ${d.created.length} kódů`, 'up', 'ti-ticket'); loadAdmin(); }
+    } catch (e) { showToast('Nepodařilo se', 'down', 'ti-x'); }
 }
 
 async function genNamedInvite() {
@@ -1799,53 +1839,36 @@ function copyText(t) {
 }
 
 // ====================== ZÁMEK (ochrana heslem) ======================
-async function startApp() {
-    await initAccount();
+let mainStarted = false;
+function startMain() {
     renderStarter();
     loadWatchlist();
+    mainStarted = true;
+}
+
+// Rozhodne, zda ukázat přístupovou zeď, nebo appku. Vrací true = má přístup.
+function refreshGate() {
+    const wall = document.getElementById('gateWall');
+    if (!cloudEnabled) { wall.style.display = 'none'; return true; }   // dev bez účtů
+    if (!authToken) {
+        document.getElementById('gate-auth').style.display = 'block';
+        document.getElementById('gate-noaccess').style.display = 'none';
+        wall.style.display = 'flex';
+        return false;
+    }
+    if (!hasAccess()) {
+        document.getElementById('gate-auth').style.display = 'none';
+        document.getElementById('gate-noaccess').style.display = 'block';
+        wall.style.display = 'flex';
+        return false;
+    }
+    wall.style.display = 'none';
+    return true;
 }
 
 async function initGate() {
-    // Pokud appka není chráněná (env APP_PASSWORD není nastaveno), nebo už je odemčeno,
-    // appku rovnou spustíme. Když ověření selže (síť), raději pustíme dál (žádný lockout).
-    try {
-        const r = await fetch(`${BACKEND_URL}/api/auth`);
-        const d = await r.json();
-        if (!d.protected || localStorage.getItem('mystocks_auth') === '1') {
-            startApp();
-            return;
-        }
-    } catch (e) {
-        startApp();
-        return;
-    }
-    const lock = document.getElementById('lockScreen');
-    lock.style.display = 'flex';
-    setTimeout(() => document.getElementById('lockInput').focus(), 100);
-}
-
-async function submitLock() {
-    const input = document.getElementById('lockInput');
-    const err = document.getElementById('lockError');
-    err.textContent = '';
-    try {
-        const r = await fetch(`${BACKEND_URL}/api/auth`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: input.value })
-        });
-        if (r.ok) {
-            localStorage.setItem('mystocks_auth', '1');
-            document.getElementById('lockScreen').style.display = 'none';
-            startApp();
-        } else {
-            err.textContent = 'Nesprávné heslo. Zkus to znovu.';
-            input.value = '';
-            input.focus();
-        }
-    } catch (e) {
-        err.textContent = 'Chyba spojení se serverem.';
-    }
+    await initAccount();
+    if (refreshGate()) startMain();
 }
 
 // ====================== SCANNER PŘÍLEŽITOSTÍ ======================
@@ -1877,9 +1900,9 @@ function fmtVol(v) {
 
 async function loadOpportunities() {
     const grid = document.getElementById('opp-grid');
-    if(!hasFeature('trader')) {
-        grid.innerHTML = lockedCardHTML('Scanner příležitostí', 'trader',
-            'Vyhledávání šílených pohybů, objemových spiků a moonshotů.');
+    if(!hasFeature('pro')) {
+        grid.innerHTML = lockedCardHTML('Příležitosti s potenciálem', 'pro',
+            'Náš model akcií s největším prostorem vyrůst + AI proč.');
         return;
     }
     if(oppLoading) return;
@@ -2379,11 +2402,6 @@ function toggleWatchlist() {
     if(myStocks.includes(t)) {
         myStocks = myStocks.filter(s => s !== t);
     } else {
-        if(!hasFeature('trader') && myStocks.length >= WATCHLIST_LIMIT_START) {
-            showToast(`Plán Start má limit ${WATCHLIST_LIMIT_START} titulů. Odemkni neomezený watchlist v plánu Trader.`, 'down', 'ti-lock');
-            openProfile('plans');
-            return;
-        }
         myStocks.push(t);
     }
     localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
@@ -2673,8 +2691,8 @@ async function runDeepAnalysis() {
         out.innerHTML = '<div class="deep-teaser">Pro hloubkovou analýzu se přihlas v profilu.</div>';
         openProfile(); return;
     }
-    if (!hasFeature('pro')) {
-        out.innerHTML = lockedCardHTML('Hloubková analýza', 'pro',
+    if (!hasFeature('elite')) {
+        out.innerHTML = lockedCardHTML('Hloubková analýza', 'elite',
             'Kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.');
         return;
     }

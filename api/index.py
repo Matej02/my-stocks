@@ -554,13 +554,18 @@ def _email_shell(title, body_html):
       </div></div>"""
 
 
-def send_welcome_email(email):
-    html = _email_shell(
-        "Vítej v MY STOCKS! 🎉",
-        "<p style='line-height:1.6'>Tvůj účet je připravený a právě ti začala "
-        "<b>7denní zkušební verze plánu Pro</b> — máš odemčené všechny funkce: "
-        "scanner příležitostí, technické hodnocení, doporučení analytiků i AI analýzu.</p>"
-        "<p style='line-height:1.6'>Přejeme šťastnou ruku při investování!</p>")
+def send_welcome_email(email, eff="none"):
+    if eff == "elite":
+        body = ("<p style='line-height:1.6'>Tvůj účet má <b>plný přístup (Elite)</b> — máš odemčené vše: "
+                "příležitosti s potenciálem, doporučení analytiků i hloubkovou AI analýzu.</p>")
+    elif eff in ("pro", "start"):
+        body = ("<p style='line-height:1.6'>Právě ti začalo <b>7 dní plánu Pro zdarma</b> — vyzkoušej "
+                "příležitosti s potenciálem a doporučení analytiků. Po zkušební době máš slevu na předplatné.</p>")
+    else:
+        body = ("<p style='line-height:1.6'>Tvůj účet je připravený. Pro přístup k funkcím si "
+                "vyber předplatné v profilu.</p>")
+    html = _email_shell("Vítej v MY STOCKS! 🎉",
+                        body + "<p style='line-height:1.6'>Přejeme šťastnou ruku při investování!</p>")
     return send_email(email, "Vítej v MY STOCKS 🎉", html)
 
 
@@ -576,8 +581,11 @@ def send_reset_email(email, link):
 
 
 # ---- Předplatné / plány ----
+# Appka je plně placená. Bez přístupu = 'none'. Žebříček: start < pro < elite.
+# trial (přes promo kód) = 7 dní Pro. comped (kód pro rodinu) = Elite natrvalo.
 TRIAL_DAYS = 7
-VALID_PLANS = ("start", "trader", "pro")
+VALID_PLANS = ("start", "pro", "elite")
+PLAN_RANK = {"none": -1, "start": 0, "pro": 1, "elite": 2}
 
 
 def admin_users():
@@ -585,19 +593,20 @@ def admin_users():
 
 
 def effective_plan(rec):
-    """Skutečně aktivní plán dle stavu účtu (trial/expirace)."""
-    plan = (rec or {}).get("plan", "start")
+    """Skutečně aktivní plán. 'none' = bez přístupu (musí zaplatit nebo použít kód)."""
+    rec = rec or {}
+    plan = rec.get("plan", "none")
     now = int(time.time())
     if plan == "comped":
-        return "pro"
+        return "elite"
     if plan == "trial":
-        return "pro" if now <= (rec.get("trial_ends") or 0) else "start"
-    if plan in ("trader", "pro"):
+        return (rec.get("trial_tier") or "pro") if now <= (rec.get("trial_ends") or 0) else "none"
+    if plan in VALID_PLANS:
         pu = rec.get("plan_until")
         if pu and now > pu:
-            return "start"
+            return "none"
         return plan
-    return "start"
+    return "none"
 
 
 def subscription_info(username, rec):
@@ -605,14 +614,18 @@ def subscription_info(username, rec):
     now = int(time.time())
     eff = effective_plan(rec)
     info = {
-        "plan": rec.get("plan", "start"),
+        "plan": rec.get("plan", "none"),
         "effective": eff,
+        "has_access": eff != "none",
         "trial_ends": rec.get("trial_ends"),
         "plan_until": rec.get("plan_until"),
+        "discount_pct": rec.get("discount_pct"),
+        "discount_until": rec.get("discount_until"),
         "is_admin": username in admin_users(),
     }
     if rec.get("plan") == "trial" and rec.get("trial_ends"):
-        info["days_left"] = max(0, (rec["trial_ends"] - now) // 86400 + (1 if (rec["trial_ends"] - now) % 86400 else 0))
+        rem = rec["trial_ends"] - now
+        info["days_left"] = max(0, rem // 86400 + (1 if rem % 86400 else 0))
         info["trial_active"] = now <= rec["trial_ends"]
     return info
 
@@ -671,28 +684,45 @@ def register():
             return jsonify({"ok": False, "error": "Účet s tímto e-mailem už existuje."}), 409
 
         now = int(time.time())
-        plan, trial_ends = "trial", now + TRIAL_DAYS * 86400
+        # Bez kódu = žádný přístup, dokud si nezvolí placený plán
+        rec = {"salt": None, "hash": None, "created": now, "plan": "none", "email": email}
 
-        # Zvací kód → plný přístup (Pro) natrvalo, kód se spotřebuje
         if invite:
             inv = kv_get_json(f"invite:{invite}")
             if not inv:
-                return jsonify({"ok": False, "error": "Neplatný zvací kód."}), 400
-            if inv.get("used_by"):
-                return jsonify({"ok": False, "error": "Tento kód už byl použit."}), 409
-            plan, trial_ends = "comped", None
-            inv["used_by"] = email
-            inv["used_at"] = now
-            kv_set_json(f"invite:{invite}", inv)
+                return jsonify({"ok": False, "error": "Neplatný kód."}), 400
+            ctype = inv.get("type", "comped")
+            if ctype == "comped":
+                # Jednorázový kód → Elite natrvalo (rodina/kamarádi)
+                if inv.get("used_by"):
+                    return jsonify({"ok": False, "error": "Tento kód už byl použit."}), 409
+                rec["plan"] = "comped"
+                inv["used_by"] = email
+                inv["used_at"] = now
+                kv_set_json(f"invite:{invite}", inv)
+            else:
+                # Promo kód (sdílený, vícenásobný) → 7 dní Pro + sleva na 3 měsíce
+                trial_days = int(inv.get("trial_days", TRIAL_DAYS))
+                rec["plan"] = "trial"
+                rec["trial_tier"] = inv.get("trial_tier", "pro")
+                rec["trial_ends"] = now + trial_days * 86400
+                rec["promo_code"] = invite
+                disc = int(inv.get("discount_pct", 0) or 0)
+                if disc:
+                    rec["discount_pct"] = disc
+                    rec["discount_until"] = now + int(inv.get("discount_months", 3)) * 30 * 86400
+                # Referral tracking – přidej uživatele k seznamu kódu
+                uses = inv.get("uses") or []
+                uses.append({"email": email, "ts": now})
+                inv["uses"] = uses
+                kv_set_json(f"invite:{invite}", inv)
 
         salt, ph = hash_password(password)
-        rec = {"salt": salt, "hash": ph, "created": now, "plan": plan, "email": email}
-        if trial_ends:
-            rec["trial_ends"] = trial_ends
+        rec["salt"], rec["hash"] = salt, ph
         kv_set_json(f"user:{email}", rec)
         kv_set_json(f"portfolio:{email}", {"watchlist": [], "positions": {}, "alerts": []})
         kv_sadd("users", email)
-        send_welcome_email(email)
+        send_welcome_email(email, effective_plan(rec))
         return jsonify({"ok": True, "token": make_token(email), "user": email,
                         "subscription": subscription_info(email, rec)})
     except Exception as e:
@@ -843,7 +873,7 @@ def admin_set_plan():
     username = _norm_user(body.get("username"))
     plan = (body.get("plan") or "").strip().lower()
     days = body.get("days")
-    if plan not in VALID_PLANS and plan not in ("comped", "trial"):
+    if plan not in VALID_PLANS and plan not in ("comped", "trial", "none"):
         return jsonify({"ok": False, "error": "Neplatný plán."}), 400
     try:
         rec = kv_get_json(f"user:{username}")
@@ -851,10 +881,11 @@ def admin_set_plan():
             return jsonify({"ok": False, "error": "Uživatel neexistuje."}), 404
         rec["plan"] = plan
         now = int(time.time())
-        if plan in ("trader", "pro"):
+        if plan in VALID_PLANS:
             rec["plan_until"] = (now + int(days) * 86400) if days else None
         elif plan == "trial":
             rec["trial_ends"] = now + int(days or TRIAL_DAYS) * 86400
+            rec["trial_tier"] = "pro"
         elif plan == "comped":
             rec["plan_until"] = None
         kv_set_json(f"user:{username}", rec)
@@ -887,30 +918,55 @@ def admin_invites():
     try:
         if request.method == "POST":
             body = request.get_json(silent=True) or {}
+            ctype = "promo" if (body.get("type") == "promo") else "comped"
+            now = int(time.time())
+            base = {"created": now, "type": ctype}
+            if ctype == "comped":
+                base["used_by"] = None
+            else:
+                base["uses"] = []
+                base["trial_tier"] = "pro"
+                base["trial_days"] = int(body.get("trial_days", TRIAL_DAYS))
+                base["discount_pct"] = int(body.get("discount_pct", 20))
+                base["discount_months"] = int(body.get("discount_months", 3))
+
             custom = (body.get("code") or "").strip().lower()
             if custom:
-                # Vlastní pojmenovaný kód (např. tom5, klara10)
                 if not re.match(r"^[a-z0-9_-]{2,24}$", custom):
                     return jsonify({"ok": False, "error": "Název kódu: 2–24 znaků (a–z, 0–9, _ -)."}), 400
                 if kv_get_json(f"invite:{custom}"):
                     return jsonify({"ok": False, "error": "Takový kód už existuje."}), 409
-                kv_set_json(f"invite:{custom}", {"created": int(time.time()), "used_by": None})
+                kv_set_json(f"invite:{custom}", base)
                 kv_sadd("invites", custom)
                 return jsonify({"ok": True, "created": [custom]})
+
             count = max(1, min(int(body.get("count", 1)), 20))
             created = []
             for _ in range(count):
-                code = secrets.token_hex(4)  # 8 znaků
-                kv_set_json(f"invite:{code}", {"created": int(time.time()), "used_by": None})
+                code = secrets.token_hex(4)
+                kv_set_json(f"invite:{code}", dict(base))
                 kv_sadd("invites", code)
                 created.append(code)
             return jsonify({"ok": True, "created": created})
-        # GET – seznam kódů
+
+        # GET – seznam kódů + referral (kdo přišel a jaký má plán)
         out = []
         for code in kv_smembers("invites"):
             inv = kv_get_json(f"invite:{code}") or {}
-            out.append({"code": code, "used_by": inv.get("used_by"),
-                        "created": inv.get("created"), "used_at": inv.get("used_at")})
+            ctype = inv.get("type", "comped")
+            item = {"code": code, "type": ctype, "created": inv.get("created"),
+                    "discount_pct": inv.get("discount_pct")}
+            if ctype == "comped":
+                item["used_by"] = inv.get("used_by")
+            else:
+                referrals = []
+                for u in (inv.get("uses") or []):
+                    ur = kv_get_json(f"user:{u.get('email')}") or {}
+                    referrals.append({"email": u.get("email"), "ts": u.get("ts"),
+                                      "plan": effective_plan(ur)})
+                item["referrals"] = referrals
+                item["referral_count"] = len(referrals)
+            out.append(item)
         out.sort(key=lambda x: x.get("created") or 0, reverse=True)
         return jsonify({"ok": True, "invites": out})
     except Exception as e:
@@ -1384,8 +1440,8 @@ def deep_analysis(ticker):
         return jsonify({"ok": False, "error": "Analytický motor zatím není nastavený."}), 503
     try:
         rec = kv_get_json(f"user:{user}")
-        if effective_plan(rec) != "pro":
-            return jsonify({"ok": False, "error": "Hloubková analýza je součástí plánu Pro.", "upgrade": True}), 402
+        if PLAN_RANK.get(effective_plan(rec), -1) < PLAN_RANK["elite"]:
+            return jsonify({"ok": False, "error": "Hloubková analýza je součástí plánu Elite.", "upgrade": True}), 402
 
         # Denní limit
         ukey = f"usage:{user}:{_today()}"
