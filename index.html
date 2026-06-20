@@ -319,6 +319,28 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 
 .port-empty {color:var(--text2); font-size:13.5px; line-height:1.6; background:rgba(255,255,255,0.03); border:1px dashed var(--border); border-radius:14px; padding:18px 20px;}
 
+/* ===== Úroveň investora + začátečnické portfolio ===== */
+.level-row {display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
+.level-lbl {font-size:13px; color:var(--text2); display:flex; align-items:center; gap:6px;}
+.level-btn {padding:7px 14px; border-radius:20px; border:1px solid var(--border); background:var(--bg-glass); color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; transition:all .2s;}
+.level-btn:hover {border-color:var(--accent); color:var(--text);}
+.level-btn.active {background:var(--accent); border-color:var(--accent); color:#000; font-weight:600;}
+.starter-box {background:linear-gradient(135deg, rgba(0,200,150,0.07), rgba(124,77,255,0.05)); border:1px solid var(--border-accent); border-radius:18px; padding:20px; margin-bottom:22px;}
+.starter-head {font-family:var(--fh); font-size:18px; font-weight:700; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.starter-head i {color:var(--accent);}
+.starter-sub {font-size:12.5px; color:var(--text2); margin:4px 0 14px; line-height:1.5;}
+.starter-grid {display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:10px;}
+.starter-item {background:var(--bg-glass); border:1px solid var(--border); border-radius:14px; padding:12px 14px;}
+.starter-sector {font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--accent); font-weight:700;}
+.starter-tkr {font-family:var(--fh); font-weight:700; font-size:16px; margin:3px 0 1px;}
+.starter-name {font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.starter-add {margin-top:8px; width:100%; padding:7px; border-radius:9px; border:1px solid var(--border); background:transparent; color:var(--accent); cursor:pointer; font-family:var(--fb); font-size:12px; font-weight:600; transition:all .2s;}
+.starter-add:hover {background:var(--accent-glow); border-color:var(--accent);}
+.starter-add.added {color:var(--up); border-color:var(--up); cursor:default;}
+.starter-actions {margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;}
+
+/* ============ NAVIGACE SEKCÍ (taby) ============ */
+
 /* ============ NAVIGACE SEKCÍ (taby) ============ */
 .dash-tabs {display:flex; gap:8px; margin-bottom:2rem; background:var(--bg-glass); border:1px solid var(--border); padding:6px; border-radius:18px; overflow-x:auto;}
 .dash-tab {flex:1; min-width:max-content; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px 18px; border:none; background:transparent; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:14px; font-weight:600; border-radius:13px; transition:all .2s; white-space:nowrap;}
@@ -381,10 +403,20 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .opp-c-top {display:flex; align-items:center; gap:10px; margin-bottom:8px;}
 .opp-score {min-width:46px; height:46px; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:var(--fh); font-weight:800; font-size:18px; line-height:1; color:#fff;}
 .opp-score small {font-size:8px; font-weight:600; opacity:.85; letter-spacing:.5px;}
-.opp-score.t-EXTRÉMNÍ {background:linear-gradient(135deg,#ff2d6e,#ff7a45);}
-.opp-score.t-VYSOKÁ {background:linear-gradient(135deg,#ff7a45,#ffb347);}
-.opp-score.t-ZVÝŠENÁ {background:linear-gradient(135deg,#7c4dff,#9c6bff);}
-.opp-score.t-SLEDOVAT {background:rgba(255,255,255,0.12); color:var(--text2);}
+.opp-score.p-high {background:linear-gradient(135deg,#00C853,#69F0AE); color:#062;}
+.opp-score.p-strong {background:linear-gradient(135deg,#7c4dff,#9c6bff);}
+.opp-score.p-mid {background:linear-gradient(135deg,#ff7a45,#ffb347);}
+.opp-score.p-low {background:rgba(255,255,255,0.12); color:var(--text2);}
+.opp-upside {margin:10px 0 6px; display:flex; align-items:baseline; gap:8px;}
+.opp-up-val {font-family:var(--fh); font-weight:800; font-size:26px; color:var(--up);}
+.opp-up-lbl {font-size:11px; color:var(--text2);}
+.opp-tier-lbl {margin-left:auto; font-size:11px; font-weight:700; padding:2px 8px; border-radius:8px;}
+.opp-tier-lbl.p-high {background:var(--up-glow); color:var(--up);}
+.opp-tier-lbl.p-strong {background:rgba(124,77,255,0.15); color:#b89bff;}
+.opp-tier-lbl.p-mid {background:rgba(255,122,69,0.15); color:#ff9d6e;}
+.opp-tier-lbl.p-low {background:rgba(255,255,255,0.06); color:var(--text2);}
+.opp-why {font-size:12.5px; line-height:1.5; color:var(--text); background:rgba(124,77,255,0.08); border:1px solid rgba(124,77,255,0.2); border-radius:10px; padding:9px 11px; margin-bottom:10px;}
+.opp-why i {color:#b89bff;}
 .opp-c-id {min-width:0;}
 .opp-c-tkr {font-family:var(--fh); font-weight:700; font-size:17px; color:var(--text);}
 .opp-c-name {font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;}
@@ -491,7 +523,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·b</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·c</div>
 
 <div class="container">
   
@@ -623,6 +655,13 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 
         <div class="sub-status" id="sub-status" style="display:none;"></div>
 
+        <div class="level-row">
+          <span class="level-lbl"><i class="ti ti-stairs"></i> Úroveň investora:</span>
+          <button class="level-btn" id="lvl-beginner" onclick="setLevel('beginner')">Začátečník</button>
+          <button class="level-btn" id="lvl-advanced" onclick="setLevel('advanced')">Pokročilý</button>
+        </div>
+        <p class="auth-hint" id="level-hint" style="text-align:left; margin:0 0 8px;"></p>
+
         <div class="auth-tabs" id="pf-subtabs" style="display:none;">
           <button class="auth-tab active" id="pftab-plans" onclick="setPfView('plans')">Předplatné</button>
           <button class="auth-tab" id="pftab-admin" onclick="setPfView('admin')" style="display:none;">Admin</button>
@@ -673,12 +712,12 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 
     <!-- SEKCE: PŘÍLEŽITOSTI -->
     <div class="dash-section" id="section-opportunities" style="display:none;">
-    <!-- SCANNER PŘÍLEŽITOSTÍ ("crazy opportunities") -->
+    <!-- SCANNER PŘÍLEŽITOSTÍ – Potenciál -->
     <div class="opp-box" id="opp-box">
       <div class="opp-head">
         <div class="opp-title">
-          <i class="ti ti-rocket"></i> Scanner příležitostí
-          <span class="opp-sub">Šílené pohyby trhu — výbuchy, objemové spiky &amp; moonshoty</span>
+          <i class="ti ti-target-arrow"></i> Příležitosti s potenciálem
+          <span class="opp-sub">Náš model hledá akcie s největším <b>prostorem vyrůst</b> — ne to, co už vystřelilo. U top titulů AI vysvětlí, proč.</span>
         </div>
         <div class="opp-actions">
           <span class="opp-updated" id="opp-updated"></span>
@@ -687,19 +726,19 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
       </div>
       <div class="opp-filters" id="opp-filters">
         <button class="opp-chip active" data-mode="all" onclick="setOppMode('all', this)">🌐 Vše</button>
-        <button class="opp-chip" data-mode="gainers" onclick="setOppMode('gainers', this)">🚀 Raketové pohyby</button>
-        <button class="opp-chip" data-mode="small" onclick="setOppMode('small', this)">💎 Small-cap / Moonshoty</button>
-        <button class="opp-chip" data-mode="active" onclick="setOppMode('active', this)">🔥 Nejaktivnější</button>
-        <label class="opp-toggle"><input type="checkbox" id="opp-moonshot-only" onchange="renderOpportunities()"> Jen moonshoty</label>
+        <button class="opp-chip" data-mode="value" onclick="setOppMode('value', this)">💎 Podhodnocené</button>
+        <button class="opp-chip" data-mode="growth" onclick="setOppMode('growth', this)">🚀 Růstové tech</button>
+        <button class="opp-chip" data-mode="small" onclick="setOppMode('small', this)">🏢 Small-cap prostor</button>
       </div>
       <div class="opp-grid" id="opp-grid">
-        <div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh napříč burzami...</div>
+        <div class="opp-loading"><i class="ti ti-loader spin"></i> Hledám příležitosti s potenciálem...</div>
       </div>
     </div>
     </div><!-- /section-opportunities -->
 
     <!-- SEKCE: MOJE PORTFOLIO -->
     <div class="dash-section" id="section-portfolio">
+      <div id="starter-card"></div>
       <div class="ps-toolbar" id="ps-toolbar">
         <span class="live-badge" id="live-badge" style="display:none;"><i class="ti ti-point-filled"></i> LIVE</span>
         <button class="tool-btn" onclick="requestNotif()"><i class="ti ti-bell"></i> Notifikace</button>
@@ -935,6 +974,16 @@ let authUser = localStorage.getItem('mystocks_user') || null;
 let cloudEnabled = false;
 let authTab = 'login';
 let syncTimer = null;
+
+// Úroveň investora (začátečník/pokročilý) + diverzifikované začátečnické portfolio
+let investorLevel = localStorage.getItem('mystocks_level') || 'advanced';
+const STARTER = [
+    { t: 'AAPL', s: 'Technologie', n: 'Apple' },
+    { t: 'JNJ', s: 'Zdravotnictví', n: 'Johnson & Johnson' },
+    { t: 'JPM', s: 'Finance', n: 'JPMorgan Chase' },
+    { t: 'PG', s: 'Spotřební zboží', n: 'Procter & Gamble' },
+    { t: 'XOM', s: 'Energie', n: 'Exxon Mobil' },
+];
 
 // Předplatné
 let mySub = null;                       // {plan, effective, trial_ends, days_left, is_admin, ...}
@@ -1228,9 +1277,10 @@ function switchTab(name) {
         if (sec) sec.style.display = (s === name) ? 'block' : 'none';
         if (tab) tab.classList.toggle('active', s === name);
     });
-    // Portfolio: překresli souhrn (graf alokace potřebuje viditelný kontejner)
-    if (name === 'portfolio' && lastWatchlistData && lastWatchlistData.length) {
-        renderPortfolioSummary(lastWatchlistData);
+    // Portfolio: překresli souhrn (graf alokace potřebuje viditelný kontejner) + začátečnické portfolio
+    if (name === 'portfolio') {
+        renderStarter();
+        if (lastWatchlistData && lastWatchlistData.length) renderPortfolioSummary(lastWatchlistData);
     }
     // Zamykání sekcí podle plánu
     if (name === 'opportunities') {
@@ -1356,6 +1406,7 @@ function renderProfileView() {
 
     authView.style.display = 'none';
     pfView.style.display = 'block';
+    renderLevelButtons();
     if (authToken) {
         acct.style.display = 'flex';
         localNote.style.display = 'none';
@@ -1527,6 +1578,71 @@ async function submitReset() {
     }
 }
 
+// ====================== ÚROVEŇ INVESTORA + ZAČÁTEČNICKÉ PORTFOLIO ======================
+function renderLevelButtons() {
+    document.getElementById('lvl-beginner').classList.toggle('active', investorLevel === 'beginner');
+    document.getElementById('lvl-advanced').classList.toggle('active', investorLevel === 'advanced');
+    document.getElementById('level-hint').textContent = investorLevel === 'beginner'
+        ? 'V záložce „Moje portfolio" ti připravíme 5 ověřených akcií napříč sektory.'
+        : 'Plný režim bez doporučení pro začátečníky.';
+}
+
+function setLevel(lvl) {
+    investorLevel = lvl;
+    localStorage.setItem('mystocks_level', lvl);
+    renderLevelButtons();
+    renderStarter();
+    showToast(lvl === 'beginner' ? 'Úroveň: Začátečník' : 'Úroveň: Pokročilý', 'up', 'ti-stairs');
+}
+
+function renderStarter() {
+    const box = document.getElementById('starter-card');
+    if (!box) return;
+    if (investorLevel !== 'beginner') { box.innerHTML = ''; return; }
+    const items = STARTER.map(x => {
+        const owned = myStocks.includes(x.t);
+        return `<div class="starter-item">
+            <div class="starter-sector">${x.s}</div>
+            <div class="starter-tkr">${x.t}</div>
+            <div class="starter-name">${x.n}</div>
+            <button class="starter-add ${owned ? 'added' : ''}" onclick="event.stopPropagation(); addStarter('${x.t}')">
+                ${owned ? '<i class="ti ti-check"></i> Přidáno' : '<i class="ti ti-plus"></i> Přidat'}
+            </button>
+        </div>`;
+    }).join('');
+    box.innerHTML = `<div class="starter-box">
+        <div class="starter-head"><i class="ti ti-seeding"></i> Začni tady — portfolio pro začátečníky</div>
+        <div class="starter-sub">5 ověřených firem, každá z <b>jiného sektoru</b> (diverzifikace = nižší riziko). Přidej si je do sledování a sleduj, jak se vyvíjejí.</div>
+        <div class="starter-grid">${items}</div>
+        <div class="starter-actions">
+            <button class="btn-primary" style="flex:none; display:inline-flex; align-items:center; gap:6px;" onclick="addAllStarter()"><i class="ti ti-stack-2"></i> Přidat všech 5</button>
+        </div>
+    </div>`;
+}
+
+function addStarter(ticker) {
+    if (!myStocks.includes(ticker)) {
+        myStocks.push(ticker);
+        localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
+        cloudSync();
+        showToast(`${ticker} přidán do sledování`, 'up', 'ti-plus');
+        loadWatchlist();
+    }
+    renderStarter();
+}
+
+function addAllStarter() {
+    let added = 0;
+    STARTER.forEach(x => { if (!myStocks.includes(x.t)) { myStocks.push(x.t); added++; } });
+    if (added) {
+        localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
+        cloudSync();
+        showToast(`Přidáno ${added} akcií do sledování`, 'up', 'ti-stack-2');
+        loadWatchlist();
+    }
+    renderStarter();
+}
+
 // ====================== CENÍK PŘEDPLATNÉHO ======================
 const PLANS = [
     { id: 'start', name: 'Start', price: '0 €', period: 'zdarma', feats: [
@@ -1611,8 +1727,14 @@ function renderAdmin(users, invites) {
 
     document.getElementById('pfview-admin').innerHTML = `
         <div class="admin-sub"><i class="ti ti-ticket" style="color:var(--accent)"></i> <b>Zvací kódy</b>
-            <button class="tool-btn" style="margin-left:auto;" onclick="genInvites(1)"><i class="ti ti-plus"></i> Vygenerovat kód</button>
-            <button class="tool-btn" onclick="genInvites(5)"><i class="ti ti-plus"></i> 5 kódů</button>
+            <button class="tool-btn" style="margin-left:auto;" onclick="genInvites(1)"><i class="ti ti-dice"></i> Náhodný</button>
+            <button class="tool-btn" onclick="genInvites(5)"><i class="ti ti-plus"></i> 5 náhodných</button>
+        </div>
+        <div style="display:flex; gap:8px; margin:10px 0; flex-wrap:wrap;">
+            <input id="invite-name" placeholder="vlastní název, např. tom5" maxlength="24"
+                   style="flex:1; min-width:160px; padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text); font-family:var(--fb);"
+                   onkeydown="if(event.key==='Enter') genNamedInvite()">
+            <button class="btn-primary" style="flex:none; display:inline-flex; align-items:center; gap:6px;" onclick="genNamedInvite()"><i class="ti ti-plus"></i> Vytvořit kód</button>
         </div>
         <div class="admin-invites">${chips}</div>
 
@@ -1632,6 +1754,20 @@ async function genInvites(count) {
         const d = await r.json();
         if (d.ok) { showToast(`Vygenerováno ${d.created.length} kódů`, 'up', 'ti-ticket'); loadAdmin(); }
     } catch (e) { showToast('Nepodařilo se vygenerovat kódy', 'down', 'ti-x'); }
+}
+
+async function genNamedInvite() {
+    const inp = document.getElementById('invite-name');
+    const name = (inp.value || '').trim().toLowerCase();
+    if (!name) { showToast('Zadej název kódu', 'down', 'ti-x'); return; }
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/admin/invites`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ code: name })
+        });
+        const d = await r.json();
+        if (d.ok) { showToast(`Kód „${d.created[0]}" vytvořen`, 'up', 'ti-ticket'); inp.value = ''; loadAdmin(); }
+        else showToast(d.error || 'Nepodařilo se', 'down', 'ti-x');
+    } catch (e) { showToast('Chyba při vytváření kódu', 'down', 'ti-x'); }
 }
 
 async function adminSetPlan(username, plan) {
@@ -1665,6 +1801,7 @@ function copyText(t) {
 // ====================== ZÁMEK (ochrana heslem) ======================
 async function startApp() {
     await initAccount();
+    renderStarter();
     loadWatchlist();
 }
 
@@ -1763,46 +1900,52 @@ async function loadOpportunities() {
     }
 }
 
+function tierClass(tier) {
+    return ({ 'VYSOKÝ POTENCIÁL': 'p-high', 'SILNÝ': 'p-strong', 'ZAJÍMAVÝ': 'p-mid', 'SLEDOVAT': 'p-low' })[tier] || 'p-low';
+}
+
 function renderOpportunities() {
     const grid = document.getElementById('opp-grid');
-    const moonOnly = document.getElementById('opp-moonshot-only')?.checked;
-    let list = oppData.slice();
-    if(moonOnly) list = list.filter(o => o.moonshot);
-
+    const list = oppData.slice();
     if(!list.length) {
-        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">${moonOnly ? 'Žádné moonshoty zrovna nesvítí. Zkus jiný filtr.' : 'Žádné příležitosti k zobrazení.'}</div>`;
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Žádné příležitosti k zobrazení. Zkus jiný filtr nebo Skenovat.</div>`;
         return;
     }
 
     grid.innerHTML = list.map((o, i) => {
-        const up = (o.change_pct || 0) >= 0;
-        const badges = (o.badges || []).slice(0, 4).map(b =>
+        const badges = (o.badges || []).slice(0, 3).map(b =>
             `<span class="opp-badge ${b.k}">${b.t}</span>`).join('');
         const yr = o.year_pct;
         const yrTxt = (yr || yr === 0) ? `${yr >= 0 ? '+' : ''}${yr.toFixed(0)}%` : '—';
+        const why = o.why ? `<div class="opp-why"><i class="ti ti-sparkles"></i> ${escapeHtml(o.why)}</div>` : '';
         return `
-        <div class="opp-card ${o.moonshot ? 'moon':''}" onclick="loadStockDetail('${o.ticker}')" title="${o.exchange || ''}">
+        <div class="opp-card" onclick="loadStockDetail('${o.ticker}')" title="${o.exchange || ''}">
             <span class="opp-rank">#${i+1}</span>
             <div class="opp-c-top">
-                <div class="opp-score t-${o.tier}">${o.score}<small>${o.tier}</small></div>
+                <div class="opp-score ${tierClass(o.tier)}">${o.score}<small>POTENCIÁL</small></div>
                 <div class="opp-c-id">
                     <div class="opp-c-tkr">${o.ticker}</div>
                     <div class="opp-c-name">${o.name || ''}</div>
                 </div>
             </div>
-            <div class="opp-c-px">
-                <span class="opp-c-price">${(o.price ?? 0).toFixed(o.price < 10 ? 4 : 2)} <span style="font-size:11px;color:var(--text2)">${o.currency||''}</span></span>
-                <span class="opp-c-chg ${up?'up':'down'}">${up?'▲':'▼'} ${up?'+':''}${(o.change_pct||0).toFixed(1)}%</span>
+            <div class="opp-upside">
+                <span class="opp-up-val">+${(o.upside ?? 0).toFixed(0)}%</span>
+                <span class="opp-up-lbl">potenciál k ročnímu maximu</span>
             </div>
+            <div class="opp-c-px">
+                <span class="opp-c-price">${(o.price ?? 0).toFixed(o.price < 10 ? 2 : 2)} <span style="font-size:11px;color:var(--text2)">${o.currency||''}</span></span>
+                <span class="opp-tier-lbl ${tierClass(o.tier)}">${o.tier}</span>
+            </div>
+            ${why}
             <div class="opp-badges">${badges}</div>
             <div class="opp-c-stats">
                 <div class="opp-stat"><span class="l">Kapitalizace</span><span class="v">${fmtCap(o.market_cap)}</span></div>
-                <div class="opp-stat"><span class="l">Objem</span><span class="v">${fmtVol(o.volume)}${o.vol_ratio ? ` · ${o.vol_ratio}×` : ''}</span></div>
+                <div class="opp-stat"><span class="l">Roční max</span><span class="v">${o.high52 ? o.high52.toFixed(2) : '—'}</span></div>
                 <div class="opp-stat"><span class="l">Za rok</span><span class="v" style="color:${(yr||0)>=0?'var(--up)':'var(--down)'}">${yrTxt}</span></div>
             </div>
         </div>`;
     }).join('') +
-    `<div class="opp-disclaimer" style="grid-column:1/-1;"><i class="ti ti-alert-triangle"></i> Vysoce volatilní tituly — extrémní pohyby znamenají extrémní riziko. Není to investiční doporučení, jen scanner. Vždy si udělej vlastní průzkum.</div>`;
+    `<div class="opp-disclaimer" style="grid-column:1/-1;"><i class="ti ti-info-circle"></i> „Potenciál" = náš model odhadu prostoru k růstu (hlavně k ročnímu maximu). Není to investiční doporučení — vždy si udělej vlastní průzkum.</div>`;
 }
 
 // --- VYKRESLENÍ KARET: rozdělení na Moje pozice vs Sledované ---

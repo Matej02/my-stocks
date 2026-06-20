@@ -886,8 +886,18 @@ def admin_invites():
         return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
     try:
         if request.method == "POST":
-            count = int((request.get_json(silent=True) or {}).get("count", 1))
-            count = max(1, min(count, 20))
+            body = request.get_json(silent=True) or {}
+            custom = (body.get("code") or "").strip().lower()
+            if custom:
+                # Vlastní pojmenovaný kód (např. tom5, klara10)
+                if not re.match(r"^[a-z0-9_-]{2,24}$", custom):
+                    return jsonify({"ok": False, "error": "Název kódu: 2–24 znaků (a–z, 0–9, _ -)."}), 400
+                if kv_get_json(f"invite:{custom}"):
+                    return jsonify({"ok": False, "error": "Takový kód už existuje."}), 409
+                kv_set_json(f"invite:{custom}", {"created": int(time.time()), "used_by": None})
+                kv_sadd("invites", custom)
+                return jsonify({"ok": True, "created": [custom]})
+            count = max(1, min(int(body.get("count", 1)), 20))
             created = []
             for _ in range(count):
                 code = secrets.token_hex(4)  # 8 znaků
@@ -928,10 +938,10 @@ def yahoo_screener(scr_id, count=30):
     return res[0].get("quotes", []) or []
 
 
-def opportunity_score(q):
-    """Skóre 'výbušnosti' 0-100 + odznaky. Odměňuje denní výbuch, objemový spike,
-    roční momentum, malou kapitalizaci (prostor 10x) a blízkost průlomu."""
-    day = _qf(q, "regularMarketChangePercent", 0) or 0
+def potential_score(q):
+    """Vlastní 'Potenciál' 0-100 – kolik PROSTORU akcie má vyrůst (ne kolik už vyrostla).
+    Kombinuje upside k ročnímu maximu, zdravou pozici v pásmu, prostor dle velikosti,
+    rozumný roční trend a rostoucí zájem. Vrací (skóre, úroveň, odznaky, upside%, vol_ratio)."""
     price = _qf(q, "regularMarketPrice", 0) or 0
     vol = _qf(q, "regularMarketVolume", 0) or 0
     avg = _qf(q, "averageDailyVolume3Month", 0) or _qf(q, "averageDailyVolume10Day", 0) or 0
@@ -940,80 +950,104 @@ def opportunity_score(q):
     hi52 = _qf(q, "fiftyTwoWeekHigh", 0) or 0
     lo52 = _qf(q, "fiftyTwoWeekLow", 0) or 0
 
+    upside = ((hi52 - price) / price * 100) if (hi52 and price) else 0
+    pos = ((price - lo52) / (hi52 - lo52)) if (hi52 and lo52 and hi52 > lo52) else 0.5
     vol_ratio = (vol / avg) if avg else 0
     badges = []
     score = 0.0
 
-    # 1) Denní výbuch (až 35 b.) – 100% za den = strop
-    score += min(abs(day), 100) / 100 * 35
-    if day >= 100:
-        badges.append({"t": f"🚀 +{day:.0f}% DNES", "k": "extreme"})
-    elif day >= 30:
-        badges.append({"t": f"🚀 +{day:.0f}% dnes", "k": "hot"})
-    elif day >= 10:
-        badges.append({"t": f"📈 +{day:.0f}% dnes", "k": "up"})
-    elif day <= -10:
-        badges.append({"t": f"📉 {day:.0f}% dnes", "k": "down"})
+    # 1) Upside k ročnímu maximu (hlavní, až 45 b.)
+    score += min(max(upside, 0), 120) / 120 * 45
+    if upside >= 80:
+        badges.append({"t": f"🎯 Potenciál +{upside:.0f}%", "k": "extreme"})
+    elif upside >= 35:
+        badges.append({"t": f"🎯 Potenciál +{upside:.0f}%", "k": "hot"})
+    elif upside >= 12:
+        badges.append({"t": f"🎯 Potenciál +{upside:.0f}%", "k": "up"})
 
-    # 2) Objemový spike (až 25 b.) – kolikrát nad průměrem
-    score += min(vol_ratio, 12) / 12 * 25
-    if vol_ratio >= 5:
-        badges.append({"t": f"🔥 Objem {vol_ratio:.0f}× průměr", "k": "hot"})
-    elif vol_ratio >= 2:
-        badges.append({"t": f"🔥 Objem {vol_ratio:.1f}× průměr", "k": "up"})
+    # 2) Zdravá pozice (ne padající nůž) (až 20 b.)
+    if 0.2 <= pos <= 0.7:
+        score += 20; badges.append({"t": "✅ Zdravá zóna", "k": "up"})
+    elif 0.7 < pos <= 0.85:
+        score += 12
+    elif pos < 0.2:
+        score += 6; badges.append({"t": "⚠️ U dna – vyšší riziko", "k": "down"})
 
-    # 3) Roční momentum (až 15 b.) – už běží
-    score += max(min(yr, 1000), 0) / 1000 * 15
-    if yr >= 500:
-        badges.append({"t": f"💥 +{yr:.0f}% za rok", "k": "extreme"})
-    elif yr >= 100:
-        badges.append({"t": f"📈 +{yr:.0f}% za rok", "k": "up"})
-
-    # 4) Malá kapitalizace = prostor pro 10x (až 15 b.)
-    if mcap and mcap < 50e6:
-        score += 15; badges.append({"t": "💎 Nano-cap", "k": "gem"})
-    elif mcap and mcap < 300e6:
-        score += 12; badges.append({"t": "💎 Micro-cap", "k": "gem"})
-    elif mcap and mcap < 2e9:
-        score += 8; badges.append({"t": "Small-cap", "k": "neutral"})
+    # 3) Prostor dle velikosti (až 15 b.)
+    if mcap and mcap < 2e9:
+        score += 15; badges.append({"t": "🏢 Small-cap prostor", "k": "gem"})
     elif mcap and mcap < 10e9:
-        score += 4
+        score += 10; badges.append({"t": "Mid-cap", "k": "neutral"})
+    elif mcap and mcap < 50e9:
+        score += 6
+    elif mcap:
+        score += 3; badges.append({"t": "Blue-chip", "k": "neutral"})
 
-    # 5) Blízkost průlomu / pozice v 52T pásmu (až 10 b.)
-    if hi52 and lo52 and hi52 > lo52 and price:
-        pos = (price - lo52) / (hi52 - lo52)
-        if pos >= 0.9:
-            score += 10; badges.append({"t": "⚡ Průlom k ATH", "k": "hot"})
-        elif pos <= 0.15:
-            score += 5; badges.append({"t": "🩹 U dna 52T", "k": "down"})
+    # 4) Rozumný roční trend (až 12 b.) – odměň stabilní, potrestej kolaps
+    if -25 <= yr <= 70:
+        score += 12
+    elif yr > 70:
+        score += 6
+    elif yr < -60:
+        score -= 6; badges.append({"t": f"📉 {yr:.0f}% za rok", "k": "down"})
+    else:
+        score += 8
 
-    # Moonshot heuristika: malá firma + objemový spike + denní výbuch
-    moonshot = bool(mcap and mcap < 300e6 and vol_ratio >= 3 and day >= 15)
-    if moonshot:
-        badges.append({"t": "🌙 Moonshot potenciál", "k": "extreme"})
+    # 5) Rostoucí zájem / objem (až 8 b.)
+    score += min(vol_ratio, 3) / 3 * 8
+    if vol_ratio >= 2:
+        badges.append({"t": f"🔥 Zvýšený objem {vol_ratio:.1f}×", "k": "hot"})
 
     score = max(0, min(100, round(score)))
-    if score >= 80:
-        tier = "EXTRÉMNÍ"
-    elif score >= 65:
-        tier = "VYSOKÁ"
-    elif score >= 50:
-        tier = "ZVÝŠENÁ"
+    if score >= 75:
+        tier = "VYSOKÝ POTENCIÁL"
+    elif score >= 60:
+        tier = "SILNÝ"
+    elif score >= 45:
+        tier = "ZAJÍMAVÝ"
     else:
         tier = "SLEDOVAT"
 
-    return score, tier, badges, vol_ratio, moonshot
+    return score, tier, badges, round(upside, 1), vol_ratio
+
+
+def opp_theses(top_items):
+    """Jedna AI věta 'proč může vyrůst' pro top tituly, kešováno na den (1 volání/den)."""
+    if not analysis_enabled() or not top_items:
+        return {}
+    date = _today()
+    cache = kv_get_json(f"oppthesis:{date}") or {}
+    missing = [it for it in top_items if it["ticker"] not in cache][:8]
+    if missing:
+        lines = [f'{it["ticker"]} ({it.get("name","")}): cena {it["price"]} {it.get("currency","")}, '
+                 f'potenciál +{it.get("upside",0)}% k ročnímu maximu, roční změna {it.get("year_pct",0)}%'
+                 for it in missing]
+        prompt = ("Jsi akciový analytik. Pro každou akcii napiš JEDNU údernou českou větu (max 16 slov), "
+                  "PROČ má potenciál výrazně vyrůst. Vrať POUZE validní JSON ve tvaru "
+                  '{"TICKER": "věta", ...}.\n\nAKCIE:\n' + "\n".join(lines))
+        res = call_llm(prompt)
+        if isinstance(res, dict):
+            for k, v in res.items():
+                if isinstance(v, str):
+                    cache[k.upper()] = v
+            try:
+                kv_set_json(f"oppthesis:{date}", cache)
+            except Exception:
+                pass
+    return cache
 
 
 @app.route("/api/opportunities")
 def get_opportunities():
-    """Scanner šílených příležitostí napříč více Yahoo screenery."""
+    """Scanner PŘÍLEŽITOSTÍ – vlastní 'Potenciál' (kolik prostoru akcie má vyrůst)
+    z podhodnocených/růstových screenerů + AI věta proč u top titulů."""
     mode = request.args.get("mode", "all")
     screen_map = {
-        "gainers": ["day_gainers"],
-        "small": ["small_cap_gainers", "aggressive_small_caps"],
-        "active": ["most_actives"],
-        "all": ["day_gainers", "small_cap_gainers", "aggressive_small_caps", "most_actives"],
+        "value": ["undervalued_growth_stocks", "undervalued_large_caps"],
+        "growth": ["growth_technology_stocks"],
+        "small": ["aggressive_small_caps", "small_cap_gainers"],
+        "all": ["undervalued_growth_stocks", "growth_technology_stocks",
+                "undervalued_large_caps", "aggressive_small_caps"],
     }
     scr_ids = screen_map.get(mode, screen_map["all"])
 
@@ -1025,9 +1059,13 @@ def get_opportunities():
                 if not sym or sym in seen:
                     continue
                 price = _qf(q, "regularMarketPrice", 0) or 0
-                if price <= 0:
+                yr = _qf(q, "fiftyTwoWeekChangePercent", 0) or 0
+                hi52 = _qf(q, "fiftyTwoWeekHigh", 0) or 0
+                upside = ((hi52 - price) / price * 100) if (hi52 and price) else 0
+                # Filtr kvality: žádné penny-junk, musí být prostor, ne totální kolaps
+                if price < 1.5 or upside < 8 or yr < -85:
                     continue
-                score, tier, badges, vol_ratio, moonshot = opportunity_score(q)
+                score, tier, badges, up, vol_ratio = potential_score(q)
                 seen[sym] = {
                     "ticker": sym,
                     "name": q.get("shortName") or q.get("displayName") or q.get("longName") or sym,
@@ -1037,25 +1075,37 @@ def get_opportunities():
                     "market_cap": _qf(q, "marketCap", None),
                     "volume": int(_qf(q, "regularMarketVolume", 0) or 0),
                     "vol_ratio": _round(vol_ratio, 1, 0),
-                    "year_pct": _round(_qf(q, "fiftyTwoWeekChangePercent", 0), 1, 0),
-                    "high52": _round(_qf(q, "fiftyTwoWeekHigh", None), 4),
+                    "year_pct": _round(yr, 1, 0),
+                    "upside": up,
+                    "high52": _round(hi52, 4),
                     "low52": _round(_qf(q, "fiftyTwoWeekLow", None), 4),
                     "exchange": q.get("fullExchangeName") or q.get("exchange") or "",
                     "score": score,
                     "tier": tier,
                     "badges": badges,
-                    "moonshot": moonshot,
                     "source": scr,
                 }
         except Exception:
             continue
 
-    items = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
+    items = sorted(seen.values(), key=lambda x: x["score"], reverse=True)[:40]
+
+    # AI věta 'proč' pro top tituly (kešováno na den)
+    try:
+        theses = opp_theses(items[:8])
+        for it in items[:8]:
+            w = theses.get(it["ticker"])
+            if w:
+                it["why"] = w
+    except Exception:
+        pass
+
     return jsonify({
         "ok": True,
         "count": len(items),
+        "ai": analysis_enabled(),
         "updated": datetime.now(timezone.utc).strftime("%H:%M:%S UTC"),
-        "results": items[:40],
+        "results": items,
     })
 
 
