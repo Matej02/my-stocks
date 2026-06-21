@@ -571,7 +571,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·l</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·m</div>
 
 <div class="container">
   
@@ -1838,13 +1838,17 @@ async function genInvites(type, count) {
     } catch (e) { showToast('Nepodařilo se', 'down', 'ti-x'); }
 }
 
-async function genNamedInvite() {
-    const inp = document.getElementById('invite-name');
+async function genNamedInvite(type) {
+    type = (type === 'promo') ? 'promo' : 'comped';
+    const inp = document.getElementById(type === 'promo' ? 'promo-name' : 'invite-name');
     const name = (inp.value || '').trim().toLowerCase();
     if (!name) { showToast('Zadej název kódu', 'down', 'ti-x'); return; }
+    const payload = (type === 'promo')
+        ? { code: name, type: 'promo', trial_days: 7, discount_pct: 20, discount_months: 3 }
+        : { code: name, type: 'comped' };
     try {
         const r = await fetch(`${BACKEND_URL}/api/admin/invites`, {
-            method: 'POST', headers: authHeaders(), body: JSON.stringify({ code: name })
+            method: 'POST', headers: authHeaders(), body: JSON.stringify(payload)
         });
         const d = await r.json();
         if (d.ok) { showToast(`Kód „${d.created[0]}" vytvořen`, 'up', 'ti-ticket'); inp.value = ''; loadAdmin(); }
