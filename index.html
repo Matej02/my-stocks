@@ -571,7 +571,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·k</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·l</div>
 
 <div class="container">
   
@@ -1677,10 +1677,12 @@ const PLANS = [
         ['Cenová upozornění + sync', 1], ['Příležitosti & analytici', 0], ['Hloubková AI analýza', 0] ] },
     { id: 'pro', name: 'Pro', price: '14,99 €', period: '/ měsíc', featured: true, feats: [
         ['Vše ze Start', 1], ['🎯 Příležitosti s potenciálem', 1], ['Doporučení analytiků & cílové ceny', 1],
-        ['Fundamenty (P/E, kapitalizace)', 1], ['Hloubková AI analýza', 0] ] },
+        ['Fundamenty (P/E, kapitalizace)', 1], ['🧠 Hloubková AI analýza (5/den)', 1],
+        ['AI chat, briefing & track record', 0] ] },
     { id: 'elite', name: 'Elite', price: '24,99 €', period: '/ měsíc', feats: [
-        ['Vše z Pro', 1], ['🧠 Hloubková AI analýza (neomezeně)', 1], ['AI „proč" u příležitostí', 1],
-        ['Track record signálů', 1], ['Prioritní novinky', 1] ] },
+        ['Vše z Pro', 1], ['🧠 Hloubková AI analýza (30/den)', 1], ['💬 AI chat o akcii', 1],
+        ['Tržní briefing & „co prodat/přikoupit"', 1], ['AI „proč" u příležitostí', 1],
+        ['Track record signálů', 1] ] },
 ];
 
 function renderPlans() {
@@ -2543,9 +2545,10 @@ async function runDeepAnalysis() {
         out.innerHTML = '<div class="deep-teaser">Pro hloubkovou analýzu se přihlas v profilu.</div>';
         openProfile(); return;
     }
-    if (!hasFeature('elite')) {
-        out.innerHTML = lockedCardHTML('Hloubková analýza', 'elite',
-            'Kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.');
+    if (!hasFeature('pro')) {
+        out.innerHTML = lockedCardHTML('Hloubková analýza', 'pro',
+            'Kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory. '
+            + 'V plánu Pro 5 analýz denně, v Elite 30 denně.');
         return;
     }
     btn.disabled = true;

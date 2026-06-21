@@ -1427,7 +1427,10 @@ def get_analyst(ticker):
 # ---------------------------------------------------------------------------
 # HLOUBKOVÁ ANALÝZA (server-side AI) + track record
 # ---------------------------------------------------------------------------
-PRO_DAILY_LIMIT = 30
+# Denní limit hloubkových AI analýz podle plánu.
+# Pro = "ochutnávka" (omezeně), Elite = plný limit. Admin jede na plný.
+PRO_DAILY_LIMIT = 5
+ELITE_DAILY_LIMIT = 30
 
 
 def _llm_creds():
@@ -1655,14 +1658,21 @@ def deep_analysis(ticker):
     try:
         rec = kv_get_json(f"user:{user}")
         is_admin = user in admin_users()
-        if not is_admin and PLAN_RANK.get(effective_plan(rec), -1) < PLAN_RANK["elite"]:
-            return jsonify({"ok": False, "error": "Hloubková analýza je součástí plánu Elite.", "upgrade": True}), 402
+        eff = effective_plan(rec)
+        if not is_admin and PLAN_RANK.get(eff, -1) < PLAN_RANK["pro"]:
+            return jsonify({"ok": False, "error": "Hloubková analýza je součástí plánů Pro a Elite.", "upgrade": True}), 402
 
-        # Denní limit
+        # Denní limit podle plánu: Pro = ochutnávka, Elite (a admin) = plný limit
+        is_elite = is_admin or PLAN_RANK.get(eff, -1) >= PLAN_RANK["elite"]
+        daily_limit = ELITE_DAILY_LIMIT if is_elite else PRO_DAILY_LIMIT
         ukey = f"usage:{user}:{_today()}"
         used = kv_get_json(ukey) or 0
-        if used >= PRO_DAILY_LIMIT:
-            return jsonify({"ok": False, "error": f"Denní limit {PRO_DAILY_LIMIT} analýz vyčerpán. Zkus to zítra."}), 429
+        if used >= daily_limit:
+            msg = (f"Denní limit {daily_limit} analýz vyčerpán. Zkus to zítra."
+                   if is_elite else
+                   f"Vyčerpal jsi denní limit {daily_limit} analýz plánu Pro. "
+                   f"Elite má {ELITE_DAILY_LIMIT}/den.")
+            return jsonify({"ok": False, "error": msg, "upgrade": not is_elite}), 429
 
         facts = gather_facts(ticker)
         report = call_llm(build_analysis_prompt(facts))
@@ -1685,7 +1695,7 @@ def deep_analysis(ticker):
         return jsonify({"ok": True, "ticker": facts["ticker"], "name": facts.get("name"),
                         "currency": facts.get("currency"), "price": facts.get("price"),
                         "report": report, "facts": facts,
-                        "used_today": used + 1, "daily_limit": PRO_DAILY_LIMIT})
+                        "used_today": used + 1, "daily_limit": daily_limit})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba analýzy: {e}"}), 500
 
