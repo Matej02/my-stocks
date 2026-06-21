@@ -607,7 +607,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·v</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·w</div>
 
 <div class="container">
   
@@ -1905,27 +1905,30 @@ async function adminBacktest() {
 
 function renderBacktest(res) {
     if (!res) return '<span style="color:var(--text2)">Zatím nespuštěno.</span>';
+    const ap = v => (v == null) ? '—' : `${v >= 0 ? '+' : ''}${v}%`;
     const row = (lbl, s, hl) => {
-        if (!s) return `<tr><td>${lbl}</td><td colspan="2" style="color:var(--text2)">—</td></tr>`;
+        if (!s) return `<tr><td>${lbl}</td><td colspan="3" style="color:var(--text2)">—</td></tr>`;
         const col = s.win_rate >= 55 ? 'var(--up)' : (s.win_rate >= 45 ? '#FFC400' : 'var(--down)');
         return `<tr${hl ? ' style="font-weight:700"' : ''}>
             <td>${lbl} <span style="color:var(--text2);font-weight:400">(${s.count})</span></td>
             <td style="text-align:right;color:${col}">${s.win_rate}%</td>
-            <td style="text-align:right;color:${s.avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${s.avg_return >= 0 ? '+' : ''}${s.avg_return}%</td></tr>`;
+            <td style="text-align:right;color:${s.avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${ap(s.avg_return)}</td>
+            <td style="text-align:right;color:${(s.alpha || 0) >= 0 ? 'var(--up)' : 'var(--down)'}">${ap(s.alpha)}</td></tr>`;
     };
     const b = res.buy, base = res.baseline;
     let edgeMsg = '';
     if (b && base) {
-        const edge = (b.avg_return - base.avg_return).toFixed(2);
-        const ok = b.avg_return > base.avg_return && b.win_rate > base.win_rate;
+        const dWin = (b.win_rate - base.win_rate).toFixed(1);
+        const dAlpha = (b.alpha != null && base.alpha != null) ? (b.alpha - base.alpha).toFixed(2) : null;
+        const ok = b.win_rate > base.win_rate && b.avg_return > base.avg_return;
         edgeMsg = `<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:${ok ? 'var(--up-glow)' : 'var(--down-glow)'};color:${ok ? 'var(--up)' : 'var(--down)'};font-size:12px;">
             ${ok ? '<i class="ti ti-circle-check"></i> Signál „Koupit" poráží baseline' : '<i class="ti ti-alert-triangle"></i> Signál „Koupit" zatím NEporáží baseline'}
-            (rozdíl prům. výnosu ${edge >= 0 ? '+' : ''}${edge} p.b.)</div>`;
+            (trefnost ${dWin >= 0 ? '+' : ''}${dWin} b.${dAlpha != null ? `, alfa ${dAlpha >= 0 ? '+' : ''}${dAlpha} b.` : ''})</div>`;
     }
     return `
-        <div style="font-size:11px;color:var(--text2);margin-bottom:6px">${res.ticker_count} titulů · ${res.sample_count} vzorků · horizont ${res.horizon_days} dní</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:6px">${res.ticker_count} titulů · ${res.sample_count} vzorků · horizont ${res.horizon_days} dní · ${escapeHtml(res.period || '')}</div>
         <table class="admin-table" style="font-size:12px">
-            <thead><tr><th>Signál</th><th style="text-align:right">Úspěšnost</th><th style="text-align:right">Prům. výnos</th></tr></thead>
+            <thead><tr><th>Signál</th><th style="text-align:right">Trefnost</th><th style="text-align:right">Výnos</th><th style="text-align:right">Alfa</th></tr></thead>
             <tbody>
                 ${row('🟢 Koupit (≥70)', res.buy, true)}
                 ${row('🟡 Držet (45–69)', res.hold)}
@@ -2759,10 +2762,12 @@ function renderDeepReport(d) {
         </div>` : '';
 
     // Důkaz úspěšnosti z backtestu (pokud je nacachovaný)
+    const alphaTxt = (btProof && btProof.buy && btProof.buy.alpha != null)
+        ? ` · poráží index o ${btProof.buy.alpha >= 0 ? '+' : ''}${btProof.buy.alpha} b.` : '';
     const proofHtml = (btProof && btProof.buy && btProof.buy.count) ? `
         <div class="deep-proof"><i class="ti ti-shield-check"></i>
-            <span>Ověřeno backtestem: signál <b>Koupit</b> měl <b>${btProof.buy.win_rate}%</b> úspěšnost na ${btProof.horizon_days} dní
-            <span class="dp-sub">(${btProof.sample_count} obchodů, ${btProof.ticker_count} akcií, bez nahlížení do budoucna)</span></span>
+            <span>Ověřeno backtestem: signál <b>Koupit</b> měl <b>${btProof.buy.win_rate}%</b> úspěšnost na ${btProof.horizon_days} dní${alphaTxt}
+            <span class="dp-sub">${btProof.period ? btProof.period + ', ' : ''}${btProof.sample_count} obchodů, ${btProof.ticker_count} akcií, bez nahlížení do budoucna</span></span>
         </div>` : '';
 
     document.getElementById('deep-output').innerHTML = `

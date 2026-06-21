@@ -1989,11 +1989,12 @@ def track_record():
 
 
 # ---------------------------------------------------------------------------
-# BACKTEST – poctivé ověření techniky na historii (win-rate, prům. výnos).
-# Backtestuje se technický Signal Score (máme historické ceny). Fundamenty se
+# BACKTEST – poctivé ověření techniky na historii (5 let, vč. medvědího 2022).
+# Backtestuje se technické setup skóre (máme historické ceny). Fundamenty se
 # zpětně (point-in-time) zdarma získat nedají, takže je do backtestu netaháme.
 # Žádný look-ahead: na každém dni počítáme skóre jen z dat DO toho dne a měříme
-# následný výnos za 'horizon' obchodních dní.
+# následný výnos za 'horizon' obchodních dní. Měříme i ALFU = výnos navíc proti
+# indexu (SPY), což se nedá ošálit býčím trhem.
 # ---------------------------------------------------------------------------
 # Široký, sektorově/velikostně rozmanitý US basket (ne jen mega-cap v býčím trhu),
 # aby byl backtest reprezentativní.
@@ -2005,59 +2006,86 @@ BACKTEST_BASKET = [
 ]
 
 
-def _backtest_ticker(ticker, horizon=20, step=5, max_days=504):
+def _fetch_series(ticker, rng="5y"):
+    """(dates, closes) z denních dat – dates jako 'YYYY-MM-DD' kvůli zarovnání s indexem."""
+    d = yahoo_chart(ticker, rng, "1d")
+    ts = d.get("timestamp") or []
+    cl = ((d.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+    dates, closes = [], []
+    for t, c in zip(ts, cl):
+        if c is not None:
+            dates.append(datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d"))
+            closes.append(c)
+    return dates, closes
+
+
+def _backtest_ticker(ticker, spy=None, horizon=10, step=5, max_days=1260):
+    """Vrací list (score, fwd_return%, excess_vs_SPY% | None)."""
     out = []
     try:
-        daily = yahoo_chart(ticker, "2y", "1d")
+        dates, closes = _fetch_series(ticker, "5y")
     except Exception:
         return out
-    dq = ((daily.get("indicators") or {}).get("quote") or [{}])[0]
-    closes = [c for c in (dq.get("close") or []) if c is not None]
-    vols = dq.get("volume") or []
     n = len(closes)
     if n < 210 + horizon:
         return out
     i = max(210, n - max_days)
     while i + horizon < n:
-        window = closes[:i + 1]
-        ind = compute_indicators(window, vols[:i + 1])
-        # Stejné skóre jako živý verdikt (technický pilíř) – aby backtest měřil
-        # přesně to, co model reálně dělá.
-        score = tech_setup_score(window[-1], ind)
+        ind = compute_indicators(closes[:i + 1], [])
+        score = tech_setup_score(closes[i], ind)  # stejné skóre jako živý verdikt
         if score is not None:
-            out.append((score, (closes[i + horizon] / closes[i] - 1) * 100))
+            fwd = (closes[i + horizon] / closes[i] - 1) * 100
+            exc = None
+            d0, dH = dates[i], dates[i + horizon]
+            if spy and d0 in spy and dH in spy and spy[d0]:
+                exc = fwd - (spy[dH] / spy[d0] - 1) * 100
+            out.append((score, fwd, exc))
         i += step
     return out
 
 
-def _bt_stats(rs):
-    if not rs:
+def _bt_stats(rows):
+    """rows = list (fwd, exc). Vrací trefnost, prům. výnos a alfu (vs index)."""
+    if not rows:
         return None
-    return {"count": len(rs),
-            "win_rate": round(sum(1 for r in rs if r > 0) / len(rs) * 100, 1),
-            "avg_return": round(sum(rs) / len(rs), 2)}
+    fwd = [r[0] for r in rows]
+    exc = [r[1] for r in rows if r[1] is not None]
+    s = {"count": len(fwd),
+         "win_rate": round(sum(1 for r in fwd if r > 0) / len(fwd) * 100, 1),
+         "avg_return": round(sum(fwd) / len(fwd), 2)}
+    if exc:
+        s["alpha"] = round(sum(exc) / len(exc), 2)
+        s["beat_index_rate"] = round(sum(1 for e in exc if e > 0) / len(exc) * 100, 1)
+    return s
 
 
-def run_backtest(tickers, horizon=20):
+def run_backtest(tickers, horizon=10):
+    try:
+        sd, sc = _fetch_series("SPY", "5y")
+        spy = dict(zip(sd, sc))
+    except Exception:
+        spy = {}
     samples, used = [], []
     for t in tickers:
-        s = _backtest_ticker(t, horizon)
+        s = _backtest_ticker(t, spy, horizon)
         if s:
             samples += s
             used.append(t)
     if not samples:
         return None
-    buys = [r for (sc, r) in samples if sc >= VERDICT_BUY]
-    holds = [r for (sc, r) in samples if VERDICT_SELL <= sc < VERDICT_BUY]
-    sells = [r for (sc, r) in samples if sc < VERDICT_SELL]
+    buys = [(fwd, exc) for (sc_, fwd, exc) in samples if sc_ >= VERDICT_BUY]
+    holds = [(fwd, exc) for (sc_, fwd, exc) in samples if VERDICT_SELL <= sc_ < VERDICT_BUY]
+    sells = [(fwd, exc) for (sc_, fwd, exc) in samples if sc_ < VERDICT_SELL]
     return {
-        "horizon_days": horizon,
+        "horizon_days": horizon, "period": "5 let (vč. propadu 2022)",
+        "benchmark": "SPY" if spy else None,
         "tickers": used, "ticker_count": len(used), "sample_count": len(samples),
         "buy": _bt_stats(buys), "hold": _bt_stats(holds), "sell": _bt_stats(sells),
-        "baseline": _bt_stats([r for (_, r) in samples]),
+        "baseline": _bt_stats([(fwd, exc) for (_, fwd, exc) in samples]),
         "generated": int(time.time()),
-        "note": f"Technické setup skóre (nákup poklesu v uptrendu), žádný look-ahead. "
-                f"Koupit = skóre ≥{VERDICT_BUY}, Prodat = <{VERDICT_SELL}.",
+        "note": f"Technické setup skóre (nákup poklesu v uptrendu), 5 let, žádný look-ahead. "
+                f"Koupit = skóre ≥{VERDICT_BUY}, Prodat = <{VERDICT_SELL}. "
+                f"Alfa = výnos navíc proti indexu (SPY).",
     }
 
 
@@ -2066,7 +2094,7 @@ def admin_backtest():
     if not _auth_admin():
         return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
     body = request.get_json(silent=True) or {}
-    horizon = max(5, min(int(body.get("horizon", 20) or 20), 120))
+    horizon = max(5, min(int(body.get("horizon", 10) or 10), 120))
     tickers = body.get("tickers") if isinstance(body.get("tickers"), list) else None
     tickers = [t.strip().upper() for t in (tickers or BACKTEST_BASKET) if str(t).strip()][:42]
     try:
