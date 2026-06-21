@@ -20,7 +20,9 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100vh;overflow-x:hidden;}
-body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50vw;background:radial-gradient(circle, var(--accent-glow) 0%, transparent 60%);filter:blur(100px);z-index:-1;opacity:0.25;pointer-events:none;}
+/* Statická záře pozadí. Bez velkého blur() (drahé na kompozici) – stejný efekt
+   dosažen měkkým radiálním gradientem, který GPU nemusí přepočítávat. */
+body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55vw;background:radial-gradient(circle, var(--accent-glow) 0%, transparent 55%);z-index:-1;opacity:0.22;pointer-events:none;}
 
 .container{max-width:1150px;margin:0 auto;padding:2rem;}
 
@@ -32,7 +34,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 
 /* LIVE SEARCH */
 .search-box {position:relative; width: 450px;}
-.search-box input {width:100%; padding:14px 20px 14px 45px; background:var(--bg-glass); backdrop-filter: blur(10px); border:1px solid var(--border); border-radius:30px; color:var(--text); font-family:var(--fb); font-size:16px; outline:none; transition:all 0.3s;}
+.search-box input {width:100%; padding:14px 20px 14px 45px; background:#12141c; border:1px solid var(--border); border-radius:30px; color:var(--text); font-family:var(--fb); font-size:16px; outline:none; transition:all 0.3s;}
 .search-box input:focus {border-color:var(--accent); box-shadow: 0 0 15px var(--accent-glow); border-bottom-left-radius: 15px; border-bottom-right-radius: 15px;}
 .search-box i.ti-search {position:absolute; left:18px; top:15px; color:var(--text2); font-size:18px;}
 .search-dropdown {position: absolute; top: 100%; left: 0; right: 0; background: #12141c; border: 1px solid var(--accent); border-top: none; border-radius: 0 0 15px 15px; overflow: hidden; display: none; flex-direction: column; box-shadow: 0 15px 30px rgba(0,0,0,0.5);}
@@ -118,7 +120,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 /* PORTFOLIO P/L */
 .sc-pl {font-size:12px; margin-top:6px; color:var(--text2); border-top:1px solid var(--border); padding-top:6px; display:flex; justify-content:space-between;}
 .pl-val {font-weight:700; font-family:var(--fh);}
-.pl-modal {display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); align-items:center; justify-content:center;}
+.pl-modal {display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,0.82); align-items:center; justify-content:center;}
 .pl-modal.open {display:flex;}
 .pl-modal-box {background:#12141c; border:1px solid var(--accent); border-radius:20px; padding:2rem; width:380px; max-width:90vw; position:relative;}
 .pl-modal-box h3 {font-family:var(--fh); font-size:20px; margin-bottom:1.5rem;}
@@ -201,7 +203,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .tool-btn:hover {color:var(--accent); border-color:var(--accent);}
 
 /* ============ ZÁMEK ============ */
-.lock-screen {position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; background:rgba(10,10,20,0.85); backdrop-filter:blur(14px); padding:20px;}
+.lock-screen {position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; background:#0a0a14; padding:20px;}
 .lock-card {background:var(--bg-glass); border:1px solid var(--border); border-radius:24px; padding:2.5rem; width:100%; max-width:380px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.5);}
 .lock-icon {width:64px; height:64px; margin:0 auto 16px; border-radius:18px; background:var(--accent-glow); display:flex; align-items:center; justify-content:center;}
 .lock-icon i {font-size:30px; color:var(--accent);}
@@ -603,7 +605,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·s</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·t</div>
 
 <div class="container">
   
