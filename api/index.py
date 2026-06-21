@@ -2281,6 +2281,28 @@ def build_morning_summary_html(email, top_opps):
                         "Není to investiční doporučení.</p>")
 
 
+@app.route("/api/cron/backtest")
+def cron_backtest():
+    """Týdně obnoví backtest a uloží do cache (`backtest:latest`), aby banner
+    'Ověřeno backtestem' u zákazníků zůstal aktuální bez ruční obsluhy.
+    Chráněno CRON_SECRET (fail-closed)."""
+    secret = os.environ.get("CRON_SECRET")
+    auth = request.headers.get("Authorization", "")
+    if not secret or (auth != f"Bearer {secret}" and request.args.get("secret") != secret):
+        return jsonify({"ok": False, "error": "Neautorizováno."}), 401
+    if not cloud_enabled():
+        return jsonify({"ok": False, "error": "Chybí úložiště."}), 503
+    try:
+        horizon = max(5, min(int(request.args.get("horizon", 10) or 10), 120))
+        res = run_backtest(BACKTEST_BASKET, horizon)
+        if not res:
+            return jsonify({"ok": False, "error": "Backtest nevrátil data."}), 502
+        kv_set_json("backtest:latest", res)
+        return jsonify({"ok": True, "buy": res.get("buy"), "horizon_days": horizon})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/cron/morning")
 def cron_morning():
     # Ochrana (fail-closed): vyžaduje env CRON_SECRET. Vercel Cron posílá

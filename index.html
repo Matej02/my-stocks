@@ -258,6 +258,9 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .dm-val {font-family:var(--fh); font-weight:700; font-size:13px; text-align:right;}
 .dm-note {grid-column:2 / 4; font-size:11px; color:var(--text2); margin-top:-4px;}
 .dm-foot {font-size:11px; color:var(--text2); margin-top:6px; line-height:1.5;}
+.deep-proof {display:flex; align-items:flex-start; gap:8px; background:var(--up-glow); border:1px solid rgba(0,230,118,0.35); color:var(--up); border-radius:12px; padding:10px 12px; margin:6px 0 14px; font-size:13px; line-height:1.45;}
+.deep-proof i {font-size:18px; flex:none; margin-top:1px;}
+.deep-proof .dp-sub {display:block; color:var(--text2); font-size:11px; margin-top:2px;}
 
 /* ============ SOUHRNNÉ TECHNICKÉ HODNOCENÍ (budík) ============ */
 .tech-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-bottom:20px;}
@@ -583,7 +586,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·p</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·q</div>
 
 <div class="container">
   
@@ -988,6 +991,7 @@ let myAlerts = JSON.parse(localStorage.getItem('mystocks_alerts')) || [];
 let authToken = localStorage.getItem('mystocks_token') || null;
 let authUser = localStorage.getItem('mystocks_user') || null;
 let cloudEnabled = false;
+let btProof = null;   // poslední backtest (důkaz úspěšnosti) z /api/backtest
 let authTab = 'login';
 let syncTimer = null;
 
@@ -1275,6 +1279,10 @@ async function initAccount() {
         const r = await fetch(`${BACKEND_URL}/api/account/status`);
         cloudEnabled = !!(await r.json()).cloud;
     } catch (e) { cloudEnabled = false; }
+
+    // Backtest „důkaz" (neblokující) – pro banner v analýze
+    fetch(`${BACKEND_URL}/api/backtest`).then(r => r.json())
+        .then(d => { if (d.ok) btProof = d.result; }).catch(() => {});
 
     if (cloudEnabled && authToken) {
         try {
@@ -2675,6 +2683,13 @@ function renderDeepReport(d) {
             <div class="dm-foot">Verdikt i jistota jsou spočítané z těchto pilířů (váhy podle dostupných dat). AI je pouze vysvětluje, nemění.</div>
         </div>` : '';
 
+    // Důkaz úspěšnosti z backtestu (pokud je nacachovaný)
+    const proofHtml = (btProof && btProof.buy && btProof.buy.count) ? `
+        <div class="deep-proof"><i class="ti ti-shield-check"></i>
+            <span>Ověřeno backtestem: signál <b>Koupit</b> měl <b>${btProof.buy.win_rate}%</b> úspěšnost na ${btProof.horizon_days} dní
+            <span class="dp-sub">(${btProof.sample_count} obchodů, ${btProof.ticker_count} akcií, bez nahlížení do budoucna)</span></span>
+        </div>` : '';
+
     document.getElementById('deep-output').innerHTML = `
         <div class="deep-verdict">
             <span class="dv-badge ${vcls}">${escapeHtml(rp.verdict || '—')}</span>
@@ -2684,6 +2699,7 @@ function renderDeepReport(d) {
             </div>
         </div>
         ${rp.headline ? `<div class="deep-headline">${escapeHtml(rp.headline)}</div>` : ''}
+        ${proofHtml}
         ${modelHtml}
         <div class="deep-levels">
             <div class="dl-cell"><div class="l">Vstup</div><div class="v">${fmt(rp.entry)}</div></div>
