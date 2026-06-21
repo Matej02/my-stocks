@@ -524,9 +524,16 @@ def email_enabled():
     return bool(os.environ.get("BREVO_API_KEY") and os.environ.get("SENDER_EMAIL"))
 
 
+# Poslední chyba odesílání e-mailu (pro admin diagnostiku). V serverless platí
+# jen v rámci jednoho requestu – proto ji vracíme rovnou v odpovědi test endpointu.
+_LAST_EMAIL_ERROR = {"msg": None}
+
+
 def send_email(to_email, subject, html):
-    """Pošle transakční e-mail přes Brevo. Vrací True/False. Nikdy nevyhodí výjimku."""
+    """Pošle transakční e-mail přes Brevo. Vrací True/False. Nikdy nevyhodí výjimku.
+    Důvod případného selhání ukládá do _LAST_EMAIL_ERROR."""
     if not email_enabled():
+        _LAST_EMAIL_ERROR["msg"] = "E-maily nejsou nastavené (chybí BREVO_API_KEY nebo SENDER_EMAIL)."
         return False
     try:
         r = requests.post(
@@ -539,8 +546,13 @@ def send_email(to_email, subject, html):
                 "subject": subject,
                 "htmlContent": html,
             }), timeout=8)
-        return r.status_code in (200, 201)
-    except Exception:
+        if r.status_code in (200, 201):
+            _LAST_EMAIL_ERROR["msg"] = None
+            return True
+        _LAST_EMAIL_ERROR["msg"] = f"Brevo HTTP {r.status_code}: {r.text[:300]}"
+        return False
+    except Exception as e:
+        _LAST_EMAIL_ERROR["msg"] = f"Výjimka při odesílání: {e}"
         return False
 
 
@@ -943,6 +955,29 @@ def admin_delete_invite():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
+@app.route("/api/admin/email-test", methods=["POST"])
+def admin_email_test():
+    """Diagnostika e-mailů: zkusí poslat testovací e-mail a vrátí PŘESNÝ výsledek
+    (status z Brevo / důvod selhání). Slouží k odhalení proč nechodí reset hesla."""
+    admin = _auth_admin()
+    if not admin:
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    to = _norm_email((request.get_json(silent=True) or {}).get("to")) or admin
+    ok = send_email(to, "Test e-mailu – MY STOCKS",
+                    _email_shell("Test e-mailu ✅",
+                                 "<p style='line-height:1.6'>Tohle je testovací e-mail z diagnostiky. "
+                                 "Pokud ti dorazil, odesílání (a tím i reset hesla) funguje.</p>"))
+    return jsonify({
+        "ok": ok,
+        "sent_to": to,
+        "email_enabled": email_enabled(),
+        "sender": os.environ.get("SENDER_EMAIL"),
+        "has_brevo_key": bool(os.environ.get("BREVO_API_KEY")),
+        "app_url": os.environ.get("APP_URL") or request.host_url.rstrip("/"),
+        "error": _LAST_EMAIL_ERROR["msg"],
+    })
 
 
 @app.route("/api/admin/invites", methods=["GET", "POST"])

@@ -571,7 +571,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·i</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·j</div>
 
 <div class="container">
   
@@ -675,14 +675,14 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 
         <div class="sub-status" id="sub-status" style="display:none;"></div>
 
-        <div class="level-row">
+        <div class="level-row" id="level-row-investor">
           <span class="level-lbl"><i class="ti ti-stairs"></i> Úroveň investora:</span>
           <button class="level-btn" id="lvl-beginner" onclick="setLevel('beginner')">Začátečník</button>
           <button class="level-btn" id="lvl-advanced" onclick="setLevel('advanced')">Pokročilý</button>
         </div>
         <p class="auth-hint" id="level-hint" style="text-align:left; margin:0 0 8px;"></p>
 
-        <div class="level-row">
+        <div class="level-row" id="level-row-simple">
           <span class="level-lbl"><i class="ti ti-wand"></i> Zjednodušený režim:</span>
           <label class="switch"><input type="checkbox" id="simple-toggle" onchange="setSimple(this.checked)"><span class="slider"></span></label>
           <span style="font-size:12px; color:var(--text2);">jen to podstatné — co koupit teď</span>
@@ -1327,9 +1327,19 @@ function renderProfileView() {
     pfView.style.display = 'block';
     renderLevelButtons();
     const st = document.getElementById('simple-toggle'); if (st) st.checked = investorSimple;
+
+    // Nastavení (úroveň investora, zjednodušený režim, ranní souhrn) ukaž jen
+    // uživateli s aktivním předplatným. Nový účet bez předplatného vidí jen plány.
+    const hasAccess = !cloudEnabled || !!(mySub && (mySub.has_access || mySub.is_admin));
+    const invRow = document.getElementById('level-row-investor');
+    const simpleRow = document.getElementById('level-row-simple');
+    const lvlHint = document.getElementById('level-hint');
+    if (invRow) invRow.style.display = hasAccess ? 'flex' : 'none';
+    if (simpleRow) simpleRow.style.display = hasAccess ? 'flex' : 'none';
+    if (lvlHint) lvlHint.style.display = hasAccess ? 'block' : 'none';
     const nrow = document.getElementById('notif-row');
     if (nrow) {
-        nrow.style.display = authToken ? 'flex' : 'none';
+        nrow.style.display = (authToken && hasAccess) ? 'flex' : 'none';
         document.getElementById('notif-morning').checked = !!(myNotif && myNotif.morning);
     }
     if (authToken) {
@@ -1762,6 +1772,13 @@ function renderAdmin(users, invites) {
     }).join('') : '<span style="color:var(--text2); font-size:13px;">Žádné promo kódy.</span>';
 
     document.getElementById('pfview-admin').innerHTML = `
+        <div class="admin-sub"><i class="ti ti-mail-cog" style="color:var(--accent)"></i> <b>Diagnostika e-mailů</b> <span style="font-size:11px;color:var(--text2)">(reset hesla, welcome, ranní souhrn)</span></div>
+        <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap; align-items:center;">
+            <input id="email-test-to" placeholder="komu poslat test (výchozí: ty)" class="admin-input" style="flex:1; min-width:180px;">
+            <button class="btn-primary admin-mk" onclick="adminEmailTest()"><i class="ti ti-send"></i> Poslat test</button>
+        </div>
+        <div id="email-test-result" style="font-size:12px; color:var(--text2); margin-bottom:18px;"></div>
+
         <div class="admin-sub"><i class="ti ti-infinity" style="color:var(--accent)"></i> <b>Kódy plného přístupu</b> <span style="font-size:11px;color:var(--text2)">(Elite natrvalo, rodina/kamarádi, 1 použití)</span></div>
         <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap;">
             <input id="invite-name" placeholder="vlastní název, např. tom" maxlength="24" class="admin-input"
@@ -1785,6 +1802,28 @@ function renderAdmin(users, invites) {
             <thead><tr><th>E-mail</th><th>Plán</th><th>Stav</th><th>Vytvořen</th><th>Změnit plán</th><th></th></tr></thead>
             <tbody>${rows || '<tr><td colspan="6" style="color:var(--text2)">Žádní uživatelé.</td></tr>'}</tbody>
         </table></div>`;
+}
+
+async function adminEmailTest() {
+    const out = document.getElementById('email-test-result');
+    const to = (document.getElementById('email-test-to').value || '').trim();
+    out.innerHTML = '<i class="ti ti-loader spin"></i> Posílám testovací e-mail...';
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/admin/email-test`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ to })
+        });
+        const d = await r.json();
+        if (d.ok) {
+            out.innerHTML = `<span style="color:var(--up)"><i class="ti ti-check"></i> Odesláno na ${d.sent_to}. Zkontroluj schránku (i spam).</span>`;
+            showToast('Testovací e-mail odeslán', 'up', 'ti-mail');
+        } else {
+            out.innerHTML = `<span style="color:var(--down)"><i class="ti ti-x"></i> Neodesláno.</span><br>
+                <span>Důvod: ${escapeHtml(d.error || 'neznámý')}</span><br>
+                <span style="color:var(--text2)">email_enabled: ${d.email_enabled} · sender: ${escapeHtml(d.sender || '—')} · brevo_key: ${d.has_brevo_key} · app_url: ${escapeHtml(d.app_url || '—')}</span>`;
+        }
+    } catch (e) {
+        out.innerHTML = '<span style="color:var(--down)">Chyba spojení se serverem.</span>';
+    }
 }
 
 async function genInvites(type, count) {
@@ -2057,11 +2096,14 @@ function detailTab(name) {
     });
 }
 
-async function loadStockDetail(ticker, runAI = true) {
+// isNew = true → čerstvé otevření akcie (resetuj analýzu, chat, načti zprávy/analytiky).
+// isNew = false → jen lehké překreslení (změna období grafu, přepnutí sledování) –
+//                 analýza, chat i otevřená záložka zůstanou zachované.
+async function loadStockDetail(ticker, isNew = true) {
     document.getElementById('dashboard').style.display = 'none';
     const detail = document.getElementById('detail-view');
     detail.style.display = 'block';
-    detailTab('overview');
+    if (isNew) detailTab('overview');
 
     document.getElementById('d-ticker').innerHTML = `<i class="ti ti-loader spin"></i>`;
 
@@ -2101,10 +2143,14 @@ async function loadStockDetail(ticker, runAI = true) {
 
         renderSignal(data);
         renderTechRating(data.tech_rating);
-        resetDeep();
-        resetChat(data.ticker);
-        loadNews(data.ticker);
-        loadAnalyst(data.ticker, data.price);
+        // Tyto panely nezávisí na zvoleném období grafu – při pouhé změně období
+        // (isNew=false) je nepřekreslujeme, aby nezmizela už vygenerovaná analýza.
+        if (isNew) {
+            resetDeep();
+            resetChat(data.ticker);
+            loadNews(data.ticker);
+            loadAnalyst(data.ticker, data.price);
+        }
 
         const btnWatch = document.getElementById('btn-toggle-watch');
         if(myStocks.includes(data.ticker)) {
