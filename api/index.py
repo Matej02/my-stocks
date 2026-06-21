@@ -2116,6 +2116,54 @@ def get_backtest():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/signals")
+def get_signals():
+    """Živé nákupní signály podle BACKTESTEM OVĚŘENÉHO modelu – akcie, které
+    PRÁVĚ TEĎ splňují náš signál (setup skóre ≥ práh = pokles v uptrendu).
+    Stejné skóre i úrovně jako hloubková analýza. Kešováno 1×/den (drahé na
+    stažení historie celého universa)."""
+    date = _today()
+    cached = kv_get_json(f"signals:{date}")
+    if cached:
+        return jsonify({"ok": True, "cached": True, **cached})
+    items = []
+    for t in BACKTEST_BASKET:
+        try:
+            daily = yahoo_chart(t, "1y", "1d")
+            meta = daily.get("meta", {})
+            closes = [c for c in (((daily.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []) if c is not None]
+            if len(closes) < 210:
+                continue
+            ind = compute_indicators(closes, [])
+            price = meta.get("regularMarketPrice") or closes[-1]
+            score = tech_setup_score(price, ind)
+            if score is None or score < VERDICT_BUY:  # ukaž jen aktuální nákupní signály
+                continue
+            lv = compute_levels({"price": price, "volatility_pct": ind.get("volatility")}, 10) or {}
+            prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
+            items.append({
+                "ticker": t,
+                "name": meta.get("shortName") or meta.get("longName") or t,
+                "price": _round(price, 2),
+                "change_pct": _round(((price - prev) / prev * 100) if prev else 0, 2, 0),
+                "currency": meta.get("currency", "USD"),
+                "score": score, "rsi": _round(ind.get("rsi"), 1), "note": _setup_note(score),
+                "target": lv.get("target_price"), "stop": lv.get("stop_loss"),
+                "reward_pct": lv.get("reward_pct"), "risk_pct": lv.get("risk_pct"), "rr": lv.get("rr"),
+            })
+        except Exception:
+            continue
+    items.sort(key=lambda x: x["score"], reverse=True)
+    out = {"count": len(items), "results": items, "universe": len(BACKTEST_BASKET),
+           "horizon_days": 10, "buy_threshold": VERDICT_BUY,
+           "updated": datetime.now(timezone.utc).strftime("%H:%M UTC"), "date": date}
+    try:
+        kv_set_json(f"signals:{date}", out)
+    except Exception:
+        pass
+    return jsonify({"ok": True, "cached": False, **out})
+
+
 # ---------------------------------------------------------------------------
 # Server-side AI (uživatel nezadává žádný klíč) – Elite plán
 # ---------------------------------------------------------------------------

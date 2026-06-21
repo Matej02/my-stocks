@@ -607,7 +607,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·w</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·x</div>
 
 <div class="container">
   
@@ -787,6 +787,23 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 
     <!-- SEKCE: PŘÍLEŽITOSTI -->
     <div class="dash-section" id="section-opportunities" style="display:none;">
+    <!-- ŽIVÉ NÁKUPNÍ SIGNÁLY PODLE OVĚŘENÉHO MODELU -->
+    <div class="opp-box" id="signals-box" style="border-color:rgba(0,230,118,0.35);">
+      <div class="opp-head">
+        <div class="opp-title">
+          <i class="ti ti-target-arrow" style="color:var(--up)"></i> Co koupit teď — ověřený signál
+          <span class="opp-sub">Akcie, které <b>právě teď</b> splňují náš backtestem prověřený nákupní signál (pokles v uptrendu). Horizont ~10 dní. <span id="signals-proof" style="color:var(--up)"></span></span>
+        </div>
+        <div class="opp-actions">
+          <span class="opp-updated" id="signals-updated"></span>
+          <button class="tool-btn" onclick="loadSignals(true)"><i class="ti ti-refresh"></i> Skenovat</button>
+        </div>
+      </div>
+      <div class="opp-grid" id="signals-grid">
+        <div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh podle ověřeného modelu…</div>
+      </div>
+    </div>
+
     <!-- SCANNER PŘÍLEŽITOSTÍ – Potenciál -->
     <div class="opp-box" id="opp-box">
       <div class="opp-head">
@@ -1250,10 +1267,13 @@ function switchTab(name) {
     // Zamykání sekcí podle plánu
     if (name === 'opportunities') {
         if (!hasFeature('pro')) {
+            document.getElementById('signals-grid').innerHTML = lockedCardHTML('Co koupit teď — ověřený signál', 'pro',
+                'Akcie, které právě teď splňují náš backtestem prověřený nákupní signál.');
             document.getElementById('opp-grid').innerHTML = lockedCardHTML('Příležitosti s potenciálem', 'pro',
                 'Náš model akcií s největším prostorem vyrůst + AI proč.');
-        } else if (!oppData.length && !oppLoading) {
-            loadOpportunities();
+        } else {
+            loadSignals();
+            if (!oppData.length && !oppLoading) loadOpportunities();
         }
     }
     if (name === 'ai') {
@@ -2067,6 +2087,62 @@ function fmtVol(v) {
     if(v >= 1e6) return (v/1e6).toFixed(1)+'M';
     if(v >= 1e3) return (v/1e3).toFixed(0)+'k';
     return ''+v;
+}
+
+let signalsLoaded = false;
+async function loadSignals(force) {
+    const grid = document.getElementById('signals-grid');
+    if (!hasFeature('pro')) {
+        grid.innerHTML = lockedCardHTML('Co koupit teď — ověřený signál', 'pro',
+            'Akcie, které právě teď splňují náš backtestem prověřený nákupní signál (pokles v uptrendu).');
+        return;
+    }
+    if (signalsLoaded && !force) return;
+    grid.innerHTML = '<div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh podle ověřeného modelu… (poprvé to chvíli trvá)</div>';
+    try {
+        const data = await (await fetch(`${BACKEND_URL}/api/signals`)).json();
+        if (!data.ok) throw new Error();
+        signalsLoaded = true;
+        document.getElementById('signals-updated').textContent = `${data.count} ${data.count === 1 ? 'signál' : (data.count < 5 ? 'signály' : 'signálů')} · ${data.updated}`;
+        if (btProof && btProof.buy && btProof.buy.win_rate != null) {
+            document.getElementById('signals-proof').textContent = `Ověřeno backtestem: ${btProof.buy.win_rate} % trefnost.`;
+        }
+        renderSignals(data.results || []);
+    } catch (e) {
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--down)">Skener se nepodařilo načíst.</div>`;
+    }
+}
+
+function renderSignals(list) {
+    const grid = document.getElementById('signals-grid');
+    if (!list.length) {
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Dnes žádný titul nesplňuje nákupní signál. To je v pořádku — model nakupuje jen ověřené situace (pokles v uptrendu), ne pořád. Mrkni sem zítra.</div>`;
+        return;
+    }
+    grid.innerHTML = list.map((o, i) => {
+        const chg = o.change_pct;
+        const chgTxt = (chg || chg === 0) ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` : '';
+        const chgCol = (chg >= 0) ? 'var(--up)' : 'var(--down)';
+        return `
+        <div class="opp-card" onclick="loadStockDetail('${o.ticker}')">
+            <span class="opp-rank">#${i + 1}</span>
+            <div class="opp-c-top">
+                <div class="opp-score p-high">${o.score}<small>SIGNÁL</small></div>
+                <div class="opp-c-id">
+                    <div class="opp-c-tkr">${o.ticker}</div>
+                    <div class="opp-c-name">${o.name || ''}</div>
+                </div>
+            </div>
+            <div class="opp-upside">
+                <span class="opp-up-val" style="color:var(--up)">cíl +${o.reward_pct ?? '?'}%</span>
+                <span class="opp-up-lbl">stop −${o.risk_pct ?? '?'} % · zisk:riziko ${o.rr ?? '—'} : 1</span>
+            </div>
+            <div class="opp-c-px">
+                <span class="opp-c-price">${(o.price ?? 0).toFixed(2)} <span style="font-size:11px;color:var(--text2)">${o.currency || ''}</span></span>
+                <span style="font-size:12px;color:${chgCol}">${chgTxt} · RSI ${o.rsi ?? '—'}</span>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 async function loadOpportunities() {
