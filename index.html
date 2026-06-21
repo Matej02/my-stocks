@@ -246,6 +246,18 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .deep-list li::before {content:""; position:absolute; left:4px; top:7px; width:6px; height:6px; border-radius:50%; background:var(--accent);}
 .deep-usage {font-size:11px; color:var(--text2); margin-top:14px; text-align:right;}
 .deep-disclaimer {font-size:11px; color:var(--text2); opacity:.7; margin-top:8px; line-height:1.5;}
+/* Rozpad pravidlového modelu verdiktu */
+.deep-model {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:14px; padding:16px; margin:6px 0 18px;}
+.dm-head {display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; flex-wrap:wrap;}
+.dm-head .t {font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--accent); font-weight:700; display:flex; align-items:center; gap:6px;}
+.dm-cov {font-size:11px; color:var(--text2);}
+.dm-row {display:grid; grid-template-columns:104px 1fr 34px; align-items:center; gap:10px; margin-bottom:9px;}
+.dm-lbl {font-size:12.5px; color:var(--text); font-weight:600;}
+.dm-bar {height:8px; border-radius:6px; background:rgba(255,255,255,0.07); overflow:hidden;}
+.dm-bar > span {display:block; height:100%; border-radius:6px;}
+.dm-val {font-family:var(--fh); font-weight:700; font-size:13px; text-align:right;}
+.dm-note {grid-column:2 / 4; font-size:11px; color:var(--text2); margin-top:-4px;}
+.dm-foot {font-size:11px; color:var(--text2); margin-top:6px; line-height:1.5;}
 
 /* ============ SOUHRNNÉ TECHNICKÉ HODNOCENÍ (budík) ============ */
 .tech-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-bottom:20px;}
@@ -571,7 +583,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·m</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·n</div>
 
 <div class="container">
   
@@ -2585,6 +2597,25 @@ function renderDeepReport(d) {
     const risks = (rp.risks || []).map(x => `<li>${escapeHtml(x)}</li>`).join('');
     const cats = (rp.catalysts || []).map(x => `<li>${escapeHtml(x)}</li>`).join('');
 
+    // Transparentní rozpad pravidlového modelu (z čeho verdikt vychází)
+    const colFor = s => s >= 66 ? 'var(--up)' : (s >= 45 ? '#FFC400' : 'var(--down)');
+    const m = d.model;
+    const modelHtml = (m && m.pillars && m.pillars.length) ? `
+        <div class="deep-model">
+            <div class="dm-head">
+                <span class="t"><i class="ti ti-adjustments-bolt"></i> Z čeho verdikt vychází</span>
+                <span class="dm-cov">skóre ${m.score}/100 · pokrytí daty ${m.coverage_pct}%</span>
+            </div>
+            ${m.pillars.map(p => `
+                <div class="dm-row">
+                    <span class="dm-lbl">${escapeHtml(p.label)}</span>
+                    <span class="dm-bar"><span style="width:${Math.max(0, Math.min(100, p.score))}%;background:${colFor(p.score)}"></span></span>
+                    <span class="dm-val" style="color:${colFor(p.score)}">${p.score}</span>
+                    ${p.note ? `<span class="dm-note">${escapeHtml(p.note)}</span>` : ''}
+                </div>`).join('')}
+            <div class="dm-foot">Verdikt i jistota jsou spočítané z těchto pilířů (váhy podle dostupných dat). AI je pouze vysvětluje, nemění.</div>
+        </div>` : '';
+
     document.getElementById('deep-output').innerHTML = `
         <div class="deep-verdict">
             <span class="dv-badge ${vcls}">${escapeHtml(rp.verdict || '—')}</span>
@@ -2594,6 +2625,7 @@ function renderDeepReport(d) {
             </div>
         </div>
         ${rp.headline ? `<div class="deep-headline">${escapeHtml(rp.headline)}</div>` : ''}
+        ${modelHtml}
         <div class="deep-levels">
             <div class="dl-cell"><div class="l">Vstup</div><div class="v">${fmt(rp.entry)}</div></div>
             <div class="dl-cell"><div class="l">Cíl</div><div class="v" style="color:var(--up)">${fmt(rp.target_price)}</div></div>

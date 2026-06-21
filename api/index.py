@@ -1609,7 +1609,122 @@ def gather_facts(ticker):
     return f
 
 
-def build_analysis_prompt(facts):
+def _grade(v, scale):
+    """v -> skóre podle sestupných prahů [(min, score), ...]. None když v není číslo."""
+    if not isinstance(v, (int, float)):
+        return None
+    for mn, sc in scale:
+        if v >= mn:
+            return sc
+    return scale[-1][1]
+
+
+def compute_verdict_model(facts):
+    """DETERMINISTICKÝ pravidlový verdikt z tvrdých dat – ne odhad AI.
+    Skóre 0-100 ze čtyř pilířů (technika, valuace, růst & ziskovost, analytici);
+    váhy se přepočítají podle toho, co máme reálně za data. Vrací verdikt, skóre,
+    jistotu (pokrytí daty + shoda pilířů + odstup od neutrálu) a transparentní rozpad.
+    AI tenhle verdikt jen vysvětlí, nemění ho."""
+    pillars = []
+
+    # 1) TECHNIKA – náš Signal Score 0-100 (skoro vždy dostupné)
+    tech = facts.get("signal_score")
+    if tech is not None:
+        pillars.append({"key": "technical", "label": "Technika", "weight": 0.30,
+                        "score": int(round(tech)), "note": facts.get("signal_label") or ""})
+
+    # 2) VALUACE – preferuj PEG, pak forward P/E, pak trailing P/E
+    val = facts.get("valuation") or {}
+    peg, fpe, pe = val.get("peg"), val.get("forward_pe"), val.get("pe")
+    vscore = vnote = None
+    if isinstance(peg, (int, float)) and peg > 0:
+        vscore = 90 if peg <= 1 else 75 if peg <= 1.5 else 60 if peg <= 2 else 40 if peg <= 3 else 22
+        vnote = f"PEG {peg:.2f}"
+    elif isinstance(fpe, (int, float)) and fpe > 0:
+        vscore = 85 if fpe <= 12 else 70 if fpe <= 18 else 55 if fpe <= 25 else 40 if fpe <= 35 else 28 if fpe <= 50 else 18
+        vnote = f"Forward P/E {fpe:.1f}"
+    elif isinstance(pe, (int, float)) and pe > 0:
+        vscore = 80 if pe <= 12 else 65 if pe <= 18 else 50 if pe <= 25 else 38 if pe <= 40 else 22
+        vnote = f"P/E {pe:.1f}"
+    if vscore is not None:
+        pillars.append({"key": "valuation", "label": "Valuace", "weight": 0.20,
+                        "score": int(vscore), "note": vnote})
+
+    # 3) RŮST & ZISKOVOST – průměr dostupných ukazatelů
+    fin = facts.get("financials") or {}
+    subs = [s for s in (
+        _grade(fin.get("revenue_growth_pct"), [(25, 90), (15, 75), (8, 60), (0, 45), (-1e9, 25)]),
+        _grade(fin.get("earnings_growth_pct"), [(25, 92), (15, 76), (8, 60), (0, 45), (-1e9, 22)]),
+        _grade(fin.get("profit_margin_pct"), [(20, 85), (10, 65), (3, 50), (0, 40), (-1e9, 20)]),
+        _grade(fin.get("roe_pct"), [(20, 85), (12, 68), (5, 52), (0, 40), (-1e9, 22)]),
+    ) if s is not None]
+    if subs:
+        bits = []
+        if isinstance(fin.get("revenue_growth_pct"), (int, float)):
+            bits.append(f"tržby {fin['revenue_growth_pct']:+.0f}%")
+        if isinstance(fin.get("profit_margin_pct"), (int, float)):
+            bits.append(f"marže {fin['profit_margin_pct']:.0f}%")
+        if isinstance(fin.get("roe_pct"), (int, float)):
+            bits.append(f"ROE {fin['roe_pct']:.0f}%")
+        pillars.append({"key": "growth", "label": "Růst & ziskovost", "weight": 0.25,
+                        "score": int(round(sum(subs) / len(subs))), "note": ", ".join(bits)})
+
+    # 4) ANALYTICI – konsenzus (počty doporučení / rec key) + upside k cíli
+    an = facts.get("analysts") or {}
+    recs = facts.get("analyst_recs") or {}
+    cscore = cnote = None
+    tot = sum(v for v in recs.values() if isinstance(v, (int, float))) if recs else 0
+    if tot:
+        cscore = (recs.get("strongBuy", 0) * 100 + recs.get("buy", 0) * 78 + recs.get("hold", 0) * 50
+                  + recs.get("sell", 0) * 25 + recs.get("strongSell", 0) * 5) / tot
+        cnote = f"{tot} analytiků"
+    else:
+        rk = (an.get("recommendation") or "").lower().replace(" ", "_")
+        rmap = {"strong_buy": 90, "strongbuy": 90, "buy": 75, "outperform": 72, "hold": 50,
+                "neutral": 50, "underperform": 30, "sell": 25, "strong_sell": 10, "strongsell": 10}
+        if rk in rmap:
+            cscore, cnote = rmap[rk], f"doporučení: {rk.replace('_', ' ')}"
+    up = an.get("target_upside_pct")
+    ascore = None
+    if isinstance(up, (int, float)):
+        uscore = 95 if up >= 30 else 80 if up >= 15 else 62 if up >= 5 else 45 if up >= -5 else 25
+        ascore = uscore if cscore is None else round(0.55 * cscore + 0.45 * uscore)
+        cnote = (cnote + ", " if cnote else "") + f"cíl {up:+.0f}%"
+    elif cscore is not None:
+        ascore = round(cscore)
+    if ascore is not None:
+        pillars.append({"key": "analysts", "label": "Analytici", "weight": 0.25,
+                        "score": int(ascore), "note": cnote or ""})
+
+    # Kompozitní skóre – váhy přepočítané podle dostupných pilířů
+    wsum = sum(p["weight"] for p in pillars)
+    composite = round(sum(p["score"] * p["weight"] for p in pillars) / wsum) if wsum else 50
+    verdict = "Koupit" if composite >= 66 else ("Prodat" if composite < 45 else "Držet")
+
+    # Jistota: pokrytí daty (0.4) + shoda pilířů (0.35) + odstup od neutrálu (0.25)
+    scores = [p["score"] for p in pillars]
+    spread = (max(scores) - min(scores)) if len(scores) > 1 else 0
+    agreement = 1 - min(spread, 70) / 70 * 0.6
+    conviction = abs(composite - 50) / 50
+    confidence = max(20, min(95, round((0.40 * wsum + 0.35 * agreement + 0.25 * conviction) * 100)))
+
+    return {
+        "score": composite, "verdict": verdict, "confidence": confidence,
+        "coverage_pct": round(wsum * 100),
+        "pillars": [{**p, "weight": round(p["weight"], 2)} for p in pillars],
+    }
+
+
+def build_analysis_prompt(facts, model=None):
+    model_block = ""
+    if model:
+        model_block = (
+            "\n\nPRAVIDLOVÝ MODEL (spočítaný deterministicky z dat – je ZÁVAZNÝ):\n"
+            + json.dumps(model, ensure_ascii=False)
+            + "\nVe výstupu pole 'verdict' a 'confidence' MUSÍ přesně odpovídat tomuto modelu "
+            "(verdict=model.verdict, confidence=model.confidence). Tvým úkolem je verdikt VYSVĚTLIT "
+            "čísly z dat (proč to skóre vyšlo), ne ho měnit. Pokud si pilíře protiřečí, otevřeně to napiš."
+        )
     return (
         "Jsi špičkový akciový analytik. Na základě DAT níže vytvoř hloubkovou, konkrétní a "
         "vyváženou analýzu v ČEŠTINĚ. Pracuj VÝHRADNĚ s čísly z dat – nic si nevymýšlej; "
@@ -1675,9 +1790,15 @@ def deep_analysis(ticker):
             return jsonify({"ok": False, "error": msg, "upgrade": not is_elite}), 429
 
         facts = gather_facts(ticker)
-        report = call_llm(build_analysis_prompt(facts))
+        # Deterministický verdikt z dat – AI ho jen vysvětlí
+        model = compute_verdict_model(facts)
+        report = call_llm(build_analysis_prompt(facts, model))
         if not report:
             return jsonify({"ok": False, "error": "Analýzu se nepodařilo vygenerovat, zkus to znovu."}), 502
+
+        # Verdikt a jistotu bereme VŽDY z modelu (no guesses), ne z AI
+        report["verdict"] = model["verdict"]
+        report["confidence"] = model["confidence"]
 
         kv_set_json(ukey, used + 1)
 
@@ -1687,14 +1808,14 @@ def deep_analysis(ticker):
                 "ticker": facts["ticker"], "ts": int(time.time()),
                 "verdict": report.get("verdict"), "price": facts.get("price"),
                 "target": report.get("target_price"), "currency": facts.get("currency"),
-                "user": user,
+                "score": model.get("score"), "user": user,
             })
         except Exception:
             pass
 
         return jsonify({"ok": True, "ticker": facts["ticker"], "name": facts.get("name"),
                         "currency": facts.get("currency"), "price": facts.get("price"),
-                        "report": report, "facts": facts,
+                        "report": report, "facts": facts, "model": model,
                         "used_today": used + 1, "daily_limit": daily_limit})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba analýzy: {e}"}), 500
