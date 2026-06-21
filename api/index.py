@@ -930,6 +930,21 @@ def admin_delete_user():
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
 
+@app.route("/api/admin/delete-invite", methods=["POST"])
+def admin_delete_invite():
+    if not _auth_admin():
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    code = (request.get_json(silent=True) or {}).get("code", "").strip().lower()
+    if not code:
+        return jsonify({"ok": False, "error": "Chybí kód."}), 400
+    try:
+        kv_del(f"invite:{code}")
+        kv_srem("invites", code)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
 @app.route("/api/admin/invites", methods=["GET", "POST"])
 def admin_invites():
     if not _auth_admin():

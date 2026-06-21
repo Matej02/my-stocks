@@ -571,7 +571,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·h</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·i</div>
 
 <div class="container">
   
@@ -1742,6 +1742,7 @@ function renderAdmin(users, invites) {
             <span>${i.code}</span>
             ${i.used_by ? `<span style="font-size:11px;color:var(--text2)">${i.used_by}</span>`
                        : `<i class="ti ti-copy copy" title="Kopírovat" onclick="copyText('${i.code}')"></i>`}
+            <i class="ti ti-trash" title="Smazat kód" style="cursor:pointer;color:var(--down)" onclick="deleteInvite('${i.code}')"></i>
         </div>`).join('') : '<span style="color:var(--text2); font-size:13px;">Žádné.</span>';
 
     const promoBlocks = promos.length ? promos.map(i => {
@@ -1754,6 +1755,7 @@ function renderAdmin(users, invites) {
                 <i class="ti ti-copy copy" onclick="copyText('${i.code}')" style="cursor:pointer; color:var(--accent)"></i>
                 <span style="font-size:11px; color:var(--text2);">7 dní Pro${i.discount_pct ? ` + ${i.discount_pct}% sleva` : ''}</span>
                 <span class="promo-count">${i.referral_count} pozvaných</span>
+                <i class="ti ti-trash" title="Smazat kód" style="cursor:pointer;color:var(--down);margin-left:6px" onclick="deleteInvite('${i.code}')"></i>
             </div>
             ${refs || '<div style="font-size:12px; color:var(--text2); margin-top:4px;">Zatím nikdo nepřišel.</div>'}
         </div>`;
@@ -1830,6 +1832,18 @@ async function adminDeleteUser(email) {
         if (d.ok) { showToast(`Účet ${email} smazán`, 'down', 'ti-trash'); loadAdmin(); }
         else showToast(d.error || 'Chyba', 'down', 'ti-x');
     } catch (e) { showToast('Chyba při mazání', 'down', 'ti-x'); }
+}
+
+async function deleteInvite(code) {
+    if (!confirm(`Smazat kód „${code}"? Existující účty zůstanou, jen kód už nepůjde použít.`)) return;
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/admin/delete-invite`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ code })
+        });
+        const d = await r.json();
+        if (d.ok) { showToast(`Kód „${code}" smazán`, 'down', 'ti-trash'); loadAdmin(); }
+        else showToast(d.error || 'Chyba', 'down', 'ti-x');
+    } catch (e) { showToast('Chyba při mazání kódu', 'down', 'ti-x'); }
 }
 
 function copyText(t) {
