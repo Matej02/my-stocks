@@ -232,6 +232,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .dl-cell {flex:1; min-width:90px; text-align:center; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:10px;}
 .dl-cell .l {font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
 .dl-cell .v {font-family:var(--fh); font-weight:700; font-size:17px; margin-top:3px;}
+.deep-rr {font-size:12px; color:var(--text); background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; padding:8px 12px; margin:-8px 0 16px; line-height:1.5;}
 .deep-sec {margin-bottom:16px;}
 .deep-sec h4 {font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--accent); margin-bottom:6px; display:flex; align-items:center; gap:6px;}
 .deep-sec p {font-size:13.5px; line-height:1.65; color:var(--text); margin:0;}
@@ -602,7 +603,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·r</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·s</div>
 
 <div class="container">
   
@@ -2730,6 +2731,7 @@ function renderDeepReport(d) {
     // Transparentní rozpad pravidlového modelu (z čeho verdikt vychází)
     const colFor = s => s >= 70 ? 'var(--up)' : (s >= 45 ? '#FFC400' : 'var(--down)');
     const m = d.model;
+    const lv = d.levels;
     const modelHtml = (m && m.pillars && m.pillars.length) ? `
         <div class="deep-model">
             <div class="dm-head">
@@ -2769,6 +2771,7 @@ function renderDeepReport(d) {
             <div class="dl-cell"><div class="l">Cíl</div><div class="v" style="color:var(--up)">${fmt(rp.target_price)}</div></div>
             <div class="dl-cell"><div class="l">Stop-loss</div><div class="v" style="color:var(--down)">${fmt(rp.stop_loss)}</div></div>
         </div>
+        ${lv ? `<div class="deep-rr">Poměr zisk:riziko <b>${lv.rr ? lv.rr + ' : 1' : '—'}</b> · cíl <b style="color:var(--up)">+${lv.reward_pct}%</b> / stop <b style="color:var(--down)">−${lv.risk_pct}%</b> · horizont ~${lv.horizon_days} dní <span style="color:var(--text2)">(z volatility, ne odhad)</span></div>` : ''}
         ${sec('ti-bulb', 'Investiční teze', rp.thesis)}
         ${sec('ti-building-bank', 'Fundament', rp.fundamentals)}
         ${sec('ti-chart-line', 'Technika', rp.technicals)}

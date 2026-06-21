@@ -1802,6 +1802,27 @@ def compute_verdict_model(facts):
     }
 
 
+def compute_levels(facts, horizon=10):
+    """DETERMINISTICKÝ vstup/stop/cíl z volatility a horizontu (ne odhad AI).
+    Šíře stop/cíl škáluje očekávaným pohybem za 'horizon' dní (sigma_H z roční
+    volatility). Drží rozumné meze. Vrací i poměr zisk:riziko (R:R)."""
+    price = facts.get("price")
+    if not price:
+        return None
+    vol = facts.get("volatility_pct")
+    sigma_h = ((vol / 100.0) / (252 ** 0.5) * (horizon ** 0.5)) if (vol and vol > 0) else 0.04
+    stop_pct = max(0.05, min(2.0 * sigma_h, 0.20))
+    tgt_pct = max(0.06, min(2.5 * sigma_h, 0.30))
+    stop = round(price * (1 - stop_pct), 2)
+    target = round(price * (1 + tgt_pct), 2)
+    return {
+        "entry": round(price, 2), "stop_loss": stop, "target_price": target,
+        "horizon_days": horizon,
+        "risk_pct": round(stop_pct * 100, 1), "reward_pct": round(tgt_pct * 100, 1),
+        "rr": round(tgt_pct / stop_pct, 2) if stop_pct else None,
+    }
+
+
 def build_analysis_prompt(facts, model=None):
     model_block = ""
     if model:
@@ -1825,8 +1846,8 @@ def build_analysis_prompt(facts, model=None):
         "6) NAČASOVÁNÍ: pokud se blíží 'next_earnings', uveď to jako zdroj volatility/rizika.\n\n"
         "KALIBRACE 'confidence' (0-100): vysoká jen když se signály SHODUJÍ (technika + fundament + "
         "analytici míří stejným směrem). Když si protiřečí nebo data chybí, dej NÍŽE. Nebuď přehnaně optimistický.\n"
-        "Ceny (target_price, stop_loss, entry) uveď ve stejné měně jako aktuální cena, realisticky vůči "
-        "52T pásmu, volatilitě a cíli analytiků. 'entry' = rozumná vstupní cena, 'stop_loss' pod klíčovou podporou.\n\n"
+        "ÚROVNĚ: pole 'suggested_levels' v datech jsou ZÁVAZNÉ – do výstupu nastav entry/stop_loss/"
+        "target_price PŘESNĚ na ně (spočítané z volatility). Nevymýšlej vlastní čísla.\n\n"
         "Vrať POUZE validní JSON přesně v tomto tvaru (bez markdownu):\n"
         "{\n"
         '  "verdict": "Koupit" | "Držet" | "Prodat",\n'
@@ -1877,15 +1898,22 @@ def deep_analysis(ticker):
             return jsonify({"ok": False, "error": msg, "upgrade": not is_elite}), 429
 
         facts = gather_facts(ticker)
-        # Deterministický verdikt z dat – AI ho jen vysvětlí
+        # Deterministický verdikt + úrovně z dat – AI je jen vysvětlí
         model = compute_verdict_model(facts)
+        levels = compute_levels(facts, horizon=10)
+        if levels:
+            facts["suggested_levels"] = levels
         report = call_llm(build_analysis_prompt(facts, model))
         if not report:
             return jsonify({"ok": False, "error": "Analýzu se nepodařilo vygenerovat, zkus to znovu."}), 502
 
-        # Verdikt a jistotu bereme VŽDY z modelu (no guesses), ne z AI
+        # Verdikt, jistotu i úrovně bereme VŽDY z výpočtu (no guesses), ne z AI
         report["verdict"] = model["verdict"]
         report["confidence"] = model["confidence"]
+        if levels:
+            report["entry"] = levels["entry"]
+            report["stop_loss"] = levels["stop_loss"]
+            report["target_price"] = levels["target_price"]
 
         kv_set_json(ukey, used + 1)
 
@@ -1902,7 +1930,7 @@ def deep_analysis(ticker):
 
         return jsonify({"ok": True, "ticker": facts["ticker"], "name": facts.get("name"),
                         "currency": facts.get("currency"), "price": facts.get("price"),
-                        "report": report, "facts": facts, "model": model,
+                        "report": report, "facts": facts, "model": model, "levels": levels,
                         "used_today": used + 1, "daily_limit": daily_limit})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba analýzy: {e}"}), 500
