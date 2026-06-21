@@ -583,7 +583,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·n</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·o</div>
 
 <div class="container">
   
@@ -1793,6 +1793,15 @@ function renderAdmin(users, invites) {
         </div>
         <div id="email-test-result" style="font-size:12px; color:var(--text2); margin-bottom:18px;"></div>
 
+        <div class="admin-sub"><i class="ti ti-chart-histogram" style="color:var(--accent)"></i> <b>Backtest pravidel</b> <span style="font-size:11px;color:var(--text2)">(úspěšnost technického signálu na 2 letech, bez look-ahead)</span></div>
+        <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap; align-items:center;">
+            <label style="font-size:12px;color:var(--text2)">Horizont (dny):</label>
+            <input id="bt-horizon" type="number" min="5" max="120" value="20" class="admin-input" style="width:90px;">
+            <button class="btn-primary admin-mk" onclick="adminBacktest()"><i class="ti ti-player-play"></i> Spustit backtest</button>
+            <span style="font-size:11px;color:var(--text2)">~5–15 s</span>
+        </div>
+        <div id="bt-result" style="font-size:12px; color:var(--text2); margin-bottom:18px;"></div>
+
         <div class="admin-sub"><i class="ti ti-infinity" style="color:var(--accent)"></i> <b>Kódy plného přístupu</b> <span style="font-size:11px;color:var(--text2)">(Elite natrvalo, rodina/kamarádi, 1 použití)</span></div>
         <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap;">
             <input id="invite-name" placeholder="vlastní název, např. tom" maxlength="24" class="admin-input"
@@ -1838,6 +1847,56 @@ async function adminEmailTest() {
     } catch (e) {
         out.innerHTML = '<span style="color:var(--down)">Chyba spojení se serverem.</span>';
     }
+}
+
+async function adminBacktest() {
+    const out = document.getElementById('bt-result');
+    const horizon = parseInt(document.getElementById('bt-horizon').value, 10) || 20;
+    out.innerHTML = '<i class="ti ti-loader spin"></i> Počítám backtest na historii… (může to pár sekund trvat)';
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/admin/backtest`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ horizon })
+        });
+        const d = await r.json();
+        if (!d.ok) { out.innerHTML = `<span style="color:var(--down)">${escapeHtml(d.error || 'Nepodařilo se.')}</span>`; return; }
+        out.innerHTML = renderBacktest(d.result);
+    } catch (e) {
+        out.innerHTML = '<span style="color:var(--down)">Chyba spojení se serverem.</span>';
+    }
+}
+
+function renderBacktest(res) {
+    if (!res) return '<span style="color:var(--text2)">Zatím nespuštěno.</span>';
+    const row = (lbl, s, hl) => {
+        if (!s) return `<tr><td>${lbl}</td><td colspan="2" style="color:var(--text2)">—</td></tr>`;
+        const col = s.win_rate >= 55 ? 'var(--up)' : (s.win_rate >= 45 ? '#FFC400' : 'var(--down)');
+        return `<tr${hl ? ' style="font-weight:700"' : ''}>
+            <td>${lbl} <span style="color:var(--text2);font-weight:400">(${s.count})</span></td>
+            <td style="text-align:right;color:${col}">${s.win_rate}%</td>
+            <td style="text-align:right;color:${s.avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${s.avg_return >= 0 ? '+' : ''}${s.avg_return}%</td></tr>`;
+    };
+    const b = res.buy, base = res.baseline;
+    let edgeMsg = '';
+    if (b && base) {
+        const edge = (b.avg_return - base.avg_return).toFixed(2);
+        const ok = b.avg_return > base.avg_return && b.win_rate > base.win_rate;
+        edgeMsg = `<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:${ok ? 'var(--up-glow)' : 'var(--down-glow)'};color:${ok ? 'var(--up)' : 'var(--down)'};font-size:12px;">
+            ${ok ? '<i class="ti ti-circle-check"></i> Signál „Koupit" poráží baseline' : '<i class="ti ti-alert-triangle"></i> Signál „Koupit" zatím NEporáží baseline'}
+            (rozdíl prům. výnosu ${edge >= 0 ? '+' : ''}${edge} p.b.)</div>`;
+    }
+    return `
+        <div style="font-size:11px;color:var(--text2);margin-bottom:6px">${res.ticker_count} titulů · ${res.sample_count} vzorků · horizont ${res.horizon_days} dní</div>
+        <table class="admin-table" style="font-size:12px">
+            <thead><tr><th>Signál</th><th style="text-align:right">Úspěšnost</th><th style="text-align:right">Prům. výnos</th></tr></thead>
+            <tbody>
+                ${row('🟢 Koupit (≥66)', res.buy, true)}
+                ${row('🟡 Držet (45–65)', res.hold)}
+                ${row('🔴 Prodat (<45)', res.sell)}
+                ${row('⚪ Baseline (vše)', res.baseline)}
+            </tbody>
+        </table>
+        ${edgeMsg}
+        <div style="font-size:11px;color:var(--text2);margin-top:6px">${escapeHtml(res.note || '')}</div>`;
 }
 
 async function genInvites(type, count) {

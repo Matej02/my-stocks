@@ -1597,6 +1597,50 @@ def gather_facts(ticker):
             f["52w_metric"] = {"high": _round(metric.get("52WeekHigh"), 2), "low": _round(metric.get("52WeekLow"), 2)}
             if recs:
                 f["analyst_recs"] = {k: recs[0].get(k) for k in ("strongBuy", "buy", "hold", "sell", "strongSell")}
+
+            def _m(*keys):
+                for k in keys:
+                    v = metric.get(k)
+                    if isinstance(v, (int, float)):
+                        return v
+                return None
+
+            # Finnhub jako spolehlivý ZDROJ pilířů, když Yahoo quoteSummary selže.
+            # Doplň jen to, co ještě nemáme (Yahoo má přednost, když projde).
+            val = f.setdefault("valuation", {})
+            for k, v in {"pe": _m("peTTM", "peBasicExclExtraTTM"),
+                         "price_to_book": _m("pbQuarterly", "pbAnnual")}.items():
+                if v is not None and k not in val:
+                    val[k] = round(v, 2)
+            fin = f.setdefault("financials", {})
+            for k, v in {
+                "revenue_growth_pct": _m("revenueGrowthTTMYoy", "revenueGrowthQuarterlyYoy"),
+                "earnings_growth_pct": _m("epsGrowthTTMYoy", "epsGrowthQuarterlyYoy"),
+                "gross_margin_pct": _m("grossMarginTTM", "grossMarginAnnual"),
+                "operating_margin_pct": _m("operatingMarginTTM", "operatingMarginAnnual"),
+                "profit_margin_pct": _m("netProfitMarginTTM", "netProfitMarginAnnual"),
+                "roe_pct": _m("roeTTM", "roeRfy"),
+                "current_ratio": _m("currentRatioQuarterly", "currentRatioAnnual"),
+                "debt_to_equity": _m("totalDebt/totalEquityQuarterly", "totalDebt/totalEquityAnnual",
+                                     "longTermDebt/equityQuarterly"),
+            }.items():
+                if v is not None and k not in fin:
+                    fin[k] = round(v, 2)
+            # Cílová cena → upside (když ji Yahoo nedodalo)
+            try:
+                pt = requests.get(f"{base}/stock/price-target", params={"symbol": ticker, "token": fk}, timeout=6).json() or {}
+                tm = pt.get("targetMean")
+                an = f.setdefault("analysts", {})
+                if isinstance(tm, (int, float)) and tm and "target_mean" not in an:
+                    an["target_mean"] = round(tm, 2)
+                    if price:
+                        an["target_upside_pct"] = round((tm / price - 1) * 100, 1)
+            except Exception:
+                pass
+            # Vyčisti prázdné dicty, ať model nepočítá s ničím
+            for kk in ("valuation", "financials", "analysts"):
+                if isinstance(f.get(kk), dict) and not f[kk]:
+                    f.pop(kk, None)
         except Exception:
             pass
     # Pár titulků zpráv
@@ -1853,6 +1897,97 @@ def track_record():
                 "buy_win_rate": round(sum(1 for r in buy_rets if r > 0) / len(buy_rets) * 100, 1),
             }
         return jsonify({"ok": True, "count": len(verdicts), "items": items, "stats": stats})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# BACKTEST – poctivé ověření techniky na historii (win-rate, prům. výnos).
+# Backtestuje se technický Signal Score (máme historické ceny). Fundamenty se
+# zpětně (point-in-time) zdarma získat nedají, takže je do backtestu netaháme.
+# Žádný look-ahead: na každém dni počítáme skóre jen z dat DO toho dne a měříme
+# následný výnos za 'horizon' obchodních dní.
+# ---------------------------------------------------------------------------
+BACKTEST_BASKET = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA",
+                   "JPM", "V", "JNJ", "WMT", "PG", "XOM", "KO", "DIS"]
+
+
+def _backtest_ticker(ticker, horizon=20, step=5, max_days=504):
+    out = []
+    try:
+        daily = yahoo_chart(ticker, "2y", "1d")
+    except Exception:
+        return out
+    dq = ((daily.get("indicators") or {}).get("quote") or [{}])[0]
+    closes = [c for c in (dq.get("close") or []) if c is not None]
+    vols = dq.get("volume") or []
+    n = len(closes)
+    if n < 210 + horizon:
+        return out
+    i = max(210, n - max_days)
+    while i + horizon < n:
+        window = closes[:i + 1]
+        ind = compute_indicators(window, vols[:i + 1])
+        seg = window[-252:]
+        score, _, _ = signal_score(window[-1], ind, max(seg), min(seg))
+        out.append((score, (closes[i + horizon] / closes[i] - 1) * 100))
+        i += step
+    return out
+
+
+def _bt_stats(rs):
+    if not rs:
+        return None
+    return {"count": len(rs),
+            "win_rate": round(sum(1 for r in rs if r > 0) / len(rs) * 100, 1),
+            "avg_return": round(sum(rs) / len(rs), 2)}
+
+
+def run_backtest(tickers, horizon=20):
+    samples, used = [], []
+    for t in tickers:
+        s = _backtest_ticker(t, horizon)
+        if s:
+            samples += s
+            used.append(t)
+    if not samples:
+        return None
+    buys = [r for (sc, r) in samples if sc >= 66]
+    holds = [r for (sc, r) in samples if 45 <= sc < 66]
+    sells = [r for (sc, r) in samples if sc < 45]
+    return {
+        "horizon_days": horizon,
+        "tickers": used, "ticker_count": len(used), "sample_count": len(samples),
+        "buy": _bt_stats(buys), "hold": _bt_stats(holds), "sell": _bt_stats(sells),
+        "baseline": _bt_stats([r for (_, r) in samples]),
+        "generated": int(time.time()),
+        "note": "Technický Signal Score, žádný look-ahead. Koupit = skóre ≥66, Prodat = <45.",
+    }
+
+
+@app.route("/api/admin/backtest", methods=["POST"])
+def admin_backtest():
+    if not _auth_admin():
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    body = request.get_json(silent=True) or {}
+    horizon = max(5, min(int(body.get("horizon", 20) or 20), 120))
+    tickers = body.get("tickers") if isinstance(body.get("tickers"), list) else None
+    tickers = [t.strip().upper() for t in (tickers or BACKTEST_BASKET) if str(t).strip()][:20]
+    try:
+        res = run_backtest(tickers, horizon)
+        if not res:
+            return jsonify({"ok": False, "error": "Backtest nevrátil data (zkus jiné tickery)."}), 502
+        kv_set_json("backtest:latest", res)
+        return jsonify({"ok": True, "result": res})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba backtestu: {e}"}), 500
+
+
+@app.route("/api/backtest")
+def get_backtest():
+    """Veřejně dostupný poslední backtest (důkaz úspěšnosti). Cachováno v KV."""
+    try:
+        return jsonify({"ok": True, "result": kv_get_json("backtest:latest")})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
