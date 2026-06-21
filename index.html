@@ -583,7 +583,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·o</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·p</div>
 
 <div class="container">
   
@@ -1889,8 +1889,8 @@ function renderBacktest(res) {
         <table class="admin-table" style="font-size:12px">
             <thead><tr><th>Signál</th><th style="text-align:right">Úspěšnost</th><th style="text-align:right">Prům. výnos</th></tr></thead>
             <tbody>
-                ${row('🟢 Koupit (≥66)', res.buy, true)}
-                ${row('🟡 Držet (45–65)', res.hold)}
+                ${row('🟢 Koupit (≥70)', res.buy, true)}
+                ${row('🟡 Držet (45–69)', res.hold)}
                 ${row('🔴 Prodat (<45)', res.sell)}
                 ${row('⚪ Baseline (vše)', res.baseline)}
             </tbody>
@@ -2657,7 +2657,7 @@ function renderDeepReport(d) {
     const cats = (rp.catalysts || []).map(x => `<li>${escapeHtml(x)}</li>`).join('');
 
     // Transparentní rozpad pravidlového modelu (z čeho verdikt vychází)
-    const colFor = s => s >= 66 ? 'var(--up)' : (s >= 45 ? '#FFC400' : 'var(--down)');
+    const colFor = s => s >= 70 ? 'var(--up)' : (s >= 45 ? '#FFC400' : 'var(--down)');
     const m = d.model;
     const modelHtml = (m && m.pillars && m.pillars.length) ? `
         <div class="deep-model">
