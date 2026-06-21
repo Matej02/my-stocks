@@ -261,6 +261,22 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
 .deep-proof {display:flex; align-items:flex-start; gap:8px; background:var(--up-glow); border:1px solid rgba(0,230,118,0.35); color:var(--up); border-radius:12px; padding:10px 12px; margin:6px 0 14px; font-size:13px; line-height:1.45;}
 .deep-proof i {font-size:18px; flex:none; margin-top:1px;}
 .deep-proof .dp-sub {display:block; color:var(--text2); font-size:11px; margin-top:2px;}
+/* Track record */
+.track-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-top:20px;}
+.track-header {font-family:var(--fh); font-weight:700; font-size:16px; display:flex; align-items:center; gap:8px; margin-bottom:14px;}
+.track-stats {display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
+.track-stat {flex:1; min-width:120px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:12px; text-align:center;}
+.track-stat .l {font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
+.track-stat .v {font-family:var(--fh); font-weight:800; font-size:22px; margin-top:4px;}
+.track-list {display:flex; flex-direction:column; gap:6px;}
+.track-row {display:grid; grid-template-columns:54px 1fr 78px 70px; align-items:center; gap:8px; font-size:13px; padding:7px 0; border-top:1px solid var(--border);}
+.track-row .tk {font-family:var(--fh); font-weight:700;}
+.track-vd {font-size:11px; font-weight:700; padding:2px 8px; border-radius:8px; justify-self:start;}
+.track-vd.buy {background:var(--up-glow); color:var(--up);}
+.track-vd.hold {background:rgba(255,196,0,0.12); color:#FFC400;}
+.track-vd.sell {background:var(--down-glow); color:var(--down);}
+.track-ret {text-align:right; font-family:var(--fh); font-weight:700;}
+.track-empty {color:var(--text2); font-size:13px;}
 
 /* ============ SOUHRNNÉ TECHNICKÉ HODNOCENÍ (budík) ============ */
 .tech-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-bottom:20px;}
@@ -586,7 +602,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·q</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·r</div>
 
 <div class="container">
   
@@ -754,6 +770,13 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:50vw;height:50v
       </div>
       <div class="ai-picks-grid" id="ai-picks-grid">
         </div>
+    </div>
+
+    <!-- TRACK RECORD: úspěšnost dosavadních verdiktů -->
+    <div class="track-box" id="track-box" style="display:none;">
+      <div class="track-header"><i class="ti ti-history"></i> Track record — jak vychází naše verdikty</div>
+      <div id="track-stats" class="track-stats"></div>
+      <div id="track-list" class="track-list"></div>
     </div>
     </div><!-- /section-ai -->
 
@@ -1232,12 +1255,14 @@ function switchTab(name) {
         const lock = document.getElementById('ai-lock');
         if (!hasFeature('elite')) {
             lock.innerHTML = lockedCardHTML('AI analýza', 'elite',
-                'Tržní briefing, doporučení „co prodat/přikoupit" a AI chat o akciích.');
+                'Tržní briefing, doporučení „co prodat/přikoupit", AI chat o akciích a track record verdiktů.');
             lock.style.display = 'block';
             document.getElementById('port-eval-box').style.display = 'none';
             document.getElementById('ai-dashboard-brief').style.display = 'none';
+            document.getElementById('track-box').style.display = 'none';
         } else {
             lock.style.display = 'none';
+            loadTrackRecord();
         }
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2430,6 +2455,44 @@ function toggleWatchlist() {
 
 // --- AUTO-AI ANALÝZA V DETAILU ---
 // --- PORTFOLIO HODNOCENÍ: CO PRODAT / PŘIKOUPIT (server-side AI) ---
+async function loadTrackRecord() {
+    const box = document.getElementById('track-box');
+    const statsEl = document.getElementById('track-stats');
+    const listEl = document.getElementById('track-list');
+    box.style.display = 'block';
+    statsEl.innerHTML = '';
+    listEl.innerHTML = '<div class="track-empty"><i class="ti ti-loader spin"></i> Načítám track record…</div>';
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/track-record`)).json();
+        if (!d.ok || !d.count) {
+            listEl.innerHTML = '<div class="track-empty">Zatím žádné verdikty. Vygeneruj hloubkovou analýzu — verdikty se začnou ukládat a tady uvidíš jejich reálnou úspěšnost v čase.</div>';
+            return;
+        }
+        const s = d.stats || {};
+        if (s.buy_count) {
+            statsEl.innerHTML = `
+                <div class="track-stat"><div class="l">Verdiktů „Koupit"</div><div class="v">${s.buy_count}</div></div>
+                <div class="track-stat"><div class="l">Úspěšnost</div><div class="v" style="color:${s.buy_win_rate >= 50 ? 'var(--up)' : 'var(--down)'}">${s.buy_win_rate}%</div></div>
+                <div class="track-stat"><div class="l">Prům. výnos</div><div class="v" style="color:${s.buy_avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${s.buy_avg_return >= 0 ? '+' : ''}${s.buy_avg_return}%</div></div>`;
+        }
+        listEl.innerHTML = d.items.map(it => {
+            const vt = (it.verdict || '').toLowerCase();
+            const vcls = vt.includes('koup') ? 'buy' : (vt.includes('prod') ? 'sell' : 'hold');
+            const ret = it.return_pct;
+            const retTxt = ret != null
+                ? `<span class="track-ret" style="color:${ret >= 0 ? 'var(--up)' : 'var(--down)'}">${ret >= 0 ? '+' : ''}${ret}%</span>`
+                : '<span class="track-ret" style="color:var(--text2)">—</span>';
+            return `<div class="track-row">
+                <span class="tk">${escapeHtml(it.ticker)}</span>
+                <span class="track-vd ${vcls}">${escapeHtml(it.verdict || '—')}</span>
+                <span style="color:var(--text2);font-size:12px;text-align:right">${fmtDate(it.ts)}</span>
+                ${retTxt}</div>`;
+        }).join('');
+    } catch (e) {
+        listEl.innerHTML = '<div class="track-empty">Track record se nepodařilo načíst.</div>';
+    }
+}
+
 async function generatePortfolioEval(watchlistData) {
     const box = document.getElementById('port-eval-box');
     const summaryEl = document.getElementById('port-eval-summary');
