@@ -59,6 +59,17 @@ def _round(v, n=3, default=None):
         return default
 
 
+def _pct(v, n=1):
+    """Zlomek z Yahoo (0.23) -> procenta (23.0). None když nejde."""
+    v = _clean(v, None)
+    if v is None:
+        return None
+    try:
+        return round(float(v) * 100, n)
+    except Exception:
+        return None
+
+
 def yahoo_chart(ticker, rng, interval):
     """Stáhne data z Yahoo chart endpointu. Vrací result dict (meta, timestamp, quote)."""
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(ticker, safe='')}"
@@ -377,6 +388,24 @@ def fetch_fundamentals(ticker):
     except Exception:
         pass
     return out
+
+
+def _quote_summary(ticker, modules):
+    """Best-effort Yahoo quoteSummary -> result[0] dict (víc modulů najednou).
+    Vrací {} při jakémkoli selhání (crumb, síť, prázdná data)."""
+    try:
+        s = requests.Session()
+        s.headers.update(HEADERS)
+        s.get("https://finance.yahoo.com/quote/" + quote(ticker, safe=''), timeout=4)
+        crumb = s.get("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=4).text.strip()
+        if not crumb or "<" in crumb or len(crumb) > 40:
+            return {}
+        url = f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{quote(ticker, safe='')}"
+        r = s.get(url, params={"modules": modules, "crumb": crumb}, timeout=7)
+        result = (((r.json() or {}).get("quoteSummary") or {}).get("result") or [])
+        return result[0] if result else {}
+    except Exception:
+        return {}
 
 
 # ---------------------------------------------------------------------------
@@ -1435,8 +1464,23 @@ def call_llm(prompt, json_mode=True):
         return None
 
 
+def _perf_windows(closes):
+    """Procentní výkonnost přes několik oken (z denních close)."""
+    out = {}
+    if not closes:
+        return out
+    last = closes[-1]
+    for label, n in (("1t", 5), ("1m", 22), ("3m", 66), ("6m", 132), ("1r", 252)):
+        if len(closes) > n and closes[-1 - n]:
+            out[label] = round((last / closes[-1 - n] - 1) * 100, 1)
+    return out
+
+
 def gather_facts(ticker):
-    """Sesbírá tvrdá data o akcii pro analytický model."""
+    """Sesbírá co nejvíc TVRDÝCH dat o akcii pro analytický model: technika,
+    výkonnost v čase, pozice v 52T pásmu, valuace, růst, ziskovost, rozvaha,
+    cíle a nálada analytiků, blížící se výsledky, titulky. Vše best-effort –
+    co se nepodaří stáhnout, se prostě vynechá (model dostane jen ověřená čísla)."""
     ticker = ticker.upper()
     daily = yahoo_chart(ticker, "1y", "1d")
     meta = daily.get("meta", {})
@@ -1452,13 +1496,90 @@ def gather_facts(ticker):
         "ticker": ticker, "name": meta.get("shortName") or ticker,
         "currency": meta.get("currency", "USD"),
         "price": _round(price, 3), "high52": _round(high52, 3), "low52": _round(low52, 3),
-        "rsi": ind.get("rsi"), "sma50": ind.get("sma50"), "sma200": ind.get("sma200"),
-        "macd_hist": ind.get("macd_hist"), "momentum_1m_pct": ind.get("mom_1m"),
-        "volatility_pct": ind.get("volatility"),
+        "rsi": ind.get("rsi"), "sma20": ind.get("sma20"), "sma50": ind.get("sma50"),
+        "sma200": ind.get("sma200"), "macd_hist": ind.get("macd_hist"),
+        "momentum_1m_pct": ind.get("mom_1m"), "volatility_pct": ind.get("volatility"),
+        "avg_volume": ind.get("avg_volume"), "last_volume": ind.get("last_volume"),
         "signal_score": score, "signal_label": score_label,
-        "tech_rating": tr["label"],
+        "tech_rating": tr["label"], "tech_votes": {"buy": tr["buy"], "sell": tr["sell"], "neutral": tr["neutral"]},
     }
-    # Fundamenty + analytici z Finnhubu (best-effort)
+    # Výkonnost v čase + pozice v 52T pásmu + vzdálenost od klouzavých průměrů
+    f["perf_pct"] = _perf_windows(closes)
+    if high52 and low52 and high52 > low52 and price:
+        f["range_position_pct"] = round((price - low52) / (high52 - low52) * 100, 1)
+    if price and ind.get("sma50"):
+        f["dist_sma50_pct"] = round((price / ind["sma50"] - 1) * 100, 1)
+    if price and ind.get("sma200"):
+        f["dist_sma200_pct"] = round((price / ind["sma200"] - 1) * 100, 1)
+
+    # Bohaté fundamenty + analytici z Yahoo quoteSummary (best-effort, 1 session)
+    qs = _quote_summary(ticker, "summaryDetail,defaultKeyStatistics,financialData,assetProfile,"
+                                "calendarEvents,earningsTrend,upgradeDowngradeHistory")
+    if qs:
+        sd = qs.get("summaryDetail") or {}
+        ks = qs.get("defaultKeyStatistics") or {}
+        fd = qs.get("financialData") or {}
+        ap = qs.get("assetProfile") or {}
+        f["sector"] = ap.get("sector")
+        f["industry"] = ap.get("industry")
+        f["valuation"] = {k: v for k, v in {
+            "pe": _raw(sd, "trailingPE"), "forward_pe": _raw(sd, "forwardPE") or _raw(ks, "forwardPE"),
+            "peg": _raw(ks, "pegRatio"), "price_to_book": _raw(ks, "priceToBook"),
+            "ev_ebitda": _raw(ks, "enterpriseToEbitda"), "market_cap": _raw(sd, "marketCap"),
+        }.items() if v is not None}
+        f["financials"] = {k: v for k, v in {
+            "revenue_growth_pct": _pct(_raw(fd, "revenueGrowth")),
+            "earnings_growth_pct": _pct(_raw(fd, "earningsGrowth")),
+            "gross_margin_pct": _pct(_raw(fd, "grossMargins")),
+            "operating_margin_pct": _pct(_raw(fd, "operatingMargins")),
+            "profit_margin_pct": _pct(_raw(fd, "profitMargins")),
+            "roe_pct": _pct(_raw(fd, "returnOnEquity")),
+            "debt_to_equity": _raw(fd, "debtToEquity"),
+            "current_ratio": _raw(fd, "currentRatio"),
+            "free_cashflow": _raw(fd, "freeCashflow"),
+            "total_cash": _raw(fd, "totalCash"), "total_debt": _raw(fd, "totalDebt"),
+        }.items() if v is not None}
+        analysts = {k: v for k, v in {
+            "target_mean": _raw(fd, "targetMeanPrice"), "target_high": _raw(fd, "targetHighPrice"),
+            "target_low": _raw(fd, "targetLowPrice"), "recommendation": fd.get("recommendationKey"),
+            "num_opinions": _raw(fd, "numberOfAnalystOpinions"),
+        }.items() if v is not None}
+        tm = analysts.get("target_mean")
+        if tm and price:
+            analysts["target_upside_pct"] = round((tm / price - 1) * 100, 1)
+        if analysts:
+            f["analysts"] = analysts
+        # Datum nejbližších výsledků (volatilita kolem earnings)
+        try:
+            ed = (((qs.get("calendarEvents") or {}).get("earnings") or {}).get("earningsDate") or [])
+            ts0 = (ed[0].get("raw") if isinstance(ed[0], dict) else ed[0]) if ed else None
+            if ts0:
+                f["next_earnings"] = datetime.fromtimestamp(ts0, tz=timezone.utc).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+        # Odhady růstu zisku (earningsTrend)
+        try:
+            growth = {}
+            for t in (qs.get("earningsTrend") or {}).get("trend") or []:
+                per, g = t.get("period"), _pct(_raw(t, "growth"))
+                if per and g is not None:
+                    growth[per] = g
+            if growth:
+                f["growth_estimates_pct"] = growth
+        except Exception:
+            pass
+        # Poslední změny ratingu od bank
+        try:
+            recent = [{"firm": h.get("firm"), "action": h.get("action"),
+                       "from": h.get("fromGrade"), "to": h.get("toGrade")}
+                      for h in ((qs.get("upgradeDowngradeHistory") or {}).get("history") or [])[:5]
+                      if h.get("firm")]
+            if recent:
+                f["recent_rating_changes"] = recent
+        except Exception:
+            pass
+
+    # Fundamenty + analytici z Finnhubu (doplní/ověří, pokud je klíč)
     fk = os.environ.get("FINNHUB_KEY")
     if fk:
         try:
@@ -1466,19 +1587,20 @@ def gather_facts(ticker):
             prof = requests.get(f"{base}/stock/profile2", params={"symbol": ticker, "token": fk}, timeout=6).json() or {}
             metric = (requests.get(f"{base}/stock/metric", params={"symbol": ticker, "metric": "all", "token": fk}, timeout=6).json() or {}).get("metric", {}) or {}
             recs = requests.get(f"{base}/stock/recommendation", params={"symbol": ticker, "token": fk}, timeout=6).json() or []
-            f["industry"] = prof.get("finnhubIndustry")
+            f.setdefault("industry", prof.get("finnhubIndustry"))
             f["market_cap_musd"] = prof.get("marketCapitalization")
             f["pe"] = _round(metric.get("peTTM"), 2)
             f["eps"] = _round(metric.get("epsTTM"), 2)
+            f["52w_metric"] = {"high": _round(metric.get("52WeekHigh"), 2), "low": _round(metric.get("52WeekLow"), 2)}
             if recs:
                 f["analyst_recs"] = {k: recs[0].get(k) for k in ("strongBuy", "buy", "hold", "sell", "strongSell")}
         except Exception:
             pass
     # Pár titulků zpráv
     try:
-        nr = requests.get(f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(ticker)}&quotesCount=0&newsCount=5",
+        nr = requests.get(f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(ticker)}&quotesCount=0&newsCount=6",
                           headers=HEADERS, timeout=6).json()
-        f["headlines"] = [n.get("title") for n in (nr.get("news") or [])[:5] if n.get("title")]
+        f["headlines"] = [n.get("title") for n in (nr.get("news") or [])[:6] if n.get("title")]
     except Exception:
         f["headlines"] = []
     return f
@@ -1487,7 +1609,19 @@ def gather_facts(ticker):
 def build_analysis_prompt(facts):
     return (
         "Jsi špičkový akciový analytik. Na základě DAT níže vytvoř hloubkovou, konkrétní a "
-        "vyváženou analýzu v ČEŠTINĚ. Opírej se o čísla z dat, nevymýšlej si fakta. "
+        "vyváženou analýzu v ČEŠTINĚ. Pracuj VÝHRADNĚ s čísly z dat – nic si nevymýšlej; "
+        "co v datech není, neuváděj jako fakt.\n\n"
+        "POSTUP (promysli, ale do výstupu dej jen výsledek):\n"
+        "1) VALUACE: posuď P/E, forward P/E, PEG, P/B, EV/EBITDA vs. růst a ziskovost.\n"
+        "2) RŮST & ZISKOVOST: revenue/earnings growth, marže, ROE, odhady růstu.\n"
+        "3) ROZVAHA: dluh/equity, current ratio, cash vs. debt, free cashflow (riziko/odolnost).\n"
+        "4) TECHNIKA: trend (vzdálenost od SMA50/200), RSI, MACD, momentum, pozice v 52T pásmu, výkonnost v čase.\n"
+        "5) ANALYTICI & SENTIMENT: cílová cena a její upside, počet názorů, poslední změny ratingu, titulky.\n"
+        "6) NAČASOVÁNÍ: pokud se blíží 'next_earnings', uveď to jako zdroj volatility/rizika.\n\n"
+        "KALIBRACE 'confidence' (0-100): vysoká jen když se signály SHODUJÍ (technika + fundament + "
+        "analytici míří stejným směrem). Když si protiřečí nebo data chybí, dej NÍŽE. Nebuď přehnaně optimistický.\n"
+        "Ceny (target_price, stop_loss, entry) uveď ve stejné měně jako aktuální cena, realisticky vůči "
+        "52T pásmu, volatilitě a cíli analytiků. 'entry' = rozumná vstupní cena, 'stop_loss' pod klíčovou podporou.\n\n"
         "Vrať POUZE validní JSON přesně v tomto tvaru (bez markdownu):\n"
         "{\n"
         '  "verdict": "Koupit" | "Držet" | "Prodat",\n'
@@ -1495,15 +1629,14 @@ def build_analysis_prompt(facts):
         '  "horizon": "<časový horizont, např. 3–6 měsíců>",\n'
         '  "target_price": <číslo>, "stop_loss": <číslo>, "entry": <číslo>,\n'
         '  "headline": "<jedna výstižná věta>",\n'
-        '  "thesis": "<2-4 věty investiční teze>",\n'
-        '  "fundamentals": "<rozbor fundamentu: valuace, růst, ziskovost>",\n'
-        '  "technicals": "<rozbor technického obrazu>",\n'
-        '  "sentiment": "<nálada trhu, zprávy, analytici>",\n'
+        '  "thesis": "<2-4 věty investiční teze opřené o konkrétní čísla>",\n'
+        '  "fundamentals": "<rozbor: valuace vs. růst, ziskovost, rozvaha – s čísly>",\n'
+        '  "technicals": "<rozbor technického obrazu – s čísly>",\n'
+        '  "sentiment": "<analytici, cílová cena/upside, změny ratingu, zprávy>",\n'
         '  "scenarios": {"bull": "<býčí scénář + cíl>", "base": "<základní>", "bear": "<medvědí + riziko>"},\n'
         '  "risks": ["<riziko 1>", "<riziko 2>", "<riziko 3>"],\n'
         '  "catalysts": ["<katalyzátor 1>", "<katalyzátor 2>"]\n'
         "}\n\n"
-        "Ceny (target_price, stop_loss, entry) uveď ve stejné měně jako aktuální cena a realisticky vzhledem k 52T pásmu a volatilitě.\n\n"
         "DATA:\n" + json.dumps(facts, ensure_ascii=False)
     )
 
