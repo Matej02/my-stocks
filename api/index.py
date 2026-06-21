@@ -2039,7 +2039,7 @@ def _backtest_ticker(ticker, spy=None, horizon=10, step=5, max_days=1260):
             d0, dH = dates[i], dates[i + horizon]
             if spy and d0 in spy and dH in spy and spy[d0]:
                 exc = fwd - (spy[dH] / spy[d0] - 1) * 100
-            out.append((score, fwd, exc))
+            out.append((score, fwd, exc, d0[:4]))  # rok pro rozpad podle režimu
         i += step
     return out
 
@@ -2073,15 +2073,22 @@ def run_backtest(tickers, horizon=10):
             used.append(t)
     if not samples:
         return None
-    buys = [(fwd, exc) for (sc_, fwd, exc) in samples if sc_ >= VERDICT_BUY]
-    holds = [(fwd, exc) for (sc_, fwd, exc) in samples if VERDICT_SELL <= sc_ < VERDICT_BUY]
-    sells = [(fwd, exc) for (sc_, fwd, exc) in samples if sc_ < VERDICT_SELL]
+    buys = [(fwd, exc) for (sc_, fwd, exc, yr) in samples if sc_ >= VERDICT_BUY]
+    holds = [(fwd, exc) for (sc_, fwd, exc, yr) in samples if VERDICT_SELL <= sc_ < VERDICT_BUY]
+    sells = [(fwd, exc) for (sc_, fwd, exc, yr) in samples if sc_ < VERDICT_SELL]
+    # Rozpad „Koupit" podle roku (důkaz, že signál drží i v medvědím 2022)
+    by_year = {}
+    for (sc_, fwd, exc, yr) in samples:
+        if sc_ >= VERDICT_BUY:
+            by_year.setdefault(yr, []).append((fwd, exc))
+    buy_by_year = {yr: _bt_stats(rows) for yr, rows in sorted(by_year.items())}
     return {
         "horizon_days": horizon, "period": "5 let (vč. propadu 2022)",
         "benchmark": "SPY" if spy else None,
         "tickers": used, "ticker_count": len(used), "sample_count": len(samples),
         "buy": _bt_stats(buys), "hold": _bt_stats(holds), "sell": _bt_stats(sells),
-        "baseline": _bt_stats([(fwd, exc) for (_, fwd, exc) in samples]),
+        "baseline": _bt_stats([(fwd, exc) for (_, fwd, exc, yr) in samples]),
+        "buy_by_year": buy_by_year,
         "generated": int(time.time()),
         "note": f"Technické setup skóre (nákup poklesu v uptrendu), 5 let, žádný look-ahead. "
                 f"Koupit = skóre ≥{VERDICT_BUY}, Prodat = <{VERDICT_SELL}. "

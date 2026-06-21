@@ -607,7 +607,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·x</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·y</div>
 
 <div class="container">
   
@@ -1935,6 +1935,19 @@ function renderBacktest(res) {
             <td style="text-align:right;color:${s.avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${ap(s.avg_return)}</td>
             <td style="text-align:right;color:${(s.alpha || 0) >= 0 ? 'var(--up)' : 'var(--down)'}">${ap(s.alpha)}</td></tr>`;
     };
+    // Rozpad „Koupit" podle roku (drží i v medvědím 2022?)
+    let byYearHtml = '';
+    if (res.buy_by_year && Object.keys(res.buy_by_year).length) {
+        const yrs = Object.keys(res.buy_by_year).sort();
+        byYearHtml = `<div style="margin-top:10px;font-size:11px;color:var(--text2)">Signál „Koupit" po letech (trefnost):</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">` +
+            yrs.map(y => {
+                const s = res.buy_by_year[y];
+                if (!s) return '';
+                const col = s.win_rate >= 55 ? 'var(--up)' : (s.win_rate >= 45 ? '#FFC400' : 'var(--down)');
+                return `<span style="font-size:11px;border:1px solid var(--border);border-radius:8px;padding:3px 8px">${y}: <b style="color:${col}">${s.win_rate}%</b> <span style="color:var(--text2)">(${s.count})</span></span>`;
+            }).join('') + `</div>`;
+    }
     const b = res.buy, base = res.baseline;
     let edgeMsg = '';
     if (b && base) {
@@ -1957,6 +1970,7 @@ function renderBacktest(res) {
             </tbody>
         </table>
         ${edgeMsg}
+        ${byYearHtml}
         <div style="font-size:11px;color:var(--text2);margin-top:6px">${escapeHtml(res.note || '')}</div>`;
 }
 
