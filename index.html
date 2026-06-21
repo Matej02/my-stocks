@@ -278,6 +278,8 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .track-vd.buy {background:var(--up-glow); color:var(--up);}
 .track-vd.hold {background:rgba(255,196,0,0.12); color:#FFC400;}
 .track-vd.sell {background:var(--down-glow); color:var(--down);}
+.track-vdwrap {display:flex; align-items:center; gap:6px;}
+.track-score {font-size:10px; color:var(--text2); font-family:var(--fh); font-weight:700;}
 .track-ret {text-align:right; font-family:var(--fh); font-weight:700;}
 .track-empty {color:var(--text2); font-size:13px;}
 
@@ -605,7 +607,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·t</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.20·u</div>
 
 <div class="container">
   
@@ -2473,10 +2475,15 @@ async function loadTrackRecord() {
         }
         const s = d.stats || {};
         if (s.buy_count) {
-            statsEl.innerHTML = `
+            const wcol = w => w >= 50 ? 'var(--up)' : 'var(--down)';
+            let cards = `
                 <div class="track-stat"><div class="l">Verdiktů „Koupit"</div><div class="v">${s.buy_count}</div></div>
-                <div class="track-stat"><div class="l">Úspěšnost</div><div class="v" style="color:${s.buy_win_rate >= 50 ? 'var(--up)' : 'var(--down)'}">${s.buy_win_rate}%</div></div>
+                <div class="track-stat"><div class="l">Úspěšnost</div><div class="v" style="color:${wcol(s.buy_win_rate)}">${s.buy_win_rate}%</div></div>
                 <div class="track-stat"><div class="l">Prům. výnos</div><div class="v" style="color:${s.buy_avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${s.buy_avg_return >= 0 ? '+' : ''}${s.buy_avg_return}%</div></div>`;
+            if (s.buy_high && s.buy_high.count) {
+                cards += `<div class="track-stat" style="border-color:rgba(0,230,118,0.4)"><div class="l">Vysoká jistota (≥${s.high_conf_threshold})</div><div class="v" style="color:${wcol(s.buy_high.win_rate)}">${s.buy_high.win_rate}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">${s.buy_high.count} verdiktů</div></div>`;
+            }
+            statsEl.innerHTML = cards;
         }
         listEl.innerHTML = d.items.map(it => {
             const vt = (it.verdict || '').toLowerCase();
@@ -2485,9 +2492,10 @@ async function loadTrackRecord() {
             const retTxt = ret != null
                 ? `<span class="track-ret" style="color:${ret >= 0 ? 'var(--up)' : 'var(--down)'}">${ret >= 0 ? '+' : ''}${ret}%</span>`
                 : '<span class="track-ret" style="color:var(--text2)">—</span>';
+            const scoreTxt = (it.score != null) ? `<span class="track-score" title="Skóre jistoty">${it.score}</span>` : '';
             return `<div class="track-row">
                 <span class="tk">${escapeHtml(it.ticker)}</span>
-                <span class="track-vd ${vcls}">${escapeHtml(it.verdict || '—')}</span>
+                <span class="track-vdwrap"><span class="track-vd ${vcls}">${escapeHtml(it.verdict || '—')}</span>${scoreTxt}</span>
                 <span style="color:var(--text2);font-size:12px;text-align:right">${fmtDate(it.ts)}</span>
                 ${retTxt}</div>`;
         }).join('');

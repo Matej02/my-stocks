@@ -1951,21 +1951,37 @@ def track_record():
                 prices[t] = (res.get("meta") or {}).get("regularMarketPrice")
             except Exception:
                 prices[t] = None
-        items, buy_rets = [], []
+        items, buy_rets, buy_high_rets = [], [], []
+        HIGH_CONF = 78  # práh „vysoká jistota" (skóre modelu)
         for v in verdicts:
             cur = prices.get(v.get("ticker"))
             entry = v.get("price")
             ret = ((cur - entry) / entry * 100) if (cur and entry) else None
             if v.get("verdict") == "Koupit" and ret is not None:
                 buy_rets.append(ret)
+                if isinstance(v.get("score"), (int, float)) and v["score"] >= HIGH_CONF:
+                    buy_high_rets.append(ret)
             items.append({**v, "current": _round(cur, 3), "return_pct": _round(ret, 2)})
         items = items[-60:][::-1]
+
+        def _agg(rs):
+            return {
+                "count": len(rs),
+                "avg_return": round(sum(rs) / len(rs), 2),
+                "win_rate": round(sum(1 for r in rs if r > 0) / len(rs) * 100, 1),
+            } if rs else None
+
         stats = {}
         if buy_rets:
             stats = {
+                # ploché klíče kvůli zpětné kompatibilitě
                 "buy_count": len(buy_rets),
                 "buy_avg_return": round(sum(buy_rets) / len(buy_rets), 2),
                 "buy_win_rate": round(sum(1 for r in buy_rets if r > 0) / len(buy_rets) * 100, 1),
+                # rozpad podle jistoty
+                "buy_all": _agg(buy_rets),
+                "buy_high": _agg(buy_high_rets),
+                "high_conf_threshold": HIGH_CONF,
             }
         return jsonify({"ok": True, "count": len(verdicts), "items": items, "stats": stats})
     except Exception as e:
