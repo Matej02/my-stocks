@@ -1826,12 +1826,18 @@ def compute_levels(facts, horizon=10):
 def build_analysis_prompt(facts, model=None):
     model_block = ""
     if model:
+        v = model.get("verdict", "")
         model_block = (
             "\n\nPRAVIDLOVÝ MODEL (spočítaný deterministicky z dat – je ZÁVAZNÝ):\n"
             + json.dumps(model, ensure_ascii=False)
-            + "\nVe výstupu pole 'verdict' a 'confidence' MUSÍ přesně odpovídat tomuto modelu "
-            "(verdict=model.verdict, confidence=model.confidence). Tvým úkolem je verdikt VYSVĚTLIT "
-            "čísly z dat (proč to skóre vyšlo), ne ho měnit. Pokud si pilíře protiřečí, otevřeně to napiš."
+            + f"\nVe výstupu pole 'verdict' a 'confidence' MUSÍ přesně odpovídat modelu (verdict='{v}'). "
+            "Verdikt jen VYSVĚTLI čísly, neměň ho.\n"
+            f"DŮLEŽITÉ – SOULAD: CELÝ text (headline, thesis, scenarios) musí ladit s verdiktem '{v}'. "
+            "Je-li verdikt 'Držet', NEPIŠ to jako jasný nákup – piš vyváženě, proč spíš počkat "
+            "(co chybí k nákupu). Je-li 'Prodat', piš opatrně/negativně. 'headline' musí odpovídat verdiktu. "
+            "Pokud si pilíře protiřečí (např. dobří analytici vs. slabá ziskovost), napiš to otevřeně.\n"
+            "HORIZONT je krátkodobý (~2 týdny, náš signál) – do pole 'horizon' napiš \"~2 týdny\" a scénáře "
+            "piš k tomuto horizontu, ne k 3–6 měsícům."
         )
     return (
         "Jsi špičkový akciový analytik. Na základě DAT níže vytvoř hloubkovou, konkrétní a "
@@ -1914,6 +1920,7 @@ def deep_analysis(ticker):
             report["entry"] = levels["entry"]
             report["stop_loss"] = levels["stop_loss"]
             report["target_price"] = levels["target_price"]
+            report["horizon"] = f"~2 týdny ({levels['horizon_days']} obch. dní)"
 
         kv_set_json(ukey, used + 1)
 
