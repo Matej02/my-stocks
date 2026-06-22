@@ -645,7 +645,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·k</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·l</div>
 
 <div class="container">
   
@@ -3167,6 +3167,13 @@ function renderDeepReport(d) {
             <span class="dp-sub">Ověřeno na historii — ${btProof.period ? btProof.period + ', ' : ''}${btProof.sample_count} obchodů, bez nahlížení do budoucna. ~40 % obchodů přesto skončí v mínusu — proto vždy se stop-lossem. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span></span>
         </div>` : '';
 
+    // Živé signály / katalyzátory (doplňkové, nevstupují do verdiktu)
+    const live = (d.facts && d.facts.live_signals) || [];
+    const liveHtml = live.length ? `
+        <div class="deep-sec"><h4><i class="ti ti-bolt"></i> Živé signály (doplňkové)</h4>
+        <ul class="deep-list">${live.map(x => `<li>${x.k === 'bull' ? '🟢' : (x.k === 'bear' ? '🔴' : '⚪')} ${escapeHtml(x.t)}</li>`).join('')}</ul>
+        <div style="font-size:11px;color:var(--text2);margin-top:4px">Aktuální události (výsledky, revize analytiků, insideři) — kontext, ne součást backtestovaného verdiktu.</div></div>` : '';
+
     document.getElementById('deep-output').innerHTML = `
         <div class="deep-verdict">
             <span class="dv-badge ${vcls}">${escapeHtml(rp.verdict || '—')}</span>
@@ -3185,6 +3192,7 @@ function renderDeepReport(d) {
         </div>
         ${lv ? `<div class="deep-rr">Poměr zisk:riziko <b>${lv.rr ? lv.rr + ' : 1' : '—'}</b> · cíl <b style="color:var(--up)">+${lv.reward_pct}%</b> / stop <b style="color:var(--down)">−${lv.risk_pct}%</b> · horizont ~${lv.horizon_days} dní <span style="color:var(--text2)">(z volatility, ne odhad)</span></div>` : ''}
         ${lv ? `<div class="deep-exit"><b>🚪 Exit plán:</b> prodej při dosažení cíle <b>${fmt(rp.target_price)}</b>, při poklesu na stop <b>${fmt(rp.stop_loss)}</b>, nebo po ~2 týdnech, pokud nenastane ani jedno. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></div>` : ''}
+        ${liveHtml}
         ${sec('ti-bulb', 'Investiční teze', rp.thesis)}
         ${sec('ti-building-bank', 'Fundament', rp.fundamentals)}
         ${sec('ti-chart-line', 'Technika', rp.technicals)}

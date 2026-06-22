@@ -1715,6 +1715,43 @@ def gather_facts(ticker):
             for kk in ("valuation", "financials", "analysts"):
                 if isinstance(f.get(kk), dict) and not f[kk]:
                     f.pop(kk, None)
+
+            # ŽIVÉ SIGNÁLY (katalyzátory) – doplňkové, NEvstupují do backtestovaného
+            # verdiktu (nejdou ověřit zpětně), jen informují: výsledky, revize, insideři.
+            live = []
+            try:  # překvapení ve výsledcích
+                earn = requests.get(f"{base}/stock/earnings", params={"symbol": ticker, "limit": 1, "token": fk}, timeout=6).json() or []
+                if earn and isinstance(earn, list):
+                    sp = earn[0].get("surprisePercent")
+                    if isinstance(sp, (int, float)):
+                        if sp >= 2:
+                            live.append({"t": f"Poslední výsledky překonaly odhad o {sp:.0f}%", "k": "bull"})
+                        elif sp <= -2:
+                            live.append({"t": f"Poslední výsledky pod odhadem o {abs(sp):.0f}%", "k": "bear"})
+            except Exception:
+                pass
+            try:  # revize doporučení (trend nákupních hlasů)
+                if recs and len(recs) >= 2:
+                    cur = (recs[0].get("strongBuy", 0) or 0) + (recs[0].get("buy", 0) or 0)
+                    prev = (recs[1].get("strongBuy", 0) or 0) + (recs[1].get("buy", 0) or 0)
+                    if cur > prev:
+                        live.append({"t": "Analytici zvyšují optimismus (přibývá nákupních doporučení)", "k": "bull"})
+                    elif cur < prev:
+                        live.append({"t": "Analytici snižují optimismus (ubývá nákupních doporučení)", "k": "bear"})
+            except Exception:
+                pass
+            try:  # insider obchody (čistý směr)
+                ins = requests.get(f"{base}/stock/insider-transactions", params={"symbol": ticker, "token": fk}, timeout=6).json() or {}
+                rows = (ins.get("data") or [])[:40]
+                net = sum((x.get("change") or 0) for x in rows if isinstance(x.get("change"), (int, float)))
+                if rows and net > 0:
+                    live.append({"t": "Insideři v poslední době spíše nakupovali", "k": "bull"})
+                elif rows and net < 0:
+                    live.append({"t": "Insideři v poslední době spíše prodávali", "k": "bear"})
+            except Exception:
+                pass
+            if live:
+                f["live_signals"] = live
         except Exception:
             pass
     # Pár titulků zpráv
