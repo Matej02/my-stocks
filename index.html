@@ -455,6 +455,16 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .method-proof i {font-size:20px; flex:none;}
 .method-proof b {color:var(--text);}
 .method-disc {font-size:11px; color:var(--text2); margin-top:14px; line-height:1.5;}
+.sim-row {display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;}
+.sim-row label {font-size:13px; color:var(--text);}
+.sim-inwrap {display:flex; align-items:center; gap:6px; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:10px; padding:6px 10px;}
+.sim-inwrap input {width:90px; background:transparent; border:none; color:var(--text); font-family:var(--fh); font-weight:700; font-size:16px; outline:none; text-align:right;}
+.sim-grid {display:flex; gap:8px; margin-top:8px;}
+.sim-cell {flex:1; text-align:center; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:12px 8px;}
+.sim-cell.main {border-color:var(--border-accent); background:rgba(255,122,0,0.06);}
+.sim-cell .l {font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.3px; line-height:1.2;}
+.sim-cell .v {font-family:var(--fh); font-weight:800; font-size:17px; margin-top:4px;}
+.sim-cell .p {font-size:11px; color:var(--text2); margin-top:2px;}
 .profile-close:hover {color:var(--accent); border-color:var(--accent);}
 .profile-box .btn-primary {display:inline-flex; align-items:center; justify-content:center; gap:8px;}
 .profile-hdr {text-align:center; margin-bottom:1.5rem;}
@@ -635,7 +645,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·j</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·k</div>
 
 <div class="container">
   
@@ -858,7 +868,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 
         <div class="method-step"><div class="ms-ico">📊</div><div>
           <h4>Důkaz, ne sliby</h4>
-          <p>Backtest na <b>5 letech</b> (vč. propadu 2022) + track record reálných verdiktů. Ukazujeme úspěšnost i alfu proti indexu — poctivě, včetně slabších období.</p>
+          <p>Backtest na <b>5 letech</b> (vč. propadu 2022) + track record reálných verdiktů. Ukazujeme úspěšnost i alfu proti indexu — poctivě, včetně slabších období. <a class="profile-cloud-link" onclick="closeAbout();openSim()">Kolik to může vydělat?</a></p>
         </div></div>
 
         <div class="method-step"><div class="ms-ico">💎</div><div>
@@ -870,6 +880,25 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 
         <p class="method-disc">MY STOCKS je informační nástroj a podklad k vlastnímu rozhodnutí. Není to investiční doporučení a žádný nástroj negarantuje zisk.</p>
       </div>
+    </div>
+  </div>
+
+  <!-- SIMULÁTOR: kolik to může vydělat (z historické expectancy) -->
+  <div class="pl-modal" id="simModal">
+    <div class="profile-box" style="max-width:520px;">
+      <button class="profile-close" onclick="closeSim()"><i class="ti ti-x"></i></button>
+      <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-calculator" style="color:var(--accent)"></i> Kolik to může vydělat?</h2>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Odhad z <b>historického průměru</b> našich TOP signálů — ne slib.</div>
+      <div class="sim-row">
+        <label>Kapitál na 1 obchod</label>
+        <div class="sim-inwrap"><input id="sim-cap" type="number" min="10" value="1000" oninput="runSim()"><span>€</span></div>
+      </div>
+      <div class="sim-row">
+        <label>Počet TOP obchodů za rok</label>
+        <div class="sim-inwrap"><input id="sim-trades" type="number" min="1" max="200" value="20" oninput="runSim()"></div>
+      </div>
+      <div id="sim-out"></div>
+      <p class="method-disc" style="margin-top:14px;">Modelový odhad z minulé úspěšnosti (compounding průměrného výnosu na obchod). <b>Skutečnost se bude lišit</b> — část obchodů skončí v mínusu, výnosy nejsou zaručené a minulost ≠ budoucnost. Slouží jen pro představu, není to investiční doporučení.</p>
     </div>
   </div>
 
@@ -911,7 +940,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 
     <!-- TRACK RECORD: úspěšnost dosavadních verdiktů -->
     <div class="track-box" id="track-box" style="display:none;">
-      <div class="track-header"><i class="ti ti-history"></i> Track record — jak vychází naše verdikty</div>
+      <div class="track-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;"><span><i class="ti ti-history"></i> Track record — jak vychází naše verdikty</span><button class="tool-btn" onclick="openSim()"><i class="ti ti-calculator"></i> Kolik to vydělá?</button></div>
       <div id="track-stats" class="track-stats"></div>
       <div id="track-list" class="track-list"></div>
     </div>
@@ -1563,6 +1592,34 @@ function openMethod() { document.getElementById('methodModal').classList.add('op
 function closeMethod() { document.getElementById('methodModal').classList.remove('open'); }
 function openAbout() { document.getElementById('aboutModal').classList.add('open'); }
 function closeAbout() { document.getElementById('aboutModal').classList.remove('open'); }
+function openSim() { document.getElementById('simModal').classList.add('open'); runSim(); }
+function closeSim() { document.getElementById('simModal').classList.remove('open'); }
+function runSim() {
+    const out = document.getElementById('sim-out');
+    const cap = Math.max(0, parseFloat(document.getElementById('sim-cap').value) || 0);
+    const trades = Math.max(1, Math.min(parseInt(document.getElementById('sim-trades').value) || 1, 200));
+    const bp = btProof && (btProof.top && btProof.top.count ? btProof.top : btProof.buy);
+    if (!bp || bp.avg_return == null) {
+        out.innerHTML = '<div style="color:var(--text2);font-size:13px;">Spusť nejdřív backtest (Admin), ať máme z čeho počítat.</div>';
+        return;
+    }
+    const e = bp.avg_return / 100;                 // průměr na obchod
+    const base = cap * Math.pow(1 + e, trades) - cap;
+    const good = cap * Math.pow(1 + e * 1.5, trades) - cap;   // příznivý
+    const bad = cap * Math.pow(1 + (e - 0.012), trades) - cap; // konzervativní (horší o 1,2 b./obchod)
+    const f = v => (v >= 0 ? '+' : '') + Math.round(v).toLocaleString('cs-CZ') + ' €';
+    const pct = v => (v >= 0 ? '+' : '') + (v / cap * 100).toFixed(0) + ' %';
+    const col = v => v >= 0 ? 'var(--up)' : 'var(--down)';
+    out.innerHTML = `
+        <div class="sim-grid">
+            <div class="sim-cell"><div class="l">Konzervativní</div><div class="v" style="color:${col(bad)}">${f(bad)}</div><div class="p">${pct(bad)}</div></div>
+            <div class="sim-cell main"><div class="l">Očekávaný (historický průměr)</div><div class="v" style="color:${col(base)}">${f(base)}</div><div class="p">${pct(base)}</div></div>
+            <div class="sim-cell"><div class="l">Příznivý</div><div class="v" style="color:${col(good)}">${f(good)}</div><div class="p">${pct(good)}</div></div>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-top:10px;line-height:1.5;">
+            Vychází z trefnosti <b>${bp.win_rate}%</b> a průměru <b>${bp.avg_return >= 0 ? '+' : ''}${bp.avg_return}%</b> na obchod (TOP signál, 5letý backtest), při ${trades} obchodech a reinvestici. Předpokládá, že tolik TOP signálů za rok skutečně nastane — bývá jich jen pár měsíčně.
+        </div>`;
+}
 
 function renderProfileView() {
     const authView = document.getElementById('profile-auth');
