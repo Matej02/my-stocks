@@ -634,7 +634,7 @@ def _email_shell(title, body_html):
 def send_welcome_email(email, eff="none"):
     if eff == "elite":
         body = ("<p style='line-height:1.6'>Tvůj účet má <b>plný přístup (Elite)</b> — máš odemčené vše: "
-                "příležitosti s potenciálem, doporučení analytiků i hloubkovou AI analýzu.</p>")
+                "příležitosti s potenciálem, doporučení analytiků i hloubkovou analýzu.</p>")
     elif eff in ("pro", "start"):
         body = ("<p style='line-height:1.6'>Právě ti začalo <b>7 dní plánu Pro zdarma</b> — vyzkoušej "
                 "příležitosti s potenciálem a doporučení analytiků. Po zkušební době máš slevu na předplatné.</p>")
@@ -2205,10 +2205,10 @@ def _ai_gate(min_plan="elite"):
     if not user:
         return None, (jsonify({"ok": False, "error": "Přihlas se."}), 401)
     if not analysis_enabled():
-        return None, (jsonify({"ok": False, "error": "AI motor zatím není nastavený."}), 503)
+        return None, (jsonify({"ok": False, "error": "Analytický motor zatím není nastavený."}), 503)
     rec = kv_get_json(f"user:{user}")
     if user not in admin_users() and PLAN_RANK.get(effective_plan(rec), -1) < PLAN_RANK[min_plan]:
-        return None, (jsonify({"ok": False, "error": f"AI funkce je v plánu {min_plan.capitalize()}.", "upgrade": True}), 402)
+        return None, (jsonify({"ok": False, "error": f"Tato funkce je v plánu {min_plan.capitalize()}.", "upgrade": True}), 402)
     return user, None
 
 
@@ -2224,7 +2224,7 @@ def ai_brief():
               '"top_picks":[{"ticker":"X","reason":"krátký pádný důvod k nákupu"}]}. Max 2 tipy. Česky.')
     out = call_llm(prompt)
     if not isinstance(out, dict):
-        return jsonify({"ok": False, "error": "AI se nepodařilo."}), 502
+        return jsonify({"ok": False, "error": "Nepodařilo se, zkus to znovu."}), 502
     return jsonify({"ok": True, "summary": out.get("summary", ""), "top_picks": out.get("top_picks", [])})
 
 
@@ -2241,7 +2241,7 @@ def ai_eval():
               '"buy":[{"ticker":"X","reason":"proč přikoupit/koupit","upside":"+15%"}]}. Max 3 v každé sekci. Česky.')
     out = call_llm(prompt)
     if not isinstance(out, dict):
-        return jsonify({"ok": False, "error": "AI se nepodařilo."}), 502
+        return jsonify({"ok": False, "error": "Nepodařilo se, zkus to znovu."}), 502
     return jsonify({"ok": True, "summary": out.get("summary", ""),
                     "sell": out.get("sell", []), "buy": out.get("buy", [])})
 
@@ -2261,7 +2261,7 @@ def ai_chat():
               "Nepoužívej markdown ani hvězdičky. Na konci krátce připomeň, že nejde o investiční doporučení.")
     answer = call_llm(prompt, json_mode=False)
     if not answer:
-        return jsonify({"ok": False, "error": "AI se nepodařilo."}), 502
+        return jsonify({"ok": False, "error": "Nepodařilo se, zkus to znovu."}), 502
     return jsonify({"ok": True, "answer": answer})
 
 

@@ -621,7 +621,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·c</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·d</div>
 
 <div class="container">
   
@@ -762,7 +762,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
       <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-compass" style="color:var(--accent)"></i> Jak hodnotíme</h2>
       <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Metoda MY STOCKS — náš systém, jak poznat, kdy koupit</div>
       <div class="method-body">
-        <p class="method-intro">Náš verdikt <b>není odhad AI</b>. Počítá ho pevný, ověřený systém z několika pilířů — stejná data dají vždy stejný výsledek. AI ho jen vysvětlí slovy.</p>
+        <p class="method-intro">Náš verdikt <b>není náhodný odhad</b>. Počítá ho pevný, ověřený systém z několika pilířů — stejná data dají vždy stejný výsledek. K tomu doplníme srozumitelný slovní rozbor.</p>
 
         <div class="method-step"><div class="ms-ico">📊</div><div>
           <h4>1. Načasování — „Sleva v trendu"</h4>
@@ -806,7 +806,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
     <div class="dash-tabs">
       <button class="dash-tab active" id="dtab-portfolio" onclick="switchTab('portfolio')"><i class="ti ti-wallet"></i> Moje portfolio</button>
       <button class="dash-tab" id="dtab-opportunities" onclick="switchTab('opportunities')"><i class="ti ti-rocket"></i> Příležitosti</button>
-      <button class="dash-tab" id="dtab-ai" onclick="switchTab('ai')"><i class="ti ti-robot"></i> AI analýza</button>
+      <button class="dash-tab" id="dtab-ai" onclick="switchTab('ai')"><i class="ti ti-bulb"></i> Doporučení</button>
     </div>
 
     <!-- SEKCE: AI ANALÝZA -->
@@ -829,7 +829,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
     </div>
 
     <div class="ai-dashboard-box" id="ai-dashboard-brief" style="display:none;">
-      <div class="ai-brief-header"><i class="ti ti-robot"></i> Tržní Briefing & Doporučení k nákupu</div>
+      <div class="ai-brief-header"><i class="ti ti-bulb"></i> Přehled trhu & doporučení k nákupu</div>
       <div class="ai-brief-content" id="ai-brief-text">
         <i class="ti ti-loader spin"></i> Analyzuji tvé portfolio pro dnešní den...
       </div>
@@ -869,7 +869,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
       <div class="opp-head">
         <div class="opp-title">
           <i class="ti ti-target-arrow"></i> Příležitosti s potenciálem
-          <span class="opp-sub">Náš model hledá akcie s největším <b>prostorem vyrůst</b> — ne to, co už vystřelilo. U top titulů AI vysvětlí, proč.</span>
+          <span class="opp-sub">Náš model hledá akcie s největším <b>prostorem vyrůst</b> — ne to, co už vystřelilo. U top titulů přidáme krátké zdůvodnění, proč.</span>
         </div>
         <div class="opp-actions">
           <span class="opp-updated" id="opp-updated"></span>
@@ -966,7 +966,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
           <button class="dtab active" id="dt-overview" onclick="detailTab('overview')"><i class="ti ti-layout-dashboard"></i> Přehled</button>
           <button class="dtab" id="dt-analysis" onclick="detailTab('analysis')"><i class="ti ti-brain"></i> Analýza</button>
           <button class="dtab" id="dt-news" onclick="detailTab('news')"><i class="ti ti-news"></i> Zprávy</button>
-          <button class="dtab" id="dt-ai" onclick="detailTab('ai')"><i class="ti ti-message-chatbot"></i> AI chat</button>
+          <button class="dtab" id="dt-ai" onclick="detailTab('ai')"><i class="ti ti-message-chatbot"></i> Asistent</button>
         </div>
 
         <!-- PŘEHLED -->
@@ -1008,9 +1008,9 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
           <div class="deep-box" id="deep-box">
             <div class="deep-head">
               <div class="signal-title"><i class="ti ti-brain" style="color:var(--accent)"></i> Hloubková analýza <span class="deep-badge">ELITE</span></div>
-              <button class="btn-primary deep-btn" id="deep-btn" onclick="runDeepAnalysis()"><i class="ti ti-sparkles"></i> Vygenerovat</button>
+              <button class="btn-primary deep-btn" id="deep-btn" onclick="runDeepAnalysis()"><i class="ti ti-report-analytics"></i> Vygenerovat</button>
             </div>
-            <div id="deep-output"><div class="deep-teaser">Klikni na <b>Vygenerovat</b> pro kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.</div></div>
+            <div id="deep-output"><div class="deep-teaser">Klikni na <b>Vygenerovat</b> pro kompletní rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.</div></div>
           </div>
 
           <div class="analyst-box" id="analyst-box" style="display:none;">
@@ -1030,7 +1030,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
         <!-- AI CHAT -->
         <div class="dpane" id="dpane-ai" style="display:none;">
           <div class="chat-box" id="chat-box">
-            <div class="chat-head"><i class="ti ti-message-chatbot"></i> Zeptej se AI na tuto akcii</div>
+            <div class="chat-head"><i class="ti ti-message-chatbot"></i> Zeptej se na tuto akcii</div>
             <div class="chat-log" id="chat-log"></div>
             <div class="chat-suggest" id="chat-suggest"></div>
             <div class="chat-input-row">
@@ -1255,7 +1255,7 @@ async function serverAI(path, body) {
         if (!d.ok) { d._status = r.status; return d; }
         return d;
     } catch (e) {
-        return { ok: false, error: 'Chyba spojení s AI.' };
+        return { ok: false, error: 'Chyba spojení se serverem.' };
     }
 }
 
@@ -1330,7 +1330,7 @@ function switchTab(name) {
             document.getElementById('signals-grid').innerHTML = lockedCardHTML('Co koupit teď — ověřený signál', 'pro',
                 'Akcie, které právě teď splňují náš backtestem prověřený nákupní signál.');
             document.getElementById('opp-grid').innerHTML = lockedCardHTML('Příležitosti s potenciálem', 'pro',
-                'Náš model akcií s největším prostorem vyrůst + AI proč.');
+                'Náš model akcií s největším prostorem vyrůst + krátké zdůvodnění.');
         } else {
             loadSignals();
             if (!oppData.length && !oppLoading) loadOpportunities();
@@ -1339,8 +1339,8 @@ function switchTab(name) {
     if (name === 'ai') {
         const lock = document.getElementById('ai-lock');
         if (!hasFeature('elite')) {
-            lock.innerHTML = lockedCardHTML('AI analýza', 'elite',
-                'Tržní briefing, doporučení „co prodat/přikoupit", AI chat o akciích a track record verdiktů.');
+            lock.innerHTML = lockedCardHTML('Doporučení', 'elite',
+                'Přehled trhu, doporučení „co prodat/přikoupit", asistent k akciím a track record verdiktů.');
             lock.style.display = 'block';
             document.getElementById('port-eval-box').style.display = 'none';
             document.getElementById('ai-dashboard-brief').style.display = 'none';
@@ -1806,14 +1806,14 @@ function addAllStarter() {
 const PLANS = [
     { id: 'start', name: 'Start', price: '7,99 €', period: '/ měsíc', feats: [
         ['Neomezené sledování', 1], ['Grafy, Signal Score & technický budík', 1], ['Aktuální zprávy', 1],
-        ['Cenová upozornění + sync', 1], ['Příležitosti & analytici', 0], ['Hloubková AI analýza', 0] ] },
+        ['Cenová upozornění + sync', 1], ['Příležitosti & analytici', 0], ['Hloubková analýza', 0] ] },
     { id: 'pro', name: 'Pro', price: '14,99 €', period: '/ měsíc', featured: true, feats: [
         ['Vše ze Start', 1], ['🎯 Příležitosti s potenciálem', 1], ['Doporučení analytiků & cílové ceny', 1],
-        ['Fundamenty (P/E, kapitalizace)', 1], ['🧠 Hloubková AI analýza (5/den)', 1],
-        ['AI chat, briefing & track record', 0] ] },
+        ['Fundamenty (P/E, kapitalizace)', 1], ['🧠 Hloubková analýza (5/den)', 1],
+        ['Asistent, přehled & track record', 0] ] },
     { id: 'elite', name: 'Elite', price: '24,99 €', period: '/ měsíc', feats: [
-        ['Vše z Pro', 1], ['🧠 Hloubková AI analýza (30/den)', 1], ['💬 AI chat o akcii', 1],
-        ['Tržní briefing & „co prodat/přikoupit"', 1], ['AI „proč" u příležitostí', 1],
+        ['Vše z Pro', 1], ['🧠 Hloubková analýza (30/den)', 1], ['💬 Asistent k akcii', 1],
+        ['Tržní briefing & „co prodat/přikoupit"', 1], ["Zdůvodnění u příležitostí", 1],
         ['Track record signálů', 1] ] },
 ];
 
@@ -2225,7 +2225,7 @@ async function loadOpportunities() {
     const grid = document.getElementById('opp-grid');
     if(!hasFeature('pro')) {
         grid.innerHTML = lockedCardHTML('Příležitosti s potenciálem', 'pro',
-            'Náš model akcií s největším prostorem vyrůst + AI proč.');
+            'Náš model akcií s největším prostorem vyrůst + krátké zdůvodnění.');
         return;
     }
     if(oppLoading) return;
@@ -2263,7 +2263,7 @@ function renderOpportunities() {
             `<span class="opp-badge ${b.k}">${b.t}</span>`).join('');
         const yr = o.year_pct;
         const yrTxt = (yr || yr === 0) ? `${yr >= 0 ? '+' : ''}${yr.toFixed(0)}%` : '—';
-        const why = o.why ? `<div class="opp-why"><i class="ti ti-sparkles"></i> ${escapeHtml(o.why)}</div>` : '';
+        const why = o.why ? `<div class="opp-why"><i class="ti ti-bulb"></i> ${escapeHtml(o.why)}</div>` : '';
         return `
         <div class="opp-card" onclick="loadStockDetail('${o.ticker}')" title="${o.exchange || ''}">
             <span class="opp-rank">#${i+1}</span>
@@ -2324,7 +2324,7 @@ async function generateDashboardBrief(watchlistData) {
 
     const aiData = await serverAI('brief', { stocks: watchlistData });
     if (!aiData.ok) {
-        briefText.innerHTML = `<span style="color:var(--down)">${aiData.error || 'AI se nepodařilo.'}</span>`;
+        briefText.innerHTML = `<span style="color:var(--down)">${aiData.error || 'Nepodařilo se, zkus to znovu.'}</span>`;
         picksGrid.innerHTML = '';
         return;
     }
@@ -2679,7 +2679,7 @@ async function generatePortfolioEval(watchlistData) {
 
     const data = await serverAI('eval', { stocks: watchlistData });
     if (!data.ok) {
-        summaryEl.innerHTML = `<span style="color:var(--down)">${data.error || 'AI se nepodařilo.'}</span>`;
+        summaryEl.innerHTML = `<span style="color:var(--down)">${data.error || 'Nepodařilo se, zkus to znovu.'}</span>`;
         sellList.innerHTML = ''; buyList.innerHTML = '';
         return;
     }
@@ -2851,7 +2851,7 @@ function resetDeep() {
     const out = document.getElementById('deep-output');
     const btn = document.getElementById('deep-btn');
     if (btn) btn.disabled = false;
-    if (out) out.innerHTML = '<div class="deep-teaser">Klikni na <b>Vygenerovat</b> pro kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.</div>';
+    if (out) out.innerHTML = '<div class="deep-teaser">Klikni na <b>Vygenerovat</b> pro kompletní rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory.</div>';
 }
 
 async function runDeepAnalysis() {
@@ -2865,7 +2865,7 @@ async function runDeepAnalysis() {
     }
     if (!hasFeature('pro')) {
         out.innerHTML = lockedCardHTML('Hloubková analýza', 'pro',
-            'Kompletní AI rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory. '
+            'Kompletní rozbor: verdikt, cílová cena, scénáře, rizika a katalyzátory. '
             + 'V plánu Pro 5 analýz denně, v Elite 30 denně.');
         return;
     }
@@ -2916,7 +2916,7 @@ function renderDeepReport(d) {
                     <span class="dm-val" style="color:${colFor(p.score)}">${p.score}</span>
                     ${p.note ? `<span class="dm-note">${escapeHtml(p.note)}</span>` : ''}
                 </div>`).join('')}
-            <div class="dm-foot">Verdikt i jistota jsou spočítané z těchto pilířů (váhy podle dostupných dat). AI je pouze vysvětluje, nemění. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></div>
+            <div class="dm-foot">Verdikt i jistota jsou spočítané z těchto pilířů (váhy podle dostupných dat). Slovní rozbor je jen doplněk, verdikt nemění. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></div>
         </div>` : '';
 
     // Důkaz úspěšnosti z backtestu (pokud je nacachovaný)
@@ -2924,8 +2924,8 @@ function renderDeepReport(d) {
         ? ` · poráží index o ${btProof.buy.alpha >= 0 ? '+' : ''}${btProof.buy.alpha} b.` : '';
     const proofHtml = (btProof && btProof.buy && btProof.buy.count) ? `
         <div class="deep-proof"><i class="ti ti-shield-check"></i>
-            <span>Ověřeno backtestem: signál <b>Koupit</b> měl <b>${btProof.buy.win_rate}%</b> úspěšnost na ${btProof.horizon_days} dní${alphaTxt}
-            <span class="dp-sub">${btProof.period ? btProof.period + ', ' : ''}${btProof.sample_count} obchodů, ${btProof.ticker_count} akcií, bez nahlížení do budoucna</span></span>
+            <span><b>Spolehlivost naší metody</b> (platí obecně, ne jen pro tento titul): signál „Koupit" měl <b>${btProof.buy.win_rate}%</b> úspěšnost na ${btProof.horizon_days} dní${alphaTxt}.
+            <span class="dp-sub">Ověřeno na historii — ${btProof.period ? btProof.period + ', ' : ''}${btProof.sample_count} obchodů, ${btProof.ticker_count} akcií, bez nahlížení do budoucna. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span></span>
         </div>` : '';
 
     document.getElementById('deep-output').innerHTML = `
@@ -2958,7 +2958,7 @@ function renderDeepReport(d) {
         ${risks ? `<div class="deep-sec"><h4><i class="ti ti-alert-triangle"></i> Rizika</h4><ul class="deep-list">${risks}</ul></div>` : ''}
         ${cats ? `<div class="deep-sec"><h4><i class="ti ti-rocket"></i> Katalyzátory</h4><ul class="deep-list">${cats}</ul></div>` : ''}
         <div class="deep-usage">Dnes využito ${d.used_today}/${d.daily_limit} analýz</div>
-        <div class="deep-disclaimer"><i class="ti ti-info-circle"></i> Vygenerováno AI z tržních dat. Není to investiční doporučení — slouží jako podklad k vlastnímu rozhodnutí.</div>`;
+        <div class="deep-disclaimer"><i class="ti ti-info-circle"></i> Sestaveno z tržních dat. Není to investiční doporučení — slouží jako podklad k vlastnímu rozhodnutí.</div>`;
 }
 
 // ====================== DOPORUČENÍ ANALYTIKŮ + FUNDAMENTY ======================
@@ -3081,7 +3081,7 @@ async function sendChat() {
     log.innerHTML += `<div class="chat-msg chat-user">${escapeHtml(q)}</div>`;
     input.value = '';
     if(!hasFeature('elite')) {
-        log.innerHTML += `<div class="chat-msg chat-ai" style="color:var(--text2)">AI chat je součástí plánu Elite. <a class="profile-cloud-link" onclick="openProfile('plans')">Zobrazit předplatné</a></div>`;
+        log.innerHTML += `<div class="chat-msg chat-ai" style="color:var(--text2)">Asistent je součástí plánu Elite. <a class="profile-cloud-link" onclick="openProfile('plans')">Zobrazit předplatné</a></div>`;
         log.scrollTop = log.scrollHeight; return;
     }
     const thinking = document.createElement('div');
@@ -3098,7 +3098,7 @@ async function sendChat() {
     const result = await serverAI('chat', { q, context, history: chatHistory.slice(-6) });
     thinking.remove();
     if(!result.ok) {
-        log.innerHTML += `<div class="chat-msg chat-ai" style="color:var(--down)">${result.error || 'AI se nepodařilo.'}</div>`;
+        log.innerHTML += `<div class="chat-msg chat-ai" style="color:var(--down)">${result.error || 'Nepodařilo se, zkus to znovu.'}</div>`;
         log.scrollTop = log.scrollHeight; return;
     }
     const answer = (result.answer || '').replace(/\*\*/g,'').trim();
