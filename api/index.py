@@ -2275,6 +2275,48 @@ def get_signals():
     return jsonify({"ok": True, "cached": False, **out})
 
 
+@app.route("/api/exit-signals")
+def exit_signals():
+    """„Co prodávat teď" – projde zadané (watchlist) tituly a označí ty, které
+    PRÁVĚ TEĎ spouští exit/oslabení podle našeho technického skóre. Symetrie
+    k nákupním signálům, deterministicky (stejné skóre)."""
+    tickers = [t.strip().upper() for t in request.args.get("tickers", "").split(",") if t.strip()][:20]
+    items = []
+    for t in tickers:
+        try:
+            daily = yahoo_chart(t, "1y", "1d")
+            meta = daily.get("meta", {})
+            closes = [c for c in (((daily.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []) if c is not None]
+            if len(closes) < 210:
+                continue
+            ind = compute_indicators(closes, [])
+            price = meta.get("regularMarketPrice") or closes[-1]
+            score = tech_setup_score(price, ind)
+            if score is None:
+                continue
+            sma200 = ind.get("sma200")
+            rsi = ind.get("rsi")
+            if score < VERDICT_SELL:
+                level, reason = "sell", f"Slabý technický obraz (skóre {score})"
+            elif sma200 and price < sma200:
+                level, reason = "weak", "Cena pod 200denním průměrem (trend slábne)"
+            elif rsi is not None and rsi > 75:
+                level, reason = "weak", f"Překoupeno (RSI {rsi:.0f}) – zvaž výběr zisku"
+            else:
+                continue  # v pořádku → nezobrazovat
+            prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
+            items.append({
+                "ticker": t, "name": meta.get("shortName") or meta.get("longName") or t,
+                "price": _round(price, 2), "currency": meta.get("currency", "USD"),
+                "change_pct": _round(((price - prev) / prev * 100) if prev else 0, 2, 0),
+                "score": score, "level": level, "reason": reason,
+            })
+        except Exception:
+            continue
+    items.sort(key=lambda x: x["score"])  # nejslabší první
+    return jsonify({"ok": True, "count": len(items), "results": items, "checked": len(tickers)})
+
+
 # ---------------------------------------------------------------------------
 # Server-side AI (uživatel nezadává žádný klíč) – Elite plán
 # ---------------------------------------------------------------------------

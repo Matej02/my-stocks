@@ -465,6 +465,15 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .sim-cell .l {font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.3px; line-height:1.2;}
 .sim-cell .v {font-family:var(--fh); font-weight:800; font-size:17px; margin-top:4px;}
 .sim-cell .p {font-size:11px; color:var(--text2); margin-top:2px;}
+.exit-box {background:rgba(255,61,0,0.05); border:1px solid rgba(255,61,0,0.3); border-radius:15px; padding:16px 18px; margin-bottom:18px;}
+.exit-head {font-family:var(--fh); font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; margin-bottom:10px; color:var(--down);}
+.exit-row {display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border); cursor:pointer; flex-wrap:wrap;}
+.exit-row:first-of-type {border-top:none;}
+.exit-tag {font-size:10px; font-weight:700; padding:2px 8px; border-radius:7px; text-transform:uppercase;}
+.exit-tag.sell {background:var(--down-glow); color:var(--down);}
+.exit-tag.weak {background:rgba(255,196,0,0.12); color:#FFC400;}
+.exit-row .er-tk {font-family:var(--fh); font-weight:700; min-width:56px;}
+.exit-row .er-reason {font-size:12.5px; color:var(--text2); flex:1; min-width:160px;}
 .profile-close:hover {color:var(--accent); border-color:var(--accent);}
 .profile-box .btn-primary {display:inline-flex; align-items:center; justify-content:center; gap:8px;}
 .profile-hdr {text-align:center; margin-bottom:1.5rem;}
@@ -645,7 +654,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·l</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·m</div>
 
 <div class="container">
   
@@ -1001,6 +1010,12 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
         <button class="tool-btn" onclick="requestNotif()"><i class="ti ti-bell"></i> Notifikace</button>
         <button class="tool-btn" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
         <button class="tool-btn" id="refresh-btn" onclick="loadWatchlist()"><i class="ti ti-refresh" id="refresh-ico"></i> Obnovit</button>
+      </div>
+
+      <!-- CO ZVÁŽIT K PRODEJI (exit signály z watchlistu) -->
+      <div class="exit-box" id="exit-box" style="display:none;">
+        <div class="exit-head"><i class="ti ti-alert-triangle"></i> Co zvážit k prodeji</div>
+        <div id="exit-list"></div>
       </div>
 
       <!-- SLEDOVANÉ AKCIE -->
@@ -1433,6 +1448,7 @@ async function loadWatchlist() {
         // AI Analýza trhu (Čistý JSON!)
         generateDashboardBrief(data.results);
         generatePortfolioEval(data.results);
+        loadExitSignals();  // „Co zvážit k prodeji" (rule-based, Pro)
 
         if(!autoRefreshTimer) {
             autoRefreshTimer = setInterval(() => {
@@ -2504,6 +2520,26 @@ function stockCardHTML(s) {
         <div class="sc-price">${s.price.toFixed(s.price < 10 ? 3 : 2)} <span style="font-size:12px;color:var(--text2)">${s.currency}</span></div>
         <div class="sc-change ${isUp ? 'up':'down'}"><i class="ti ${isUp ? 'ti-trending-up':'ti-trending-down'}"></i> ${isUp?'+':''}${s.change_pct.toFixed(2)}%</div>
     </div>`;
+}
+
+async function loadExitSignals() {
+    const box = document.getElementById('exit-box');
+    const list = document.getElementById('exit-list');
+    if (!box) return;
+    if (!hasFeature('pro') || !myStocks.length) { box.style.display = 'none'; return; }
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/exit-signals?tickers=${myStocks.join(',')}`)).json();
+        if (!d.ok || !d.count) { box.style.display = 'none'; return; }
+        box.style.display = 'block';
+        list.innerHTML = d.results.map(o => `
+            <div class="exit-row" onclick="loadStockDetail('${o.ticker}')">
+                <span class="exit-tag ${o.level}">${o.level === 'sell' ? 'Prodat' : 'Oslabení'}</span>
+                <span class="er-tk">${o.ticker}</span>
+                <span class="er-reason">${escapeHtml(o.reason)}</span>
+                <span style="font-size:12px;color:var(--text2)">${(o.price ?? 0).toFixed(2)} ${o.currency || ''} · skóre ${o.score}</span>
+            </div>`).join('') +
+            `<div style="font-size:11px;color:var(--text2);margin-top:8px">Z tvého sledování — podle našeho technického skóre právě slábnou. Není to příkaz k prodeji, ale podnět zvážit exit (viz <a class="profile-cloud-link" onclick="event.stopPropagation();openMethod()">metodika</a>).</div>`;
+    } catch (e) { box.style.display = 'none'; }
 }
 
 function renderWatchCards(results) {
