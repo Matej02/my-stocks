@@ -635,7 +635,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·i</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·j</div>
 
 <div class="container">
   
@@ -815,7 +815,12 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
           <p>Pozici zavíráme podle pevných pravidel, ne podle emocí: <b>cena dosáhne cíle</b> (realizuj zisk) · <b>klesne na stop-loss</b> (omez ztrátu) · <b>uplyne horizont ~2 týdny</b> bez zásahu (přehodnoť — naše výhoda je krátkodobá) · nebo <b>MS Skóre spadne</b> a verdikt už není „Koupit". Track record ti u každého verdiktu ukáže, který z těchto stavů nastal.</p>
         </div></div>
 
-        <div class="method-proof"><i class="ti ti-shield-check"></i> <span>Vše stojí na <b>důkazech</b>: backtest bez nahlížení do budoucna + track record reálných verdiktů. Metodiku měníme jen na základě čísel, ne dojmů.</span></div>
+        <div class="method-step"><div class="ms-ico">⭐</div><div>
+          <h4>7. TOP signály &amp; expectancy</h4>
+          <p>Nejde nám o hádání jednotlivých sázek, ale o <b>kladnou očekávanou hodnotu</b> v čase. Nejpřísnější výběr <b>„TOP signál" (skóre ≥80)</b> má historicky vyšší trefnost. Klíč je kombinace: solidní trefnost + utínání ztrát + necháváme zisky běžet.</p>
+        </div></div>
+
+        <div class="method-proof"><i class="ti ti-shield-check"></i> <span>Vše stojí na <b>důkazech</b>: backtest bez nahlížení do budoucna + veřejný track record reálných verdiktů. <b>Buďme féroví:</b> ani nejlepší signál není jistota — část obchodů skončí v mínusu, proto vždy se stop-lossem. Metodiku měníme jen podle čísel, ne dojmů.</span></div>
 
         <p class="method-disc">Slouží jako podklad k vlastnímu rozhodnutí. Není to investiční doporučení — žádný nástroj negarantuje zisk.</p>
       </div>
@@ -2144,7 +2149,8 @@ function renderBacktest(res) {
         <table class="admin-table" style="font-size:12px">
             <thead><tr><th>Signál</th><th style="text-align:right">Trefnost</th><th style="text-align:right">Výnos</th><th style="text-align:right">Alfa</th></tr></thead>
             <tbody>
-                ${row('🟢 Koupit (≥70)', res.buy, true)}
+                ${row('⭐ TOP signál (≥80)', res.top, true)}
+                ${row('🟢 Koupit (≥70)', res.buy)}
                 ${row('🟡 Držet (45–69)', res.hold)}
                 ${row('🔴 Prodat (<45)', res.sell)}
                 ${row('⚪ Baseline (vše)', res.baseline)}
@@ -2318,14 +2324,15 @@ function renderSignals(list) {
         const chg = o.change_pct;
         const chgTxt = (chg || chg === 0) ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` : '';
         const chgCol = (chg >= 0) ? 'var(--up)' : 'var(--down)';
+        const isTop = o.conviction === 'top';
         return `
-        <div class="opp-card" onclick="loadStockDetail('${o.ticker}')">
-            <span class="opp-rank">#${i + 1}</span>
+        <div class="opp-card${isTop ? ' moon' : ''}" onclick="loadStockDetail('${o.ticker}')">
+            <span class="opp-rank">${isTop ? '⭐ TOP' : '#' + (i + 1)}</span>
             <div class="opp-c-top">
                 <div class="opp-score p-high">${o.score}<small>SIGNÁL</small></div>
                 <div class="opp-c-id">
                     <div class="opp-c-tkr">${o.ticker}</div>
-                    <div class="opp-c-name">${o.name || ''}</div>
+                    <div class="opp-c-name">${escapeHtml(niceName(o.ticker, o.name))}</div>
                 </div>
             </div>
             <div class="opp-upside">
@@ -2786,10 +2793,12 @@ async function loadTrackRecord() {
         const MIN = 3; // málo dat = nezobrazovat zavádějící %
         const enough = s.buy_count && s.buy_count >= MIN;
 
-        // Hlavní karta vždy: spolehlivost metody z backtestu (důkaz, ne 0 %)
+        // Hlavní karty z backtestu (důkaz, ne 0 %): TOP tier + expectancy
         let cards = '';
-        if (btProof && btProof.buy && btProof.buy.win_rate != null) {
-            cards += `<div class="track-stat" style="border-color:rgba(0,230,118,0.4)"><div class="l">Spolehlivost metody (backtest)</div><div class="v" style="color:${wcol(btProof.buy.win_rate)}">${btProof.buy.win_rate}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">5 let, ${btProof.sample_count} obchodů</div></div>`;
+        const bp = btProof && (btProof.top && btProof.top.count ? btProof.top : btProof.buy);
+        if (bp && bp.win_rate != null) {
+            cards += `<div class="track-stat" style="border-color:rgba(0,230,118,0.4)"><div class="l">Spolehlivost TOP signálu (backtest)</div><div class="v" style="color:${wcol(bp.win_rate)}">${bp.win_rate}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">5 let, ${btProof.sample_count} obchodů</div></div>`;
+            cards += `<div class="track-stat"><div class="l">Očekávaný výnos / obchod</div><div class="v" style="color:${bp.avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${bp.avg_return >= 0 ? '+' : ''}${bp.avg_return}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">~2 týdny</div></div>`;
         }
         if (enough) {
             cards += `
@@ -3090,13 +3099,15 @@ function renderDeepReport(d) {
             <div class="dm-foot">Verdikt i jistota jsou spočítané z těchto pilířů (váhy podle dostupných dat). Slovní rozbor je jen doplněk, verdikt nemění. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></div>
         </div>` : '';
 
-    // Důkaz úspěšnosti z backtestu (pokud je nacachovaný)
-    const alphaTxt = (btProof && btProof.buy && btProof.buy.alpha != null)
-        ? ` · poráží index o ${btProof.buy.alpha >= 0 ? '+' : ''}${btProof.buy.alpha} b.` : '';
-    const proofHtml = (btProof && btProof.buy && btProof.buy.count) ? `
+    // Důkaz spolehlivosti z backtestu – vedeno přes TOP tier + expectancy (pokud je cache)
+    const bp = btProof && (btProof.top && btProof.top.count ? btProof.top : btProof.buy);
+    const bpLabel = (btProof && btProof.top && btProof.top.count) ? 'TOP signál' : 'signál Koupit';
+    const expTxt = (bp && bp.avg_return != null) ? ` · očekávaný výnos <b>${bp.avg_return >= 0 ? '+' : ''}${bp.avg_return}%</b>/obchod` : '';
+    const alphaTxt = (bp && bp.alpha != null) ? ` · nad indexem ${bp.alpha >= 0 ? '+' : ''}${bp.alpha} b.` : '';
+    const proofHtml = (bp && bp.count) ? `
         <div class="deep-proof"><i class="ti ti-shield-check"></i>
-            <span><b>Spolehlivost naší metody</b> (platí obecně, ne jen pro tento titul): signál „Koupit" měl <b>${btProof.buy.win_rate}%</b> úspěšnost na ${btProof.horizon_days} dní${alphaTxt}.
-            <span class="dp-sub">Ověřeno na historii — ${btProof.period ? btProof.period + ', ' : ''}${btProof.sample_count} obchodů, ${btProof.ticker_count} akcií, bez nahlížení do budoucna. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span></span>
+            <span><b>Spolehlivost naší metody</b> (platí obecně, ne predikce tohoto titulu): ${bpLabel} měl <b>${bp.win_rate}%</b> úspěšnost na ${btProof.horizon_days} dní${expTxt}${alphaTxt}.
+            <span class="dp-sub">Ověřeno na historii — ${btProof.period ? btProof.period + ', ' : ''}${btProof.sample_count} obchodů, bez nahlížení do budoucna. ~40 % obchodů přesto skončí v mínusu — proto vždy se stop-lossem. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span></span>
         </div>` : '';
 
     document.getElementById('deep-output').innerHTML = `

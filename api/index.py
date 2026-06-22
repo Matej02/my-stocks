@@ -285,6 +285,7 @@ def signal_score(price, ind, high52, low52):
 # Prahy verdiktu – kalibrované backtestem (viz tech_setup_score).
 VERDICT_BUY = 70
 VERDICT_SELL = 45
+VERDICT_TOP = 80  # konviktní „TOP signál" – přísnější výběr, vyšší doložená trefnost
 
 
 def tech_setup_score(price, ind):
@@ -2134,6 +2135,7 @@ def run_backtest(tickers, horizon=10):
     if not samples:
         return None
     buys = [(fwd, exc) for (sc_, fwd, exc, yr) in samples if sc_ >= VERDICT_BUY]
+    tops = [(fwd, exc) for (sc_, fwd, exc, yr) in samples if sc_ >= VERDICT_TOP]
     holds = [(fwd, exc) for (sc_, fwd, exc, yr) in samples if VERDICT_SELL <= sc_ < VERDICT_BUY]
     sells = [(fwd, exc) for (sc_, fwd, exc, yr) in samples if sc_ < VERDICT_SELL]
     # Rozpad „Koupit" podle roku (důkaz, že signál drží i v medvědím 2022)
@@ -2146,9 +2148,10 @@ def run_backtest(tickers, horizon=10):
         "horizon_days": horizon, "period": "5 let (vč. propadu 2022)",
         "benchmark": "SPY" if spy else None,
         "tickers": used, "ticker_count": len(used), "sample_count": len(samples),
-        "buy": _bt_stats(buys), "hold": _bt_stats(holds), "sell": _bt_stats(sells),
+        "buy": _bt_stats(buys), "top": _bt_stats(tops),
+        "hold": _bt_stats(holds), "sell": _bt_stats(sells),
         "baseline": _bt_stats([(fwd, exc) for (_, fwd, exc, yr) in samples]),
-        "buy_by_year": buy_by_year,
+        "buy_by_year": buy_by_year, "top_threshold": VERDICT_TOP,
         "generated": int(time.time()),
         "note": f"Technické setup skóre (nákup poklesu v uptrendu), 5 let, žádný look-ahead. "
                 f"Koupit = skóre ≥{VERDICT_BUY}, Prodat = <{VERDICT_SELL}. "
@@ -2208,6 +2211,7 @@ def _scan_signals():
                 "change_pct": _round(((price - prev) / prev * 100) if prev else 0, 2, 0),
                 "currency": meta.get("currency", "USD"),
                 "score": score, "rsi": _round(ind.get("rsi"), 1), "note": _setup_note(score),
+                "conviction": "top" if score >= VERDICT_TOP else "buy",
                 "target": lv.get("target_price"), "stop": lv.get("stop_loss"),
                 "reward_pct": lv.get("reward_pct"), "risk_pct": lv.get("risk_pct"), "rr": lv.get("rr"),
             })
