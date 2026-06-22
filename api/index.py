@@ -2269,6 +2269,7 @@ def ai_chat():
 def get_stock_detail(ticker):
     ticker = ticker.upper()
     period = request.args.get("period", "6mo")
+    want_model = request.args.get("full") == "1"  # náš verdikt jen při plném otevření (ne při změně období)
 
     range_map = {
         "1d": ("1d", "5m"), "5d": ("5d", "15m"), "1mo": ("1mo", "1d"),
@@ -2340,6 +2341,18 @@ def get_stock_detail(ticker):
         if div is not None:
             div = round(div * 100 if div < 1 else div, 2)
 
+        # Náš verdikt (MS Skóre) – stejný model jako Hloubková analýza, aby se
+        # detail a analýza NIKDY nerozcházely. Počítá se jen při plném otevření.
+        verdict_model = None
+        verdict_levels = None
+        if want_model:
+            try:
+                facts = gather_facts(ticker)
+                verdict_model = compute_verdict_model(facts)
+                verdict_levels = compute_levels(facts, 10)
+            except Exception:
+                verdict_model = None
+
         return jsonify({
             "ok": True,
             "ticker": ticker,
@@ -2370,6 +2383,8 @@ def get_stock_detail(ticker):
             "score_label": score_label,
             "score_components": score_comps,
             "tech_rating": technical_rating(price, indicators),
+            "model": verdict_model,
+            "levels": verdict_levels,
             "chart": chart_data,
             "sma20": sma20,
             "sma50": sma50,

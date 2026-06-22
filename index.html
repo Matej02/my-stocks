@@ -75,6 +75,8 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .stock-card {background:var(--bg-glass); border:1px solid var(--border); border-radius:20px; padding:1.5rem; cursor:pointer; transition:all 0.2s;}
 .stock-card:hover {transform:translateY(-5px); border-color:var(--accent); box-shadow: 0 10px 25px var(--accent-glow);}
 .sc-ticker {font-family:var(--fh); font-weight:700; font-size:22px; color:var(--text);}
+.sc-name {font-family:var(--fh); font-weight:700; font-size:17px; color:var(--text); line-height:1.2; display:flex; align-items:center; gap:6px; justify-content:space-between;}
+.sc-sub {font-size:11px; color:var(--text2); letter-spacing:.5px; margin:2px 0 8px;}
 .sc-price {font-family:var(--fh); font-size:28px; font-weight:600; margin-top:10px;}
 .sc-change {font-size:14px; font-weight:600; display:flex; align-items:center; gap:4px; margin-top:5px;}
 .up {color:var(--up);} .down {color:var(--down);}
@@ -532,6 +534,15 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .opp-disclaimer {font-size:10.5px; color:var(--text2); margin-top:14px; position:relative; z-index:1; opacity:.7;}
 
 /* ============ TECHNICKÝ SIGNAL PANEL ============ */
+.verdict-box {background:linear-gradient(135deg, rgba(255,122,0,0.10), rgba(255,255,255,0.02)); border:1px solid var(--border-accent); border-radius:16px; padding:18px 20px; margin-bottom:20px;}
+.vb-main {display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;}
+.vb-label {font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text2);}
+.vb-verdict {font-family:var(--fh); font-weight:800; font-size:28px; line-height:1.1; margin-top:2px;}
+.vb-verdict.buy {color:var(--up);} .vb-verdict.hold {color:#FFC400;} .vb-verdict.sell {color:var(--down);}
+.vb-scorewrap {text-align:right;}
+.vb-score {font-family:var(--fh); font-weight:800; font-size:30px;}
+.vb-sub {font-size:11px; color:var(--text2);}
+.vb-note {font-size:12.5px; color:var(--text2); line-height:1.55; margin-top:12px; border-top:1px solid var(--border); padding-top:10px;}
 .signal-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-bottom:20px;}
 .signal-head {display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
 .signal-title {font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text2); display:flex; align-items:center; gap:8px;}
@@ -621,7 +632,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·d</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·e</div>
 
 <div class="container">
   
@@ -705,6 +716,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
         </button>
         <p class="auth-hint" id="auth-hint">Ještě nemáš účet? Klikni na „Registrovat“.</p>
         <p class="auth-hint" id="auth-forgot" style="margin-top:6px;"><a class="profile-cloud-link" onclick="forgotPassword()">Zapomenuté heslo?</a></p>
+        <p class="auth-hint" style="margin-top:4px;"><a class="profile-cloud-link" onclick="openAbout()">O nás — co nabízíme</a></p>
       </div>
 
       <!-- B) PŘEHLED PORTFOLIA (přihlášený nebo lokální režim) -->
@@ -743,6 +755,8 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
           <label class="switch"><input type="checkbox" id="notif-morning" onchange="saveNotif()"><span class="slider"></span></label>
           <span style="font-size:12px; color:var(--text2);">pohyby + tipy + hodnocení každé ráno</span>
         </div>
+
+        <p class="auth-hint" style="text-align:left;margin:4px 0 10px;"><a class="profile-cloud-link" onclick="openAbout()">O nás — co nabízíme</a></p>
 
         <div class="auth-tabs" id="pf-subtabs" style="display:none;">
           <button class="auth-tab active" id="pftab-plans" onclick="setPfView('plans')">Předplatné</button>
@@ -797,6 +811,52 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
         <div class="method-proof"><i class="ti ti-shield-check"></i> <span>Vše stojí na <b>důkazech</b>: backtest bez nahlížení do budoucna + track record reálných verdiktů. Metodiku měníme jen na základě čísel, ne dojmů.</span></div>
 
         <p class="method-disc">Slouží jako podklad k vlastnímu rozhodnutí. Není to investiční doporučení — žádný nástroj negarantuje zisk.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- O NÁS — co nabízíme -->
+  <div class="pl-modal" id="aboutModal">
+    <div class="profile-box">
+      <button class="profile-close" onclick="closeAbout()"><i class="ti ti-x"></i></button>
+      <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-building-store" style="color:var(--accent)"></i> O nás</h2>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">MY <span style="color:var(--accent);font-weight:700">STOCKS</span> — co nabízíme</div>
+      <div class="method-body">
+        <p class="method-intro">Jsme <b>investiční asistent</b> (ne broker). Pomáháme ti rozhodnout, <b>kdy koupit a kdy prodat</b>, na základě vlastní ověřené metody — ne dojmů ani náhodných tipů. Vše stojí na tvrdých datech a transparentních pravidlech.</p>
+
+        <div class="method-step"><div class="ms-ico">🧭</div><div>
+          <h4>Vlastní metoda</h4>
+          <p>Náš pětikrokový systém (Metoda MY STOCKS) hodnotí každou akcii: načasování, kvalitu firmy, potvrzení analytiků, řízení rizika a pravidla výstupu. <a class="profile-cloud-link" onclick="closeAbout();openMethod()">Jak hodnotíme?</a></p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico">📈</div><div>
+          <h4>Sledování & signál</h4>
+          <p>Sleduj akcie, grafy a technický signál, nastav si cenová upozornění. Vše synchronizované napříč zařízeními.</p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico">🎯</div><div>
+          <h4>Co koupit teď</h4>
+          <p>Skener „Sleva v trendu" ukáže akcie, které <b>právě teď</b> splňují náš backtestem ověřený nákupní signál — s cílem, stop-lossem a horizontem.</p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico">🔍</div><div>
+          <h4>Hloubková analýza</h4>
+          <p>Ke každé akcii verdikt (MS Skóre), z čeho vychází, vstup/cíl/stop, scénáře, rizika, katalyzátory a exit plán. Stejný verdikt vidíš i v detailu akcie.</p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico">📊</div><div>
+          <h4>Důkaz, ne sliby</h4>
+          <p>Backtest na <b>5 letech</b> (vč. propadu 2022) + track record reálných verdiktů. Ukazujeme úspěšnost i alfu proti indexu — poctivě, včetně slabších období.</p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico">💎</div><div>
+          <h4>Plány</h4>
+          <p><b>Start</b> — sledování, grafy, signál, upozornění. <b>Pro</b> — příležitosti, analytici, fundamenty, hloubková analýza (5/den). <b>Elite</b> — neomezená analýza, asistent k akciím, přehled trhu, track record. <a class="profile-cloud-link" onclick="closeAbout();openProfile('plans')">Zobrazit předplatné</a></p>
+        </div></div>
+
+        <div class="method-proof"><i class="ti ti-shield-check"></i> <span>Naše krédo: <b>obhajitelná čísla místo prázdných slibů.</b> Co nefunguje v backtestu, do nástroje nedáváme.</span></div>
+
+        <p class="method-disc">MY STOCKS je informační nástroj a podklad k vlastnímu rozhodnutí. Není to investiční doporučení a žádný nástroj negarantuje zisk.</p>
       </div>
     </div>
   </div>
@@ -899,7 +959,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
         <span class="live-badge" id="live-badge" style="display:none;"><i class="ti ti-point-filled"></i> LIVE</span>
         <button class="tool-btn" onclick="requestNotif()"><i class="ti ti-bell"></i> Notifikace</button>
         <button class="tool-btn" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
-        <button class="tool-btn" onclick="loadWatchlist()"><i class="ti ti-refresh"></i> Obnovit</button>
+        <button class="tool-btn" id="refresh-btn" onclick="loadWatchlist()"><i class="ti ti-refresh" id="refresh-ico"></i> Obnovit</button>
       </div>
 
       <!-- SLEDOVANÉ AKCIE -->
@@ -971,9 +1031,23 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 
         <!-- PŘEHLED -->
         <div class="dpane" id="dpane-overview">
+          <div class="verdict-box" id="verdict-box" style="display:none;">
+            <div class="vb-main">
+              <div>
+                <div class="vb-label">Náš verdikt</div>
+                <div class="vb-verdict" id="vb-verdict">--</div>
+              </div>
+              <div class="vb-scorewrap">
+                <div class="vb-score" id="vb-score">--</div>
+                <div class="vb-sub">MS Skóre · <span id="vb-cov"></span></div>
+              </div>
+            </div>
+            <div class="vb-note" id="vb-note"></div>
+          </div>
+
           <div class="signal-box" id="signal-box" style="display:none;">
             <div class="signal-head">
-              <div class="signal-title"><i class="ti ti-gauge"></i> Technický signál</div>
+              <div class="signal-title"><i class="ti ti-gauge"></i> Technický signál <span style="font-size:11px;color:var(--text2);font-weight:400;">(krátkodobá složka)</span></div>
               <div class="signal-verdict" id="signal-verdict">--</div>
             </div>
             <div style="display:flex; align-items:center; gap:16px; margin-bottom:6px;">
@@ -1264,11 +1338,17 @@ async function loadWatchlist() {
     const watchGrid = document.getElementById('watch-grid');
     const badge = document.getElementById('live-badge');
     const dbrief = document.getElementById('ai-dashboard-brief');
+    const rbtn = document.getElementById('refresh-btn');
+    const rico = document.getElementById('refresh-ico');
+    if (rico) rico.classList.add('spin');
+    if (rbtn) rbtn.disabled = true;
 
     if(myStocks.length === 0) {
         watchGrid.innerHTML = '';
         document.getElementById('watch-empty').style.display = 'block';
         dbrief.style.display = 'none';
+        if (rico) rico.classList.remove('spin');
+        if (rbtn) rbtn.disabled = false;
         return;
     }
 
@@ -1293,9 +1373,14 @@ async function loadWatchlist() {
                 if(document.getElementById('dashboard').style.display !== 'none') loadWatchlistSilent();
             }, 10000);
         }
+        showToast('Portfolio aktualizováno', 'up', 'ti-refresh');
     } catch(e) {
         badge.style.display = 'none';
         watchGrid.innerHTML = `<div style="color:var(--down); padding:20px; border:1px solid var(--down); border-radius:10px;">Chyba spojení s burzou.</div>`;
+        showToast('Aktualizace se nezdařila', 'down', 'ti-x');
+    } finally {
+        if (rico) rico.classList.remove('spin');
+        if (rbtn) rbtn.disabled = false;
     }
 }
 
@@ -1439,6 +1524,8 @@ function closeProfile() {
 }
 function openMethod() { document.getElementById('methodModal').classList.add('open'); }
 function closeMethod() { document.getElementById('methodModal').classList.remove('open'); }
+function openAbout() { document.getElementById('aboutModal').classList.add('open'); }
+function closeAbout() { document.getElementById('aboutModal').classList.remove('open'); }
 
 function renderProfileView() {
     const authView = document.getElementById('profile-auth');
@@ -2295,13 +2382,30 @@ function renderOpportunities() {
 }
 
 // --- VYKRESLENÍ KARET: rozdělení na Moje pozice vs Sledované ---
+// Hezké názvy pro komodity/indexy/krypto (Yahoo je má ošklivé, např. „Gold Jun 26")
+const NAME_MAP = {
+    'GC=F': 'Zlato', 'SI=F': 'Stříbro', 'HG=F': 'Měď', 'PL=F': 'Platina', 'PA=F': 'Palladium',
+    'CL=F': 'Ropa (WTI)', 'BZ=F': 'Ropa (Brent)', 'NG=F': 'Zemní plyn',
+    'ZC=F': 'Kukuřice', 'ZW=F': 'Pšenice', 'ZS=F': 'Sója',
+    'BTC-USD': 'Bitcoin', 'ETH-USD': 'Ethereum',
+    '^GSPC': 'S&P 500', '^IXIC': 'Nasdaq', '^DJI': 'Dow Jones', '^GDAXI': 'DAX'
+};
+function niceName(ticker, name) {
+    if (NAME_MAP[ticker]) return NAME_MAP[ticker];
+    let n = (name || ticker).trim();
+    // ořež expirace u futures názvů („Gold Jun 26" -> „Gold")
+    n = n.replace(/\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*['\d].*$/i, '').trim();
+    return n || ticker;
+}
+
 function stockCardHTML(s) {
     const isUp = s.change_pct >= 0;
     const hasAlert = myAlerts.some(a => a.ticker === s.ticker);
-    const bell = hasAlert ? '<i class="ti ti-bell-ringing" style="color:var(--accent); font-size:14px; float:right;"></i>' : '';
+    const bell = hasAlert ? '<i class="ti ti-bell-ringing" style="color:var(--accent); font-size:14px;"></i>' : '';
     return `<div class="stock-card" onclick="loadStockDetail('${s.ticker}')">
-        <div class="sc-ticker">${s.ticker} ${bell}</div>
-        <div class="sc-price">${s.price.toFixed(3)} <span style="font-size:12px;color:var(--text2)">${s.currency}</span></div>
+        <div class="sc-name">${escapeHtml(niceName(s.ticker, s.name))} ${bell}</div>
+        <div class="sc-sub">${s.ticker}</div>
+        <div class="sc-price">${s.price.toFixed(s.price < 10 ? 3 : 2)} <span style="font-size:12px;color:var(--text2)">${s.currency}</span></div>
         <div class="sc-change ${isUp ? 'up':'down'}"><i class="ti ${isUp ? 'ti-trending-up':'ti-trending-down'}"></i> ${isUp?'+':''}${s.change_pct.toFixed(2)}%</div>
     </div>`;
 }
@@ -2378,7 +2482,7 @@ async function loadStockDetail(ticker, isNew = true) {
     document.getElementById('d-ticker').innerHTML = `<i class="ti ti-loader spin"></i>`;
 
     try {
-        const res = await fetch(`${BACKEND_URL}/api/stock/${ticker}?period=${chartPeriod}`);
+        const res = await fetch(`${BACKEND_URL}/api/stock/${ticker}?period=${chartPeriod}${isNew ? '&full=1' : ''}`);
         const data = await res.json();
         
         if(!data.ok) { alert(data.error); closeDetail(); return; }
@@ -2413,6 +2517,7 @@ async function loadStockDetail(ticker, isNew = true) {
 
         renderSignal(data);
         renderTechRating(data.tech_rating);
+        if (isNew) renderVerdict(data.model);
         // Tyto panely nezávisí na zvoleném období grafu – při pouhé změně období
         // (isNew=false) je nepřekreslujeme, aby nezmizela už vygenerovaná analýza.
         if (isNew) {
@@ -2531,6 +2636,26 @@ function toggleMA() {
 }
 
 // --- TECHNICKÝ SIGNAL PANEL ---
+function renderVerdict(model) {
+    const box = document.getElementById('verdict-box');
+    if (!model || !model.verdict) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    const vt = model.verdict.toLowerCase();
+    const vcls = vt.includes('koup') ? 'buy' : (vt.includes('prod') ? 'sell' : 'hold');
+    const vEl = document.getElementById('vb-verdict');
+    vEl.textContent = model.verdict;
+    vEl.className = 'vb-verdict ' + vcls;
+    document.getElementById('vb-score').textContent = (model.score != null ? model.score : '--') + '/100';
+    document.getElementById('vb-cov').textContent =
+        'jistota ' + (model.confidence != null ? model.confidence + '%' : '—') +
+        ' · pokrytí ' + (model.coverage_pct != null ? model.coverage_pct + '%' : '—');
+    const pillars = (model.pillars || []).map(p => `${escapeHtml(p.label)} ${p.score}`).join(' · ');
+    document.getElementById('vb-note').innerHTML =
+        `Spočítáno z pilířů: ${pillars || '—'}. Kompletní rozbor (teze, scénáře, exit plán) najdeš v <b>Hloubkové analýze</b>. ` +
+        `<a class="profile-cloud-link" onclick="detailTab('analysis')">Otevřít analýzu</a> · ` +
+        `<a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a>`;
+}
+
 function renderSignal(data) {
     const box = document.getElementById('signal-box');
     if(data.score == null) { box.style.display = 'none'; return; }
