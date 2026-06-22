@@ -41,7 +41,8 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .search-item {padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.2s;}
 .search-item:last-child {border-bottom: none;}
 .search-item:hover {background: rgba(255, 122, 0, 0.1);}
-.si-ticker {font-family: var(--fh); font-weight: bold; color: var(--accent); font-size: 15px;}
+.si-ticker {font-family: var(--fh); font-weight: bold; color: var(--accent); font-size: 15px; flex:none;}
+.si-type {font-size:10px; font-weight:700; padding:2px 7px; border-radius:7px; text-transform:uppercase; letter-spacing:.5px; flex:none;}
 
 .settings-btn {background:var(--bg-glass); border:1px solid var(--border); padding:10px 15px; border-radius:20px; color:var(--text2); cursor:pointer; display:flex; align-items:center; gap:8px; transition:all 0.2s;}
 .settings-btn:hover {color:var(--accent); border-color:var(--accent);}
@@ -625,14 +626,14 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
     <div class="lock-icon"><i class="ti ti-key"></i></div>
     <h2>Nové heslo</h2>
     <p>Nastav si nové heslo ke svému účtu.</p>
-    <input type="password" id="resetInput" placeholder="Nové heslo (min. 4 znaky)" autocomplete="new-password"
+    <input type="password" id="resetInput" placeholder="Nové heslo (min. 6 znaků)" autocomplete="new-password"
            onkeydown="if(event.key==='Enter') submitReset()">
     <div class="lock-error" id="resetError"></div>
     <button class="btn-primary" onclick="submitReset()"><i class="ti ti-check"></i> Uložit heslo</button>
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·f</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·g</div>
 
 <div class="container">
   
@@ -1287,11 +1288,15 @@ async function fetchSearchResults(query) {
             dropdown.innerHTML = '<div style="padding:15px; color:var(--text2); text-align:center;">Nic nenalezeno</div>'; return;
         }
         dropdown.innerHTML = '';
+        const TYPE_CZ = { EQUITY: 'Akcie', ETF: 'ETF', INDEX: 'Index', CRYPTOCURRENCY: 'Krypto', FUTURE: 'Komodita', CURRENCY: 'Měna', MUTUALFUND: 'Fond' };
+        const TYPE_COL = { INDEX: '#29B6F6', CRYPTOCURRENCY: '#AB47BC', FUTURE: '#FFC400', CURRENCY: '#26A69A', ETF: '#7C4DFF' };
         data.results.forEach(item => {
+            const t = item.type || 'EQUITY';
+            const badge = `<span class="si-type" style="background:${(TYPE_COL[t] || 'var(--text2)')}22;color:${TYPE_COL[t] || 'var(--text2)'}">${TYPE_CZ[t] || 'Akcie'}</span>`;
             dropdown.innerHTML += `
                 <div class="search-item" onclick="selectSearchItem('${item.ticker}')">
-                    <div style="display:flex; align-items:center; gap:10px;"><span class="si-ticker">${item.ticker}</span><span class="si-name">${item.name}</span></div>
-                    <span class="si-exch">${item.exchange}</span>
+                    <div style="display:flex; align-items:center; gap:10px; min-width:0;"><span class="si-ticker">${item.ticker}</span><span class="si-name">${escapeHtml(niceName(item.ticker, item.name))}</span></div>
+                    <div style="display:flex; align-items:center; gap:8px; flex:none;">${badge}<span class="si-exch">${item.exchange}</span></div>
                 </div>`;
         });
     } catch(e) { dropdown.innerHTML = '<div style="padding:15px; color:var(--down); text-align:center;">Chyba připojení k serveru.</div>'; }
@@ -1723,7 +1728,7 @@ async function submitReset() {
     const pw = document.getElementById('resetInput').value;
     const err = document.getElementById('resetError');
     err.textContent = '';
-    if (!pw || pw.length < 4) { err.textContent = 'Heslo musí mít aspoň 4 znaky.'; return; }
+    if (!pw || pw.length < 6) { err.textContent = 'Heslo musí mít aspoň 6 znaků.'; return; }
     try {
         const r = await fetch(`${BACKEND_URL}/api/reset`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2583,7 +2588,7 @@ function renderChart(historyData) {
 
     const options = {
         series: series,
-        chart: { type: baseType, height: 360, toolbar: {show: false}, animations: {enabled: false}, id: 'mainChart', group: 'sync' },
+        chart: { type: baseType, height: 360, toolbar: {show: false}, zoom: {enabled: false, allowMouseWheelZoom: false}, animations: {enabled: false}, id: 'mainChart', group: 'sync' },
         colors: colors,
         stroke: { curve: 'smooth', width: series.map((s,i) => i===0 ? (isCandle?1:2) : 1.5) },
         plotOptions: { candlestick: { colors: { upward: '#00E676', downward: '#FF3D00' }, wick: { useFillColor: true } } },
@@ -2753,23 +2758,40 @@ async function loadTrackRecord() {
     listEl.innerHTML = '<div class="track-empty"><i class="ti ti-loader spin"></i> Načítám track record…</div>';
     try {
         const d = await (await fetch(`${BACKEND_URL}/api/track-record`)).json();
+        const wcol = w => w >= 50 ? 'var(--up)' : 'var(--down)';
+        const s = (d && d.stats) || {};
+        const MIN = 3; // málo dat = nezobrazovat zavádějící %
+        const enough = s.buy_count && s.buy_count >= MIN;
+
+        // Hlavní karta vždy: spolehlivost metody z backtestu (důkaz, ne 0 %)
+        let cards = '';
+        if (btProof && btProof.buy && btProof.buy.win_rate != null) {
+            cards += `<div class="track-stat" style="border-color:rgba(0,230,118,0.4)"><div class="l">Spolehlivost metody (backtest)</div><div class="v" style="color:${wcol(btProof.buy.win_rate)}">${btProof.buy.win_rate}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">5 let, ${btProof.sample_count} obchodů</div></div>`;
+        }
+        if (enough) {
+            cards += `
+                <div class="track-stat"><div class="l">Živých verdiktů „Koupit"</div><div class="v">${s.buy_count}</div></div>
+                <div class="track-stat"><div class="l">Úspěšnost (živě)</div><div class="v" style="color:${wcol(s.buy_win_rate)}">${s.buy_win_rate}%</div></div>
+                <div class="track-stat"><div class="l">Prům. výnos</div><div class="v" style="color:${s.buy_avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${s.buy_avg_return >= 0 ? '+' : ''}${s.buy_avg_return}%</div></div>`;
+        }
+        statsEl.innerHTML = cards;
+
         if (!d.ok || !d.count) {
-            listEl.innerHTML = '<div class="track-empty">Zatím žádné verdikty. Vygeneruj hloubkovou analýzu — verdikty se začnou ukládat a tady uvidíš jejich reálnou úspěšnost v čase.</div>';
+            listEl.innerHTML = '<div class="track-empty">Živé verdikty se teprve sbírají. Vygeneruj hloubkovou analýzu a její verdikt se sem uloží — postupně tu uvidíš reálnou úspěšnost v čase. Mezitím platí ověřená spolehlivost metody z backtestu (nahoře).</div>';
             return;
         }
-        const s = d.stats || {};
-        if (s.buy_count) {
-            const wcol = w => w >= 50 ? 'var(--up)' : 'var(--down)';
-            let cards = `
-                <div class="track-stat"><div class="l">Verdiktů „Koupit"</div><div class="v">${s.buy_count}</div></div>
-                <div class="track-stat"><div class="l">Úspěšnost</div><div class="v" style="color:${wcol(s.buy_win_rate)}">${s.buy_win_rate}%</div></div>
-                <div class="track-stat"><div class="l">Prům. výnos</div><div class="v" style="color:${s.buy_avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${s.buy_avg_return >= 0 ? '+' : ''}${s.buy_avg_return}%</div></div>`;
-            if (s.buy_high && s.buy_high.count) {
-                cards += `<div class="track-stat" style="border-color:rgba(0,230,118,0.4)"><div class="l">Vysoká jistota (≥${s.high_conf_threshold})</div><div class="v" style="color:${wcol(s.buy_high.win_rate)}">${s.buy_high.win_rate}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">${s.buy_high.count} verdiktů</div></div>`;
-            }
-            statsEl.innerHTML = cards;
+        if (!enough) {
+            listEl.innerHTML = `<div class="track-empty">Zatím málo živých verdiktů (${d.count}) na statistiku — sbírá se. Níže je jejich aktuální stav; souhrnná úspěšnost se ukáže po pár verdiktech.</div>` + trackListHTML(d.items);
+            return;
         }
-        listEl.innerHTML = d.items.map(it => {
+        listEl.innerHTML = trackListHTML(d.items);
+    } catch (e) {
+        listEl.innerHTML = '<div class="track-empty">Track record se nepodařilo načíst.</div>';
+    }
+}
+
+function trackListHTML(items) {
+        return (items || []).map(it => {
             const vt = (it.verdict || '').toLowerCase();
             const vcls = vt.includes('koup') ? 'buy' : (vt.includes('prod') ? 'sell' : 'hold');
             const ret = it.return_pct;
@@ -2789,9 +2811,6 @@ async function loadTrackRecord() {
                 </div>
                 ${exitTxt}</div>`;
         }).join('');
-    } catch (e) {
-        listEl.innerHTML = '<div class="track-empty">Track record se nepodařilo načíst.</div>';
-    }
 }
 
 async function generatePortfolioEval(watchlistData) {

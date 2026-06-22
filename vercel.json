@@ -5,7 +5,13 @@
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index.py" },
-    { "src": "/(.*)", "dest": "/index.html" }
+    { "src": "/(.*)", "dest": "/index.html", "headers": {
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "SAMEORIGIN",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+      "Permissions-Policy": "geolocation=(), microphone=(), camera=()"
+    } }
   ],
   "crons": [
     { "path": "/api/cron/morning", "schedule": "0 6 * * *" },

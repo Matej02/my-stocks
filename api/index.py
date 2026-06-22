@@ -28,6 +28,35 @@ from urllib.parse import quote
 app = Flask(__name__)
 CORS(app)
 
+
+@app.after_request
+def _security_headers(resp):
+    """Bezpečnostní hlavičky na všech API odpovědích."""
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+def _client_ip():
+    fwd = request.headers.get("X-Forwarded-For", "")
+    return (fwd.split(",")[0].strip() if fwd else (request.remote_addr or "?"))
+
+
+def _rate_ok(action, limit, window):
+    """Jednoduchý rate-limit per IP (proti hrubé síle). Fail-open při chybě KV."""
+    if not cloud_enabled():
+        return True
+    try:
+        key = _pk(f"rl:{action}:{_client_ip()}:{int(time.time()) // window}")
+        n = _kv_cmd("INCR", key)
+        if n == 1:
+            _kv_cmd("EXPIRE", key, window)
+        return (n or 0) <= limit
+    except Exception:
+        return True
+
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
 HEADERS = {"User-Agent": UA, "Accept": "application/json"}
@@ -748,13 +777,15 @@ def account_status():
 def register():
     if not cloud_enabled():
         return jsonify({"ok": False, "error": "Účty nejsou nastavené (chybí úložiště)."}), 400
+    if not _rate_ok("register", 8, 600):
+        return jsonify({"ok": False, "error": "Příliš mnoho pokusů. Zkus to za chvíli."}), 429
     body = request.get_json(silent=True) or {}
     email = _norm_email(body.get("email"))
     password = body.get("password") or ""
     if not EMAIL_RE.match(email):
         return jsonify({"ok": False, "error": "Zadej platný e-mail."}), 400
-    if len(password) < 4:
-        return jsonify({"ok": False, "error": "Heslo musí mít aspoň 4 znaky."}), 400
+    if len(password) < 6:
+        return jsonify({"ok": False, "error": "Heslo musí mít aspoň 6 znaků."}), 400
     invite = (body.get("invite") or "").strip().lower()
     try:
         if kv_get_json(f"user:{email}"):
@@ -810,6 +841,8 @@ def register():
 def login():
     if not cloud_enabled():
         return jsonify({"ok": False, "error": "Účty nejsou nastavené (chybí úložiště)."}), 400
+    if not _rate_ok("login", 15, 300):
+        return jsonify({"ok": False, "error": "Příliš mnoho pokusů o přihlášení. Zkus to za pár minut."}), 429
     body = request.get_json(silent=True) or {}
     email = _norm_email(body.get("email"))
     password = body.get("password") or ""
@@ -828,6 +861,8 @@ def login():
 def forgot_password():
     if not cloud_enabled():
         return jsonify({"ok": True})  # nic neprozrazujeme
+    if not _rate_ok("forgot", 6, 600):
+        return jsonify({"ok": True})  # tváříme se OK, ale nic nepošleme
     email = _norm_email((request.get_json(silent=True) or {}).get("email"))
     try:
         if EMAIL_RE.match(email) and kv_get_json(f"user:{email}"):
@@ -848,8 +883,8 @@ def reset_password():
     body = request.get_json(silent=True) or {}
     token = (body.get("token") or "").strip()
     password = body.get("password") or ""
-    if len(password) < 4:
-        return jsonify({"ok": False, "error": "Heslo musí mít aspoň 4 znaky."}), 400
+    if len(password) < 6:
+        return jsonify({"ok": False, "error": "Heslo musí mít aspoň 6 znaků."}), 400
     try:
         data = kv_get_json(f"reset:{token}")
         if not data or data.get("exp", 0) < int(time.time()):
@@ -1309,7 +1344,7 @@ def search_ticker():
         return jsonify({"ok": True, "results": []})
     try:
         url = (f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(query)}"
-               f"&quotesCount=20&newsCount=0&enableFuzzyQuery=true&listsCount=0")
+               f"&quotesCount=40&newsCount=0&enableFuzzyQuery=true&listsCount=0")
         r = requests.get(url, headers=HEADERS, timeout=8)
         data = r.json()
         # Povolené typy – širší (přidány MUTUALFUND, OPTION vynechán). Neznámé typy taky pustíme,
@@ -2148,16 +2183,9 @@ def get_backtest():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-@app.route("/api/signals")
-def get_signals():
-    """Živé nákupní signály podle BACKTESTEM OVĚŘENÉHO modelu – akcie, které
-    PRÁVĚ TEĎ splňují náš signál (setup skóre ≥ práh = pokles v uptrendu).
-    Stejné skóre i úrovně jako hloubková analýza. Kešováno 1×/den (drahé na
-    stažení historie celého universa)."""
-    date = _today()
-    cached = kv_get_json(f"signals:{date}")
-    if cached:
-        return jsonify({"ok": True, "cached": True, **cached})
+def _scan_signals():
+    """Projede universum a vrátí akcie, které PRÁVĚ TEĎ splňují nákupní signál
+    (setup skóre ≥ práh). Stejné skóre i úrovně jako hloubková analýza."""
     items = []
     for t in BACKTEST_BASKET:
         try:
@@ -2169,7 +2197,7 @@ def get_signals():
             ind = compute_indicators(closes, [])
             price = meta.get("regularMarketPrice") or closes[-1]
             score = tech_setup_score(price, ind)
-            if score is None or score < VERDICT_BUY:  # ukaž jen aktuální nákupní signály
+            if score is None or score < VERDICT_BUY:  # jen aktuální nákupní signály
                 continue
             lv = compute_levels({"price": price, "volatility_pct": ind.get("volatility")}, 10) or {}
             prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
@@ -2186,9 +2214,19 @@ def get_signals():
         except Exception:
             continue
     items.sort(key=lambda x: x["score"], reverse=True)
-    out = {"count": len(items), "results": items, "universe": len(BACKTEST_BASKET),
-           "horizon_days": 10, "buy_threshold": VERDICT_BUY,
-           "updated": datetime.now(timezone.utc).strftime("%H:%M UTC"), "date": date}
+    return {"count": len(items), "results": items, "universe": len(BACKTEST_BASKET),
+            "horizon_days": 10, "buy_threshold": VERDICT_BUY,
+            "updated": datetime.now(timezone.utc).strftime("%H:%M UTC"), "date": _today()}
+
+
+@app.route("/api/signals")
+def get_signals():
+    """Živé nákupní signály podle BACKTESTEM OVĚŘENÉHO modelu. Kešováno 1×/den."""
+    date = _today()
+    cached = kv_get_json(f"signals:{date}")
+    if cached:
+        return jsonify({"ok": True, "cached": True, **cached})
+    out = _scan_signals()
     try:
         kv_set_json(f"signals:{date}", out)
     except Exception:
@@ -2415,7 +2453,7 @@ def _top_opps_for_summary(n=3):
     return out[:n]
 
 
-def build_morning_summary_html(email, top_opps):
+def build_morning_summary_html(email, top_opps, top_signals=None):
     pf = kv_get_json(f"portfolio:{email}") or {}
     watch = (pf.get("watchlist") or [])[:8]
     rows = ""
@@ -2441,9 +2479,19 @@ def build_morning_summary_html(email, top_opps):
             f"&nbsp;<b>{sym}</b> <span style='color:#9ba1b0'>{name}</span></div>"
             for (sc, sym, name, up, cur, pr) in top_opps)
         opp_html = f"<h3 style='font-size:16px;margin:22px 0 8px'>🎯 Příležitosti s potenciálem</h3>{items}"
+    sig_html = ""
+    if top_signals:
+        sitems = "".join(
+            f"<div style='padding:8px 0;border-top:1px solid #23262f'>"
+            f"<b style='color:#00C853'>Koupit</b> &nbsp;<b>{s.get('ticker')}</b> "
+            f"<span style='color:#9ba1b0'>{s.get('name','')}</span><br>"
+            f"<span style='color:#9ba1b0;font-size:12px'>skóre {s.get('score')} · cíl +{s.get('reward_pct')}% / stop −{s.get('risk_pct')}% · ~2 týdny</span></div>"
+            for s in top_signals[:4])
+        sig_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>✅ Dnešní signály „Sleva v trendu"
+                    "</h3>" + sitems)
     return _email_shell("Ranní přehled trhu ☀️",
                         "<p style='line-height:1.6'>Dobré ráno! Tady je tvůj dnešní přehled:</p>" +
-                        watch_html + opp_html +
+                        watch_html + sig_html + opp_html +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>Notifikace vypneš v appce v profilu. "
                         "Není to investiční doporučení.</p>")
 
@@ -2483,13 +2531,22 @@ def cron_morning():
     sent = 0
     try:
         top_opps = _top_opps_for_summary(3)
+        # Dnešní signály – z denní cache, jinak dopočítej (a ulož do cache)
+        sig = kv_get_json(f"signals:{_today()}")
+        if not sig:
+            try:
+                sig = _scan_signals()
+                kv_set_json(f"signals:{_today()}", sig)
+            except Exception:
+                sig = {}
+        top_signals = (sig or {}).get("results") or []
         for email in kv_smembers("users")[:200]:
             rec = kv_get_json(f"user:{email}") or {}
             if not (rec.get("notif") or {}).get("morning"):
                 continue
             try:
                 send_email(email, "☀️ Ranní přehled trhu – MY STOCKS",
-                           build_morning_summary_html(email, top_opps))
+                           build_morning_summary_html(email, top_opps, top_signals))
                 sent += 1
             except Exception:
                 continue
