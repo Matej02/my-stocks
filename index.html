@@ -43,6 +43,8 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .search-item:hover {background: rgba(255, 122, 0, 0.1);}
 .si-ticker {font-family: var(--fh); font-weight: bold; color: var(--accent); font-size: 15px; flex:none;}
 .si-type {font-size:10px; font-weight:700; padding:2px 7px; border-radius:7px; text-transform:uppercase; letter-spacing:.5px; flex:none;}
+.search-head {padding:10px 14px 4px; font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:1px;}
+.search-grp {padding:8px 14px 2px; font-size:10px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
 
 .settings-btn {background:var(--bg-glass); border:1px solid var(--border); padding:10px 15px; border-radius:20px; color:var(--text2); cursor:pointer; display:flex; align-items:center; gap:8px; transition:all 0.2s;}
 .settings-btn:hover {color:var(--accent); border-color:var(--accent);}
@@ -633,7 +635,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·h</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·i</div>
 
 <div class="container">
   
@@ -1247,10 +1249,13 @@ document.addEventListener("DOMContentLoaded", () => {
     searchInput.addEventListener('input', (e) => {
         clearTimeout(searchTimeout);
         const query = e.target.value.trim();
-        if(query.length === 0) { searchDropdown.style.display = 'none'; return; }
+        if(query.length === 0) { showPopularMarkets(); return; }
         searchDropdown.style.display = 'flex';
         searchDropdown.innerHTML = '<div style="padding:15px; color:var(--text2); text-align:center;"><i class="ti ti-loader spin"></i> Hledám...</div>';
         searchTimeout = setTimeout(() => fetchSearchResults(query), 300);
+    });
+    searchInput.addEventListener('focus', () => {
+        if (!searchInput.value.trim()) showPopularMarkets();
     });
 
     document.addEventListener('click', (e) => {
@@ -1279,6 +1284,35 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
+const SEARCH_TYPE_CZ = { EQUITY: 'Akcie', ETF: 'ETF', INDEX: 'Index', CRYPTOCURRENCY: 'Krypto', FUTURE: 'Komodita', CURRENCY: 'Měna', MUTUALFUND: 'Fond' };
+const SEARCH_TYPE_COL = { INDEX: '#29B6F6', CRYPTOCURRENCY: '#AB47BC', FUTURE: '#FFC400', CURRENCY: '#26A69A', ETF: '#7C4DFF' };
+function searchItemHTML(item) {
+    const t = item.type || 'EQUITY';
+    const badge = `<span class="si-type" style="background:${(SEARCH_TYPE_COL[t] || 'var(--text2)')}22;color:${SEARCH_TYPE_COL[t] || 'var(--text2)'}">${SEARCH_TYPE_CZ[t] || 'Akcie'}</span>`;
+    return `<div class="search-item" onclick="selectSearchItem('${item.ticker}')">
+        <div style="display:flex; align-items:center; gap:10px; min-width:0;"><span class="si-ticker">${item.ticker}</span><span class="si-name">${escapeHtml(niceName(item.ticker, item.name))}</span></div>
+        <div style="display:flex; align-items:center; gap:8px; flex:none;">${badge}<span class="si-exch">${item.exchange || ''}</span></div>
+    </div>`;
+}
+
+const POPULAR_MARKETS = [
+    { h: 'Indexy' },
+    { ticker: '^GSPC', type: 'INDEX' }, { ticker: '^IXIC', type: 'INDEX' }, { ticker: '^DJI', type: 'INDEX' }, { ticker: '^GDAXI', type: 'INDEX' },
+    { h: 'Komodity' },
+    { ticker: 'GC=F', type: 'FUTURE' }, { ticker: 'SI=F', type: 'FUTURE' }, { ticker: 'CL=F', type: 'FUTURE' }, { ticker: 'HG=F', type: 'FUTURE' },
+    { h: 'Krypto' },
+    { ticker: 'BTC-USD', type: 'CRYPTOCURRENCY' }, { ticker: 'ETH-USD', type: 'CRYPTOCURRENCY' },
+    { h: 'Populární akcie' },
+    { ticker: 'AAPL', type: 'EQUITY', name: 'Apple' }, { ticker: 'NVDA', type: 'EQUITY', name: 'NVIDIA' }, { ticker: 'MSFT', type: 'EQUITY', name: 'Microsoft' },
+    { ticker: 'TSLA', type: 'EQUITY', name: 'Tesla' }, { ticker: 'AMZN', type: 'EQUITY', name: 'Amazon' }, { ticker: 'GOOGL', type: 'EQUITY', name: 'Alphabet' },
+];
+function showPopularMarkets() {
+    const dropdown = document.getElementById('searchDropdown');
+    dropdown.style.display = 'flex';
+    dropdown.innerHTML = '<div class="search-head">Populární trhy</div>' + POPULAR_MARKETS.map(x =>
+        x.h ? `<div class="search-grp">${x.h}</div>` : searchItemHTML(x)).join('');
+}
+
 async function fetchSearchResults(query) {
     const dropdown = document.getElementById('searchDropdown');
     try {
@@ -1287,18 +1321,7 @@ async function fetchSearchResults(query) {
         if(!data.ok || data.results.length === 0) {
             dropdown.innerHTML = '<div style="padding:15px; color:var(--text2); text-align:center;">Nic nenalezeno</div>'; return;
         }
-        dropdown.innerHTML = '';
-        const TYPE_CZ = { EQUITY: 'Akcie', ETF: 'ETF', INDEX: 'Index', CRYPTOCURRENCY: 'Krypto', FUTURE: 'Komodita', CURRENCY: 'Měna', MUTUALFUND: 'Fond' };
-        const TYPE_COL = { INDEX: '#29B6F6', CRYPTOCURRENCY: '#AB47BC', FUTURE: '#FFC400', CURRENCY: '#26A69A', ETF: '#7C4DFF' };
-        data.results.forEach(item => {
-            const t = item.type || 'EQUITY';
-            const badge = `<span class="si-type" style="background:${(TYPE_COL[t] || 'var(--text2)')}22;color:${TYPE_COL[t] || 'var(--text2)'}">${TYPE_CZ[t] || 'Akcie'}</span>`;
-            dropdown.innerHTML += `
-                <div class="search-item" onclick="selectSearchItem('${item.ticker}')">
-                    <div style="display:flex; align-items:center; gap:10px; min-width:0;"><span class="si-ticker">${item.ticker}</span><span class="si-name">${escapeHtml(niceName(item.ticker, item.name))}</span></div>
-                    <div style="display:flex; align-items:center; gap:8px; flex:none;">${badge}<span class="si-exch">${item.exchange}</span></div>
-                </div>`;
-        });
+        dropdown.innerHTML = data.results.map(searchItemHTML).join('');
     } catch(e) { dropdown.innerHTML = '<div style="padding:15px; color:var(--down); text-align:center;">Chyba připojení k serveru.</div>'; }
 }
 
