@@ -436,6 +436,17 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .profile-btn i {font-size:18px;}
 .profile-box {background:#12141c; border:1px solid var(--accent); border-radius:22px; padding:2rem; width:760px; max-width:94vw; max-height:90vh; overflow-y:auto; position:relative;}
 .profile-close {position:absolute; top:16px; right:16px; background:rgba(255,255,255,0.05); border:1px solid var(--border); color:var(--text2); width:34px; height:34px; border-radius:10px; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center;}
+/* Metodika „Jak hodnotíme" */
+.method-intro {font-size:14px; line-height:1.6; color:var(--text); background:rgba(255,122,0,0.06); border:1px solid var(--border-accent); border-radius:12px; padding:12px 14px; margin:0 0 16px;}
+.method-step {display:flex; gap:14px; align-items:flex-start; padding:12px 0; border-top:1px solid var(--border);}
+.method-step .ms-ico {font-size:26px; flex:none; line-height:1.2;}
+.method-step h4 {margin:0 0 4px; font-size:15px; font-family:var(--fh);}
+.method-step p {margin:0; font-size:13px; line-height:1.6; color:var(--text2);}
+.method-step p b {color:var(--text);}
+.method-proof {display:flex; gap:10px; align-items:flex-start; margin-top:16px; padding:12px 14px; border-radius:12px; background:var(--up-glow); border:1px solid rgba(0,230,118,0.35); color:var(--up); font-size:13px; line-height:1.55;}
+.method-proof i {font-size:20px; flex:none;}
+.method-proof b {color:var(--text);}
+.method-disc {font-size:11px; color:var(--text2); margin-top:14px; line-height:1.5;}
 .profile-close:hover {color:var(--accent); border-color:var(--accent);}
 .profile-box .btn-primary {display:inline-flex; align-items:center; justify-content:center; gap:8px;}
 .profile-hdr {text-align:center; margin-bottom:1.5rem;}
@@ -607,7 +618,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·a</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·b</div>
 
 <div class="container">
   
@@ -741,6 +752,47 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
     </div>
   </div>
 
+  <!-- JAK HODNOTÍME — metodika MY STOCKS -->
+  <div class="pl-modal" id="methodModal">
+    <div class="profile-box">
+      <button class="profile-close" onclick="closeMethod()"><i class="ti ti-x"></i></button>
+      <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-compass" style="color:var(--accent)"></i> Jak hodnotíme</h2>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Metoda MY STOCKS — náš systém, jak poznat, kdy koupit</div>
+      <div class="method-body">
+        <p class="method-intro">Náš verdikt <b>není odhad AI</b>. Počítá ho pevný, ověřený systém z několika pilířů — stejná data dají vždy stejný výsledek. AI ho jen vysvětlí slovy.</p>
+
+        <div class="method-step"><div class="ms-ico">📊</div><div>
+          <h4>1. Načasování — „Sleva v trendu"</h4>
+          <p>Kupujeme jen v ověřené situaci: cena <b>nad 200denním průměrem</b> (dlouhodobý růst) a zároveň <b>nízké RSI</b> (krátkodobý pokles = sleva). Nehoníme padající nože ani překoupené tituly. <b>Backtest 5 let (vč. propadu 2022): ~60 % trefnost na 10 dní</b>, lépe než náhodný vstup.</p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico">🏦</div><div>
+          <h4>2. Kvalita — fundament firmy</h4>
+          <p>Díváme se na růst tržeb, marže, návratnost kapitálu (ROE), zadlužení a valuaci. <b>Nekvalitní firmu nekoupíme, ani když „letí"</b> — záporná ziskovost skóre stáhne dolů.</p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico">👔</div><div>
+          <h4>3. Potvrzení — analytici</h4>
+          <p>Konsenzus bank a cílová cena jako nezávislý třetí hlas. Bereme je jako potvrzení, ne jako jediný důvod.</p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico">🎯</div><div>
+          <h4>4. MS Skóre 0–100 + jistota</h4>
+          <p>Pilíře spojíme do jednoho <b>MS Skóre</b> (váhy podle dostupných dat): <b>Koupit ≥ 70 · Držet 45–69 · Prodat < 45</b>. <b>Jistota</b> je vysoká jen když se pilíře shodují a máme dost dat — když si protiřečí, přiznáme nižší jistotu.</p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico">🛡️</div><div>
+          <h4>5. Řízení rizika</h4>
+          <p>Ke každému signálu počítáme <b>vstup, stop-loss a cíl z volatility</b> akcie, poměr zisk:riziko a horizont <b>~2 týdny</b>. Žádné odhady — čistě z dat.</p>
+        </div></div>
+
+        <div class="method-proof"><i class="ti ti-shield-check"></i> <span>Vše stojí na <b>důkazech</b>: backtest bez nahlížení do budoucna + track record reálných verdiktů. Metodiku měníme jen na základě čísel, ne dojmů.</span></div>
+
+        <p class="method-disc">Slouží jako podklad k vlastnímu rozhodnutí. Není to investiční doporučení — žádný nástroj negarantuje zisk.</p>
+      </div>
+    </div>
+  </div>
+
   <div id="dashboard">
     <!-- NAVIGACE SEKCÍ -->
     <div class="dash-tabs">
@@ -791,8 +843,8 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
     <div class="opp-box" id="signals-box" style="border-color:rgba(0,230,118,0.35);">
       <div class="opp-head">
         <div class="opp-title">
-          <i class="ti ti-target-arrow" style="color:var(--up)"></i> Co koupit teď — ověřený signál
-          <span class="opp-sub">Akcie, které <b>právě teď</b> splňují náš backtestem prověřený nákupní signál (pokles v uptrendu). Horizont ~10 dní. <span id="signals-proof" style="color:var(--up)"></span></span>
+          <i class="ti ti-target-arrow" style="color:var(--up)"></i> Co koupit teď — signál „Sleva v trendu"
+          <span class="opp-sub">Akcie, které <b>právě teď</b> splňují náš backtestem prověřený nákupní signál (pokles v uptrendu). Horizont ~2 týdny. <span id="signals-proof" style="color:var(--up)"></span> <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span>
         </div>
         <div class="opp-actions">
           <span class="opp-updated" id="signals-updated"></span>
@@ -1377,6 +1429,8 @@ function openProfile(view) {
 function closeProfile() {
     document.getElementById('profileModal').classList.remove('open');
 }
+function openMethod() { document.getElementById('methodModal').classList.add('open'); }
+function closeMethod() { document.getElementById('methodModal').classList.remove('open'); }
 
 function renderProfileView() {
     const authView = document.getElementById('profile-auth');
@@ -2848,7 +2902,7 @@ function renderDeepReport(d) {
                     <span class="dm-val" style="color:${colFor(p.score)}">${p.score}</span>
                     ${p.note ? `<span class="dm-note">${escapeHtml(p.note)}</span>` : ''}
                 </div>`).join('')}
-            <div class="dm-foot">Verdikt i jistota jsou spočítané z těchto pilířů (váhy podle dostupných dat). AI je pouze vysvětluje, nemění.</div>
+            <div class="dm-foot">Verdikt i jistota jsou spočítané z těchto pilířů (váhy podle dostupných dat). AI je pouze vysvětluje, nemění. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></div>
         </div>` : '';
 
     // Důkaz úspěšnosti z backtestu (pokud je nacachovaný)
