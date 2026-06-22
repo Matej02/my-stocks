@@ -1930,6 +1930,8 @@ def deep_analysis(ticker):
                 "ticker": facts["ticker"], "ts": int(time.time()),
                 "verdict": report.get("verdict"), "price": facts.get("price"),
                 "target": report.get("target_price"), "currency": facts.get("currency"),
+                "stop": (levels or {}).get("stop_loss"),
+                "horizon_days": (levels or {}).get("horizon_days", 10),
                 "score": model.get("score"), "user": user,
             })
         except Exception:
@@ -1960,6 +1962,7 @@ def track_record():
                 prices[t] = None
         items, buy_rets, buy_high_rets = [], [], []
         HIGH_CONF = 78  # práh „vysoká jistota" (skóre modelu)
+        now = int(time.time())
         for v in verdicts:
             cur = prices.get(v.get("ticker"))
             entry = v.get("price")
@@ -1968,7 +1971,22 @@ def track_record():
                 buy_rets.append(ret)
                 if isinstance(v.get("score"), (int, float)) and v["score"] >= HIGH_CONF:
                     buy_high_rets.append(ret)
-            items.append({**v, "current": _round(cur, 3), "return_pct": _round(ret, 2)})
+            # Vyhodnocení EXIT pravidel (jen pro nákupní verdikty)
+            exit_status, exit_label = None, None
+            if v.get("verdict") == "Koupit" and cur:
+                horizon = v.get("horizon_days", 10) or 10
+                cal_days = round(horizon * 7 / 5)  # obchodní → kalendářní dny
+                days_held = (now - (v.get("ts") or now)) / 86400
+                if v.get("target") and cur >= v["target"]:
+                    exit_status, exit_label = "target", "✅ Cíl zasažen — realizuj zisk"
+                elif v.get("stop") and cur <= v["stop"]:
+                    exit_status, exit_label = "stop", "🛑 Stop zasažen — vystup"
+                elif days_held > cal_days:
+                    exit_status, exit_label = "expired", "⏳ Horizont vypršel — přehodnoť"
+                else:
+                    exit_status, exit_label = "open", "Drží se (do cíle/stopu/horizontu)"
+            items.append({**v, "current": _round(cur, 3), "return_pct": _round(ret, 2),
+                          "exit_status": exit_status, "exit_label": exit_label})
         items = items[-60:][::-1]
 
         def _agg(rs):
