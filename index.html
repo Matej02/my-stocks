@@ -199,6 +199,8 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   .vb-verdict {font-size:24px;}
   .vb-score {font-size:24px;}
   .sim-grid {flex-direction:column;}
+  .sim-compare {flex-direction:column;}
+  .sim-vs {justify-content:center;}
   .dm-row {grid-template-columns:90px 1fr 30px;}
 }
 
@@ -478,6 +480,15 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .sim-cell .l {font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.3px; line-height:1.2;}
 .sim-cell .v {font-family:var(--fh); font-weight:800; font-size:17px; margin-top:4px;}
 .sim-cell .p {font-size:11px; color:var(--text2); margin-top:2px;}
+.sim-compare {display:flex; align-items:stretch; gap:10px; margin-top:6px;}
+.sim-side {flex:1; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:14px; padding:16px 12px; text-align:center;}
+.sim-side.win {border-color:var(--border-accent); background:rgba(255,122,0,0.07);}
+.sim-side .l {font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
+.sim-side .big {font-family:var(--fh); font-weight:800; font-size:24px; margin-top:6px;}
+.sim-side .d {font-size:12px; margin-top:3px;}
+.sim-vs {display:flex; align-items:center; color:var(--text2); font-weight:700; font-size:13px;}
+.sim-diff {text-align:center; margin-top:12px; font-size:15px; color:var(--text);}
+.sim-diff b {color:var(--accent); font-family:var(--fh); font-size:18px;}
 .exit-box {background:rgba(255,61,0,0.05); border:1px solid rgba(255,61,0,0.3); border-radius:15px; padding:16px 18px; margin-bottom:18px;}
 .exit-head {font-family:var(--fh); font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; margin-bottom:10px; color:var(--down);}
 .exit-row {display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border); cursor:pointer; flex-wrap:wrap;}
@@ -667,7 +678,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·q</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·r</div>
 
 <div class="container">
   
@@ -850,7 +861,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
     <div class="profile-box" style="max-width:520px;">
       <button class="profile-close" onclick="closeSim()"><i class="ti ti-x"></i></button>
       <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-calculator" style="color:var(--accent)"></i> Kolik to může vydělat?</h2>
-      <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Odhad z <b>historického průměru</b> našich TOP signálů — ne slib.</div>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Kolik můžeš mít za rok — <b>sám vs s námi</b> (z historického průměru, ne slib).</div>
       <div class="sim-row">
         <label>Kapitál na 1 obchod</label>
         <div class="sim-inwrap"><input id="sim-cap" type="number" min="10" value="1000" oninput="runSim()"><span>€</span></div>
@@ -1589,21 +1600,34 @@ function runSim() {
         out.innerHTML = '<div style="color:var(--text2);font-size:13px;">Spusť nejdřív backtest (Admin), ať máme z čeho počítat.</div>';
         return;
     }
-    const e = bp.avg_return / 100;                 // průměr na obchod
-    const base = cap * Math.pow(1 + e, trades) - cap;
-    const good = cap * Math.pow(1 + e * 1.5, trades) - cap;   // příznivý
-    const bad = cap * Math.pow(1 + (e - 0.012), trades) - cap; // konzervativní (horší o 1,2 b./obchod)
-    const f = v => (v >= 0 ? '+' : '') + Math.round(v).toLocaleString('cs-CZ') + ' €';
-    const pct = v => (v >= 0 ? '+' : '') + (v / cap * 100).toFixed(0) + ' %';
-    const col = v => v >= 0 ? 'var(--up)' : 'var(--down)';
+    // S NÁMI = náš edge (TOP signál); BEZ NÁS = stejný počet obchodů, ale bez naší
+    // selekce (baseline = běžný/náhodný obchod z backtestu).
+    const eWith = bp.avg_return / 100;
+    const baseStat = (btProof && btProof.baseline && btProof.baseline.avg_return != null) ? btProof.baseline : null;
+    const eWithout = baseStat ? baseStat.avg_return / 100 : 0;
+    const withUs = cap * Math.pow(1 + eWith, trades);
+    const without = cap * Math.pow(1 + eWithout, trades);
+    const diff = withUs - without;
+    const money = v => Math.round(v).toLocaleString('cs-CZ') + ' €';
+    const delta = v => (v - cap >= 0 ? '+' : '') + Math.round(v - cap).toLocaleString('cs-CZ') + ' € (' + (v - cap >= 0 ? '+' : '') + ((v - cap) / cap * 100).toFixed(0) + ' %)';
+    const col = v => v >= cap ? 'var(--up)' : 'var(--down)';
     out.innerHTML = `
-        <div class="sim-grid">
-            <div class="sim-cell"><div class="l">Konzervativní</div><div class="v" style="color:${col(bad)}">${f(bad)}</div><div class="p">${pct(bad)}</div></div>
-            <div class="sim-cell main"><div class="l">Očekávaný (historický průměr)</div><div class="v" style="color:${col(base)}">${f(base)}</div><div class="p">${pct(base)}</div></div>
-            <div class="sim-cell"><div class="l">Příznivý</div><div class="v" style="color:${col(good)}">${f(good)}</div><div class="p">${pct(good)}</div></div>
+        <div class="sim-compare">
+            <div class="sim-side">
+                <div class="l">Sám, bez nás</div>
+                <div class="big" style="color:${col(without)}">${money(without)}</div>
+                <div class="d" style="color:${col(without)}">${delta(without)}</div>
+            </div>
+            <div class="sim-vs">vs</div>
+            <div class="sim-side win">
+                <div class="l">S MY STOCKS</div>
+                <div class="big" style="color:${col(withUs)}">${money(withUs)}</div>
+                <div class="d" style="color:${col(withUs)}">${delta(withUs)}</div>
+            </div>
         </div>
+        <div class="sim-diff">Rozdíl díky nám: <b>${diff >= 0 ? '+' : ''}${money(diff)}</b> za rok</div>
         <div style="font-size:12px;color:var(--text2);margin-top:10px;line-height:1.5;">
-            Vychází z trefnosti <b>${bp.win_rate}%</b> a průměru <b>${bp.avg_return >= 0 ? '+' : ''}${bp.avg_return}%</b> na obchod (TOP signál, 5letý backtest), při ${trades} obchodech a reinvestici. Předpokládá, že tolik TOP signálů za rok skutečně nastane — bývá jich jen pár měsíčně.
+            Z ${trades} obchodů a reinvestice. <b>S námi</b> = náš TOP signál (trefnost ${bp.win_rate}%, průměr ${bp.avg_return >= 0 ? '+' : ''}${bp.avg_return}%/obchod). <b>Bez nás</b> = stejný počet obchodů bez naší selekce${baseStat ? ` (běžný průměr ${baseStat.avg_return >= 0 ? '+' : ''}${baseStat.avg_return}%/obchod)` : ''}. Vše z 5letého backtestu.
         </div>`;
 }
 
