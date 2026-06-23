@@ -75,6 +75,11 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 
 /* PORTFOLIO CARDS */
 .grid-watchlist {display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:20px; margin-bottom:3rem;}
+.pf-summary {grid-template-columns:repeat(5, 1fr); gap:10px; margin-bottom:20px;}
+.pf-stat {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:14px; padding:14px 12px; text-align:center;}
+.pf-stat .l {font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
+.pf-stat .v {font-family:var(--fh); font-weight:800; font-size:20px; margin-top:4px;}
+@media (max-width:640px){ .pf-summary {grid-template-columns:repeat(2, 1fr);} }
 .stock-card {background:var(--bg-glass); border:1px solid var(--border); border-radius:20px; padding:1.5rem; cursor:pointer; transition:all 0.2s;}
 .stock-card:hover {transform:translateY(-5px); border-color:var(--accent); box-shadow: 0 10px 25px var(--accent-glow);}
 .sc-ticker {font-family:var(--fh); font-weight:700; font-size:22px; color:var(--text);}
@@ -662,7 +667,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·p</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·q</div>
 
 <div class="container">
   
@@ -960,6 +965,9 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
         <button class="tool-btn" id="refresh-btn" onclick="loadWatchlist()"><i class="ti ti-refresh" id="refresh-ico"></i> Obnovit</button>
       </div>
 
+      <!-- PŘEHLED PORTFOLIA -->
+      <div id="portfolio-summary" class="pf-summary" style="display:none;"></div>
+
       <!-- CO ZVÁŽIT K PRODEJI (exit signály z watchlistu) -->
       <div class="exit-box" id="exit-box" style="display:none;">
         <div class="exit-head"><i class="ti ti-alert-triangle"></i> Co zvážit k prodeji</div>
@@ -967,8 +975,14 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
       </div>
 
       <!-- SLEDOVANÉ AKCIE -->
-      <div class="section-title">
+      <div class="section-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
         <div style="display:flex; align-items:center; gap:10px;"><i class="ti ti-eye" style="color:var(--accent)"></i> Moje sledované akcie</div>
+        <select id="watch-sort" onchange="renderWatchCards(lastWatchlistData)" style="background:#12141c; border:1px solid var(--border); color:var(--text); border-radius:10px; padding:7px 12px; font-size:13px; font-family:var(--fb); cursor:pointer;">
+          <option value="change_desc">Řadit: dnes nejvíc ↑</option>
+          <option value="change_asc">Řadit: dnes nejvíc ↓</option>
+          <option value="name">Řadit: podle názvu</option>
+          <option value="price_desc">Řadit: nejdražší</option>
+        </select>
       </div>
       <div class="grid-watchlist" id="watch-grid"></div>
       <div id="watch-empty" class="port-empty" style="display:none;">Zatím nic nesleduješ. Najdi akcii a přidej ji tlačítkem „Sledovat" v detailu.</div>
@@ -2499,9 +2513,39 @@ async function loadExitSignals() {
 }
 
 function renderWatchCards(results) {
+    results = Array.isArray(results) ? results.slice() : [];
+    const sort = (document.getElementById('watch-sort') || {}).value || 'change_desc';
+    const cmp = {
+        change_desc: (a, b) => (b.change_pct ?? 0) - (a.change_pct ?? 0),
+        change_asc: (a, b) => (a.change_pct ?? 0) - (b.change_pct ?? 0),
+        name: (a, b) => niceName(a.ticker, a.name).localeCompare(niceName(b.ticker, b.name)),
+        price_desc: (a, b) => (b.price ?? 0) - (a.price ?? 0),
+    }[sort];
+    if (cmp) results.sort(cmp);
     const watchGrid = document.getElementById('watch-grid');
     watchGrid.innerHTML = results.map(stockCardHTML).join('');
     document.getElementById('watch-empty').style.display = results.length ? 'none' : 'block';
+    renderPortfolioSummary(results);
+}
+
+function renderPortfolioSummary(results) {
+    const el = document.getElementById('portfolio-summary');
+    if (!el) return;
+    if (!results || !results.length) { el.style.display = 'none'; return; }
+    const up = results.filter(r => (r.change_pct ?? 0) > 0).length;
+    const down = results.filter(r => (r.change_pct ?? 0) < 0).length;
+    const avg = results.reduce((s, r) => s + (r.change_pct ?? 0), 0) / results.length;
+    const best = results.reduce((a, b) => ((b.change_pct ?? 0) > (a.change_pct ?? 0) ? b : a));
+    const worst = results.reduce((a, b) => ((b.change_pct ?? 0) < (a.change_pct ?? 0) ? b : a));
+    const col = v => v >= 0 ? 'var(--up)' : 'var(--down)';
+    const chg = v => `${v >= 0 ? '+' : ''}${(v ?? 0).toFixed(2)}%`;
+    el.style.display = 'grid';
+    el.innerHTML = `
+        <div class="pf-stat"><div class="l">Titulů</div><div class="v">${results.length}</div></div>
+        <div class="pf-stat"><div class="l">Dnes</div><div class="v"><span style="color:var(--up)">${up}↑</span> <span style="color:var(--down)">${down}↓</span></div></div>
+        <div class="pf-stat"><div class="l">Průměr dnes</div><div class="v" style="color:${col(avg)}">${chg(avg)}</div></div>
+        <div class="pf-stat"><div class="l">Nejlepší</div><div class="v" style="font-size:15px">${best.ticker} <span style="color:${col(best.change_pct)};font-size:13px">${chg(best.change_pct)}</span></div></div>
+        <div class="pf-stat"><div class="l">Nejhorší</div><div class="v" style="font-size:15px">${worst.ticker} <span style="color:${col(worst.change_pct)};font-size:13px">${chg(worst.change_pct)}</span></div></div>`;
 }
 
 async function generateDashboardBrief(watchlistData) {
