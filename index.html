@@ -235,6 +235,28 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .lock-card .btn-primary {width:100%; justify-content:center;}
 .lock-error {color:var(--down); font-size:12px; min-height:16px; margin-bottom:10px;}
 
+/* ===== PŘIHLAŠOVACÍ HERO (redesign) ===== */
+#gateWall {background:radial-gradient(circle at 50% -5%, #15151f 0%, #08080e 58%);}
+.gate-card {width:100%; max-width:560px; text-align:center; animation:gateIn .5s ease both;}
+@keyframes gateIn {from{opacity:0; transform:translateY(12px)} to{opacity:1; transform:none}}
+.gate-brand {display:inline-flex; align-items:center; gap:12px; margin-bottom:30px;}
+.gate-brand .bi {width:46px; height:46px; border-radius:13px; background:var(--accent); color:#1a0e00; display:flex; align-items:center; justify-content:center; font-size:24px;}
+.gate-brand .bt {font-family:var(--fh); font-weight:700; font-size:23px; letter-spacing:.5px;}
+.gate-brand .bt span {color:var(--accent);}
+.gate-card h1 {font-family:var(--fh); font-weight:700; font-size:clamp(28px,6vw,40px); line-height:1.08; letter-spacing:-1px; margin-bottom:14px; color:var(--text);}
+.gate-card h1 em {color:var(--accent); font-style:normal;}
+.gate-lead {color:var(--text2); font-size:15.5px; max-width:430px; margin:0 auto 28px; line-height:1.6;}
+.gate-proof {display:flex; gap:12px; justify-content:center; margin-bottom:30px; flex-wrap:wrap;}
+.gate-proof .gp {background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:14px; padding:14px 18px; min-width:118px;}
+.gate-proof .gpv {font-family:var(--fh); font-weight:700; font-size:23px;}
+.gate-proof .gpv.g {color:var(--up);}
+.gate-proof .gpl {font-size:11px; color:var(--text2); margin-top:4px;}
+.gate-cta {display:inline-flex; align-items:center; justify-content:center; gap:9px; background:var(--accent); color:#1a0e00; font-family:var(--fb); font-weight:700; font-size:15.5px; border:none; border-radius:13px; padding:15px 30px; cursor:pointer; transition:transform .12s ease, opacity .15s;}
+.gate-cta:hover {opacity:.9;} .gate-cta:active {transform:scale(.98);}
+.gate-trust {display:flex; align-items:center; justify-content:center; gap:8px; margin-top:20px; font-size:12.5px; color:var(--text3);}
+.gate-trust i {color:var(--up);}
+.gate-trust a {color:var(--accent); cursor:pointer;}
+
 /* ============ HLOUBKOVÁ ANALÝZA ============ */
 .deep-box {background:linear-gradient(135deg, rgba(124,77,255,0.08), rgba(255,122,0,0.05)); border:1px solid var(--border-accent); border-radius:16px; padding:20px; margin-bottom:20px;}
 .deep-head {display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
@@ -666,17 +688,24 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 <!-- ZÁMEK – zobrazí se jen když je nastaveno heslo (env APP_PASSWORD) -->
 <!-- PŘÍSTUPOVÁ ZEĎ – přihlášení / vybrat plán -->
 <div id="gateWall" class="lock-screen" style="display:none;">
-  <div class="lock-card">
-    <div class="lock-icon"><i class="ti ti-chart-candle"></i></div>
-    <h2>MY <span>STOCKS</span></h2>
+  <div class="gate-card">
+    <div class="gate-brand"><div class="bi"><i class="ti ti-chart-candle"></i></div><div class="bt">MY <span>STOCKS</span></div></div>
     <div id="gate-auth">
-      <p>Tvůj investiční asistent. Přihlas se nebo si vytvoř účet.</p>
-      <button class="btn-primary" onclick="openProfile()"><i class="ti ti-login-2"></i> Přihlásit / Registrovat</button>
+      <h1>Vědět, <em>kdy koupit</em> — ne hádat.</h1>
+      <p class="gate-lead">Investiční asistent s ověřeným edge. Verdikt ze 4 datových pilířů, ne pocit. A transparentně ukazujeme i to, co nefunguje.</p>
+      <div class="gate-proof">
+        <div class="gp"><div class="gpv g">~65 %</div><div class="gpl">trefnost TOP signálu</div></div>
+        <div class="gp"><div class="gpv">+2 %</div><div class="gpl">expectancy / obchod</div></div>
+        <div class="gp"><div class="gpv">5 let</div><div class="gpl">backtest vč. 2022</div></div>
+      </div>
+      <button class="gate-cta" onclick="openProfile()"><i class="ti ti-login-2"></i> Přihlásit / Vytvořit účet</button>
+      <div class="gate-trust"><i class="ti ti-shield-check"></i> Obhajitelná čísla místo prázdných slibů · stop-loss u každého obchodu</div>
     </div>
     <div id="gate-noaccess" style="display:none;">
-      <p>Tvůj účet zatím nemá aktivní plán. Pro přístup si vyber předplatné.</p>
-      <button class="btn-primary" onclick="openProfile('plans')"><i class="ti ti-crown"></i> Vybrat předplatné</button>
-      <p class="auth-hint" style="margin-top:10px;"><a class="profile-cloud-link" onclick="doLogout()">Odhlásit se</a></p>
+      <h1 style="font-size:clamp(26px,5vw,34px);">Vyber si plán</h1>
+      <p class="gate-lead">Tvůj účet zatím nemá aktivní předplatné. Odemkni dnešní signály, hloubkovou analýzu i skener příležitostí.</p>
+      <button class="gate-cta" onclick="openProfile('plans')"><i class="ti ti-crown"></i> Vybrat předplatné</button>
+      <div class="gate-trust" style="margin-top:16px;"><a onclick="doLogout()">Odhlásit se</a></div>
     </div>
   </div>
 </div>
@@ -696,7 +725,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·y</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·z</div>
 
 <div class="container">
   
