@@ -147,7 +147,7 @@ def compute_indicators(closes, volumes):
     out = {
         "rsi": None, "sma20": None, "sma50": None, "sma200": None,
         "macd": None, "macd_hist": None, "volatility": None,
-        "mom_1m": None, "avg_volume": None, "last_volume": None,
+        "mom_1m": None, "avg_volume": None, "last_volume": None, "vol_ratio": None,
     }
     closes = [c for c in closes if c is not None]
     if len(closes) < 5:
@@ -205,6 +205,15 @@ def compute_indicators(closes, volumes):
         if len(vols) >= 5:
             tail = vols[-20:]
             out["avg_volume"] = int(sum(tail) / len(tail))
+        # Poměr objemu: posledních ~5 dní vs posledních ~50 dní. <1 = pokles na
+        # klidném objemu (nikdo nepanikaří), >1.15 = zvýšený prodejní tlak.
+        # Nulové objemy (svátky/halty) z okna vyřazujeme = chybějící data.
+        vlong = [v for v in vols[-50:] if v]
+        vshort = [v for v in vols[-5:] if v]
+        if len(vlong) >= 20 and vshort:
+            base_v = sum(vlong) / len(vlong)
+            if base_v:
+                out["vol_ratio"] = round((sum(vshort) / len(vshort)) / base_v, 2)
     return out
 
 
@@ -286,6 +295,11 @@ def signal_score(price, ind, high52, low52):
 VERDICT_BUY = 70
 VERDICT_SELL = 45
 VERDICT_TOP = 80  # konviktní „TOP signál" – přísnější výběr, vyšší doložená trefnost
+# TOP tier navíc vyžaduje, aby se signál NEdělal na zvýšeném prodejním objemu
+# (5denní průměr objemu vůči ~50dennímu). Backtest 5 let: silný setup s klidným
+# objemem měl ~65 % trefnost (každý rok vč. 2022) a expectancy ~+2.3 %/obchod,
+# vs. ~60 % široký signál. Práh kalibrován na basketu (viz /tmp/bt_improve3.py).
+TOP_VOL_MAX = 1.15
 
 
 def tech_setup_score(price, ind):
@@ -307,6 +321,16 @@ def tech_setup_score(price, ind):
     else:               # downtrend → levné RSI je rizikové, nehoň nůž
         s = 40 + max(-8, min(6, (45 - rsi) * 0.2))
     return max(0, min(100, round(s)))
+
+
+def is_top_signal(score, ind):
+    """TOP (konviktní) signál = silný setup, který se NEděje na zvýšeném prodejním
+    objemu. Backtestem doložená trefnost ~65 % (každý rok vč. 2022) vs ~60 % široký
+    signál. Když objem neznáme, ber jen práh skóre (best-effort)."""
+    if score is None or score < VERDICT_TOP:
+        return False
+    vr = (ind or {}).get("vol_ratio")
+    return vr is None or vr < TOP_VOL_MAX
 
 
 def _setup_note(score):
@@ -1744,8 +1768,9 @@ def gather_facts(ticker):
         "sma200": ind.get("sma200"), "macd_hist": ind.get("macd_hist"),
         "momentum_1m_pct": ind.get("mom_1m"), "volatility_pct": ind.get("volatility"),
         "avg_volume": ind.get("avg_volume"), "last_volume": ind.get("last_volume"),
+        "vol_ratio": ind.get("vol_ratio"),
         "signal_score": score, "signal_label": score_label, "setup_score": setup,
-        "setup_note": _setup_note(setup),
+        "setup_note": _setup_note(setup), "setup_top": is_top_signal(setup, ind),
         "tech_rating": tr["label"], "tech_votes": {"buy": tr["buy"], "sell": tr["sell"], "neutral": tr["neutral"]},
     }
     # Výkonnost v čase + pozice v 52T pásmu + vzdálenost od klouzavých průměrů
@@ -2273,23 +2298,28 @@ BACKTEST_BASKET = [
 
 
 def _fetch_series(ticker, rng="5y"):
-    """(dates, closes) z denních dat – dates jako 'YYYY-MM-DD' kvůli zarovnání s indexem."""
+    """(dates, closes, vols) z denních dat – dates jako 'YYYY-MM-DD' kvůli zarovnání
+    s indexem. Objem zarovnaný s cenou (jen dny, kde je cena)."""
     d = yahoo_chart(ticker, rng, "1d")
     ts = d.get("timestamp") or []
-    cl = ((d.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
-    dates, closes = [], []
-    for t, c in zip(ts, cl):
+    q = ((d.get("indicators") or {}).get("quote") or [{}])[0]
+    cl = q.get("close") or []
+    vl = q.get("volume") or []
+    dates, closes, vols = [], [], []
+    for idx, (t, c) in enumerate(zip(ts, cl)):
         if c is not None:
             dates.append(datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d"))
             closes.append(c)
-    return dates, closes
+            v = vl[idx] if idx < len(vl) else None
+            vols.append(v if v is not None else 0)
+    return dates, closes, vols
 
 
 def _backtest_ticker(ticker, spy=None, horizon=10, step=5, max_days=1260):
-    """Vrací list (score, fwd_return%, excess_vs_SPY% | None)."""
+    """Vrací list (score, fwd_return%, excess_vs_SPY% | None, rok, is_top)."""
     out = []
     try:
-        dates, closes = _fetch_series(ticker, "5y")
+        dates, closes, vols = _fetch_series(ticker, "5y")
     except Exception:
         return out
     n = len(closes)
@@ -2297,7 +2327,7 @@ def _backtest_ticker(ticker, spy=None, horizon=10, step=5, max_days=1260):
         return out
     i = max(210, n - max_days)
     while i + horizon < n:
-        ind = compute_indicators(closes[:i + 1], [])
+        ind = compute_indicators(closes[:i + 1], vols[:i + 1])
         score = tech_setup_score(closes[i], ind)  # stejné skóre jako živý verdikt
         if score is not None:
             fwd = (closes[i + horizon] / closes[i] - 1) * 100
@@ -2305,7 +2335,8 @@ def _backtest_ticker(ticker, spy=None, horizon=10, step=5, max_days=1260):
             d0, dH = dates[i], dates[i + horizon]
             if spy and d0 in spy and dH in spy and spy[d0]:
                 exc = fwd - (spy[dH] / spy[d0] - 1) * 100
-            out.append((score, fwd, exc, d0[:4]))  # rok pro rozpad podle režimu
+            # TOP = silný setup + klidný objem (stejná logika jako živě)
+            out.append((score, fwd, exc, d0[:4], is_top_signal(score, ind)))
         i += step
     return out
 
@@ -2316,9 +2347,13 @@ def _bt_stats(rows):
         return None
     fwd = [r[0] for r in rows]
     exc = [r[1] for r in rows if r[1] is not None]
+    wins = [x for x in fwd if x > 0]
+    losses = [x for x in fwd if x <= 0]
     s = {"count": len(fwd),
          "win_rate": round(sum(1 for r in fwd if r > 0) / len(fwd) * 100, 1),
-         "avg_return": round(sum(fwd) / len(fwd), 2)}
+         "avg_return": round(sum(fwd) / len(fwd), 2),
+         "avg_win": round(sum(wins) / len(wins), 2) if wins else 0,
+         "avg_loss": round(sum(losses) / len(losses), 2) if losses else 0}
     if exc:
         s["alpha"] = round(sum(exc) / len(exc), 2)
         s["beat_index_rate"] = round(sum(1 for e in exc if e > 0) / len(exc) * 100, 1)
@@ -2327,7 +2362,7 @@ def _bt_stats(rows):
 
 def run_backtest(tickers, horizon=10):
     try:
-        sd, sc = _fetch_series("SPY", "5y")
+        sd, sc, _ = _fetch_series("SPY", "5y")
         spy = dict(zip(sd, sc))
     except Exception:
         spy = {}
@@ -2339,27 +2374,31 @@ def run_backtest(tickers, horizon=10):
             used.append(t)
     if not samples:
         return None
-    buys = [(fwd, exc) for (sc_, fwd, exc, yr) in samples if sc_ >= VERDICT_BUY]
-    tops = [(fwd, exc) for (sc_, fwd, exc, yr) in samples if sc_ >= VERDICT_TOP]
-    holds = [(fwd, exc) for (sc_, fwd, exc, yr) in samples if VERDICT_SELL <= sc_ < VERDICT_BUY]
-    sells = [(fwd, exc) for (sc_, fwd, exc, yr) in samples if sc_ < VERDICT_SELL]
-    # Rozpad „Koupit" podle roku (důkaz, že signál drží i v medvědím 2022)
-    by_year = {}
-    for (sc_, fwd, exc, yr) in samples:
+    buys = [(fwd, exc) for (sc_, fwd, exc, yr, top_) in samples if sc_ >= VERDICT_BUY]
+    tops = [(fwd, exc) for (sc_, fwd, exc, yr, top_) in samples if top_]
+    holds = [(fwd, exc) for (sc_, fwd, exc, yr, top_) in samples if VERDICT_SELL <= sc_ < VERDICT_BUY]
+    sells = [(fwd, exc) for (sc_, fwd, exc, yr, top_) in samples if sc_ < VERDICT_SELL]
+    # Rozpad „Koupit" i „TOP" podle roku (důkaz, že signál drží i v medvědím 2022)
+    by_year, top_year = {}, {}
+    for (sc_, fwd, exc, yr, top_) in samples:
         if sc_ >= VERDICT_BUY:
             by_year.setdefault(yr, []).append((fwd, exc))
+        if top_:
+            top_year.setdefault(yr, []).append((fwd, exc))
     buy_by_year = {yr: _bt_stats(rows) for yr, rows in sorted(by_year.items())}
+    top_by_year = {yr: _bt_stats(rows) for yr, rows in sorted(top_year.items())}
     return {
         "horizon_days": horizon, "period": "5 let (vč. propadu 2022)",
         "benchmark": "SPY" if spy else None,
         "tickers": used, "ticker_count": len(used), "sample_count": len(samples),
         "buy": _bt_stats(buys), "top": _bt_stats(tops),
         "hold": _bt_stats(holds), "sell": _bt_stats(sells),
-        "baseline": _bt_stats([(fwd, exc) for (_, fwd, exc, yr) in samples]),
-        "buy_by_year": buy_by_year, "top_threshold": VERDICT_TOP,
+        "baseline": _bt_stats([(fwd, exc) for (_, fwd, exc, yr, top_) in samples]),
+        "buy_by_year": buy_by_year, "top_by_year": top_by_year, "top_threshold": VERDICT_TOP,
         "generated": int(time.time()),
         "note": f"Náš nákupní signál (MS Skóre), 5 let, žádný look-ahead. "
                 f"Koupit = skóre ≥{VERDICT_BUY}, Prodat = <{VERDICT_SELL}. "
+                f"TOP = silný setup + klidný objem (bez prodejního tlaku). "
                 f"Alfa = výnos navíc proti indexu (SPY).",
     }
 
@@ -2399,10 +2438,18 @@ def _scan_signals():
         try:
             daily = yahoo_chart(t, "1y", "1d")
             meta = daily.get("meta", {})
-            closes = [c for c in (((daily.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []) if c is not None]
+            q = ((daily.get("indicators") or {}).get("quote") or [{}])[0]
+            raw_cl = q.get("close") or []
+            raw_vl = q.get("volume") or []
+            closes, vols = [], []
+            for k, c in enumerate(raw_cl):
+                if c is not None:
+                    closes.append(c)
+                    v = raw_vl[k] if k < len(raw_vl) else None
+                    vols.append(v if v is not None else 0)
             if len(closes) < 210:
                 continue
-            ind = compute_indicators(closes, [])
+            ind = compute_indicators(closes, vols)
             price = meta.get("regularMarketPrice") or closes[-1]
             score = tech_setup_score(price, ind)
             if score is None or score < VERDICT_BUY:  # jen aktuální nákupní signály
@@ -2416,7 +2463,7 @@ def _scan_signals():
                 "change_pct": _round(((price - prev) / prev * 100) if prev else 0, 2, 0),
                 "currency": meta.get("currency", "USD"),
                 "score": score, "rsi": _round(ind.get("rsi"), 1), "note": _setup_note(score),
-                "conviction": "top" if score >= VERDICT_TOP else "buy",
+                "conviction": "top" if is_top_signal(score, ind) else "buy",
                 "target": lv.get("target_price"), "stop": lv.get("stop_loss"),
                 "reward_pct": lv.get("reward_pct"), "risk_pct": lv.get("risk_pct"), "rr": lv.get("rr"),
             })

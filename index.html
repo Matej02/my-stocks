@@ -696,7 +696,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·v</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·w</div>
 
 <div class="container">
   
@@ -2336,7 +2336,7 @@ function renderBacktest(res) {
         <table class="admin-table" style="font-size:12px">
             <thead><tr><th>Signál</th><th style="text-align:right">Trefnost</th><th style="text-align:right">Výnos</th><th style="text-align:right">Alfa</th></tr></thead>
             <tbody>
-                ${row('⭐ TOP signál (≥80)', res.top, true)}
+                ${row('⭐ TOP signál (≥80, klidný objem)', res.top, true)}
                 ${row('🟢 Koupit (≥70)', res.buy)}
                 ${row('🟡 Držet (45–69)', res.hold)}
                 ${row('🔴 Prodat (<45)', res.sell)}
