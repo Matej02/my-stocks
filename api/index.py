@@ -1424,6 +1424,48 @@ def get_news(ticker):
         return jsonify({"ok": True, "results": [], "error": str(e)})
 
 
+def _market_status():
+    """Stav americké burzy (přibližně, ignoruje svátky). Časy v SELČ/SEČ."""
+    now = datetime.now(timezone.utc)
+    summer = 3 <= now.month <= 10  # hrubá aproximace letního času
+    open_utc, close_utc = (13.5, 20.0) if summer else (14.5, 21.0)
+    prg = 2 if summer else 1
+    tzname = "SELČ" if summer else "SEČ"
+    hf = now.hour + now.minute / 60
+    is_open = now.weekday() < 5 and open_utc <= hf < close_utc
+
+    def hhmm(u):
+        return f"{(int(u) + prg) % 24:02d}:{int(round((u % 1) * 60)):02d}"
+
+    hours = f"{hhmm(open_utc)}–{hhmm(close_utc)} {tzname}"
+    label = (f"Americká burza je OTEVŘENÁ · zavírá v {hhmm(close_utc)} {tzname}"
+             if is_open else
+             f"Americká burza je ZAVŘENÁ · obchodní hodiny {hours} (po–pá)")
+    return {"open": is_open, "label": label, "hours": hours}
+
+
+@app.route("/api/market-news")
+def market_news():
+    """Celkové dění na trhu (ne portfolio) + stav burzy. Pomáhá pochopit,
+    proč je portfolio v plusu/mínusu, i když je burza zavřená."""
+    items, seen = [], set()
+    for q in ("^GSPC", "^IXIC", "stock market"):
+        try:
+            r = requests.get(f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(q)}&quotesCount=0&newsCount=8",
+                             headers=HEADERS, timeout=6).json()
+            for n in (r.get("news") or []):
+                t = n.get("title")
+                if not t or t in seen:
+                    continue
+                seen.add(t)
+                items.append({"title": t, "link": n.get("link", ""),
+                              "publisher": n.get("publisher", "Zdroj"), "time": n.get("providerPublishTime")})
+        except Exception:
+            continue
+    items.sort(key=lambda x: x.get("time") or 0, reverse=True)
+    return jsonify({"ok": True, "results": items[:14], "market": _market_status()})
+
+
 @app.route("/api/analyst/<path:ticker>")
 def get_analyst(ticker):
     """Doporučení analytiků, cílové ceny a fundamenty z Finnhubu (env FINNHUB_KEY).

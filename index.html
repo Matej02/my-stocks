@@ -470,6 +470,9 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .method-proof i {font-size:20px; flex:none;}
 .method-proof b {color:var(--text);}
 .method-disc {font-size:11px; color:var(--text2); margin-top:14px; line-height:1.5;}
+.market-status {display:flex; align-items:center; gap:8px; padding:12px 14px; border-radius:12px; font-size:14px; font-weight:600;}
+.market-status.open {background:var(--up-glow); color:var(--up); border:1px solid rgba(0,230,118,0.35);}
+.market-status.closed {background:rgba(255,196,0,0.1); color:#FFC400; border:1px solid rgba(255,196,0,0.3);}
 .sim-row {display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;}
 .sim-row label {font-size:13px; color:var(--text);}
 .sim-inwrap {display:flex; align-items:center; gap:6px; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:10px; padding:6px 10px;}
@@ -680,7 +683,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·s</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·t</div>
 
 <div class="container">
   
@@ -697,6 +700,10 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
     </div>
 
     <div class="nav-actions">
+      <button class="profile-btn" onclick="openNews()" title="Novinky z trhu">
+        <i class="ti ti-news"></i>
+        <span class="nav-btn-label">Novinky</span>
+      </button>
       <button class="profile-btn" onclick="openAbout()" title="O nás — co nabízíme">
         <i class="ti ti-building-store"></i>
         <span class="nav-btn-label">O nás</span>
@@ -874,6 +881,17 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
       </div>
       <div id="sim-out"></div>
       <p class="method-disc" style="margin-top:14px;">Modelový odhad z minulé úspěšnosti (compounding průměrného výnosu na obchod). <b>Skutečnost se bude lišit</b> — část obchodů skončí v mínusu, výnosy nejsou zaručené a minulost ≠ budoucnost. Slouží jen pro představu, není to investiční doporučení.</p>
+    </div>
+  </div>
+
+  <!-- NOVINKY Z TRHU + stav burzy -->
+  <div class="pl-modal" id="newsModal">
+    <div class="profile-box" style="max-width:560px;">
+      <button class="profile-close" onclick="closeNews()"><i class="ti ti-x"></i></button>
+      <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-news" style="color:var(--accent)"></i> Novinky z trhu</h2>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Co se právě děje na trzích — proč rostou nebo padají.</div>
+      <div id="market-status" class="market-status"></div>
+      <div id="market-news-list" style="margin-top:14px;"></div>
     </div>
   </div>
 
@@ -1588,6 +1606,27 @@ function openAbout() {
     }
 }
 function closeAbout() { document.getElementById('aboutModal').classList.remove('open'); }
+function openNews() { document.getElementById('newsModal').classList.add('open'); loadMarketNews(); }
+function closeNews() { document.getElementById('newsModal').classList.remove('open'); }
+async function loadMarketNews() {
+    const st = document.getElementById('market-status');
+    const list = document.getElementById('market-news-list');
+    st.innerHTML = ''; st.className = 'market-status';
+    list.innerHTML = '<div style="color:var(--text2);font-size:13px;"><i class="ti ti-loader spin"></i> Načítám novinky z trhu…</div>';
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/market-news`)).json();
+        if (d.market) {
+            st.className = 'market-status ' + (d.market.open ? 'open' : 'closed');
+            st.innerHTML = `<i class="ti ti-${d.market.open ? 'point-filled' : 'moon'}"></i> ${escapeHtml(d.market.label)}`;
+        }
+        if (!d.results || !d.results.length) { list.innerHTML = '<div style="color:var(--text2);font-size:13px;">Žádné aktuální novinky.</div>'; return; }
+        list.innerHTML = d.results.map(n => {
+            const when = formatNewsTime(n.time);
+            const link = n.link ? `href="${n.link}" target="_blank" rel="noopener noreferrer"` : '';
+            return `<a class="news-item" ${link}><div class="news-title">${escapeHtml(n.title)}</div><div class="news-meta"><i class="ti ti-building-broadcast-tower"></i> ${escapeHtml(n.publisher)}${when ? ' • ' + when : ''}</div></a>`;
+        }).join('');
+    } catch (e) { list.innerHTML = '<div style="color:var(--down);font-size:13px;">Novinky se nepodařilo načíst.</div>'; }
+}
 // „Jak hodnotíme?" odkazy teď otevírají jednotný panel O nás (bez prozrazení receptu)
 function openMethod() { openAbout(); }
 function closeMethod() { closeAbout(); }
