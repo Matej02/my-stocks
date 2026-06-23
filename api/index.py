@@ -22,7 +22,7 @@ import base64
 import secrets
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
 
 app = Flask(__name__)
@@ -1904,6 +1904,21 @@ def gather_facts(ticker):
                         an["target_upside_pct"] = round((tm / price - 1) * 100, 1)
             except Exception:
                 pass
+            # Datum nejbližších výsledků – Finnhub kalendář (když Yahoo crumb selhal).
+            # Bez tohoto fallbacku by se varování na earnings na Vercelu skoro neukázalo.
+            if "next_earnings" not in f:
+                try:
+                    today = datetime.now(timezone.utc).date()
+                    to = (today + timedelta(days=90)).strftime("%Y-%m-%d")
+                    cal = requests.get(f"{base}/calendar/earnings",
+                                       params={"from": today.strftime("%Y-%m-%d"), "to": to,
+                                               "symbol": ticker, "token": fk}, timeout=6).json() or {}
+                    upcoming = sorted(e.get("date") for e in (cal.get("earningsCalendar") or [])
+                                      if e.get("date") and e["date"] >= today.strftime("%Y-%m-%d"))
+                    if upcoming:
+                        f["next_earnings"] = upcoming[0]
+                except Exception:
+                    pass
             # Vyčisti prázdné dicty, ať model nepočítá s ničím
             for kk in ("valuation", "financials", "analysts"):
                 if isinstance(f.get(kk), dict) and not f[kk]:
