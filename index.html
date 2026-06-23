@@ -662,7 +662,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·o</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·p</div>
 
 <div class="container">
   
@@ -803,97 +803,37 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
     </div>
   </div>
 
-  <!-- JAK HODNOTÍME — metodika MY STOCKS -->
-  <div class="pl-modal" id="methodModal">
-    <div class="profile-box">
-      <button class="profile-close" onclick="closeMethod()"><i class="ti ti-x"></i></button>
-      <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-compass" style="color:var(--accent)"></i> Jak hodnotíme</h2>
-      <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Metoda MY STOCKS — náš systém, jak poznat, kdy koupit</div>
-      <div class="method-body">
-        <p class="method-intro">Náš verdikt <b>není náhodný odhad</b>. Počítá ho pevný, ověřený systém z několika pilířů — stejná data dají vždy stejný výsledek. K tomu doplníme srozumitelný slovní rozbor.</p>
-
-        <div class="method-step"><div class="ms-ico">📊</div><div>
-          <h4>1. Načasování — „Sleva v trendu"</h4>
-          <p>Kupujeme jen v ověřené situaci: cena <b>nad 200denním průměrem</b> (dlouhodobý růst) a zároveň <b>nízké RSI</b> (krátkodobý pokles = sleva). Nehoníme padající nože ani překoupené tituly. <b>Backtest 5 let (vč. propadu 2022): ~60 % trefnost na 10 dní</b>, lépe než náhodný vstup.</p>
-        </div></div>
-
-        <div class="method-step"><div class="ms-ico">🏦</div><div>
-          <h4>2. Kvalita — fundament firmy</h4>
-          <p>Díváme se na růst tržeb, marže, návratnost kapitálu (ROE), zadlužení a valuaci. <b>Nekvalitní firmu nekoupíme, ani když „letí"</b> — záporná ziskovost skóre stáhne dolů.</p>
-        </div></div>
-
-        <div class="method-step"><div class="ms-ico">👔</div><div>
-          <h4>3. Potvrzení — analytici</h4>
-          <p>Konsenzus bank a cílová cena jako nezávislý třetí hlas. Bereme je jako potvrzení, ne jako jediný důvod.</p>
-        </div></div>
-
-        <div class="method-step"><div class="ms-ico">🎯</div><div>
-          <h4>4. MS Skóre 0–100 + jistota</h4>
-          <p>Pilíře spojíme do jednoho <b>MS Skóre</b> (váhy podle dostupných dat): <b>Koupit ≥ 70 · Držet 45–69 · Prodat < 45</b>. <b>Jistota</b> je vysoká jen když se pilíře shodují a máme dost dat — když si protiřečí, přiznáme nižší jistotu.</p>
-        </div></div>
-
-        <div class="method-step"><div class="ms-ico">🛡️</div><div>
-          <h4>5. Řízení rizika</h4>
-          <p>Ke každému signálu počítáme <b>vstup, stop-loss a cíl z volatility</b> akcie, poměr zisk:riziko a horizont <b>~2 týdny</b>. Žádné odhady — čistě z dat.</p>
-        </div></div>
-
-        <div class="method-step"><div class="ms-ico">🚪</div><div>
-          <h4>6. Kdy prodat (exit)</h4>
-          <p>Pozici zavíráme podle pevných pravidel, ne podle emocí: <b>cena dosáhne cíle</b> (realizuj zisk) · <b>klesne na stop-loss</b> (omez ztrátu) · <b>uplyne horizont ~2 týdny</b> bez zásahu (přehodnoť — naše výhoda je krátkodobá) · nebo <b>MS Skóre spadne</b> a verdikt už není „Koupit". Track record ti u každého verdiktu ukáže, který z těchto stavů nastal.</p>
-        </div></div>
-
-        <div class="method-step"><div class="ms-ico">⭐</div><div>
-          <h4>7. TOP signály &amp; expectancy</h4>
-          <p>Nejde nám o hádání jednotlivých sázek, ale o <b>kladnou očekávanou hodnotu</b> v čase. Nejpřísnější výběr <b>„TOP signál" (skóre ≥80)</b> má historicky vyšší trefnost. Klíč je kombinace: solidní trefnost + utínání ztrát + necháváme zisky běžet.</p>
-        </div></div>
-
-        <div class="method-proof"><i class="ti ti-shield-check"></i> <span>Vše stojí na <b>důkazech</b>: backtest bez nahlížení do budoucna + veřejný track record reálných verdiktů. <b>Buďme féroví:</b> ani nejlepší signál není jistota — část obchodů skončí v mínusu, proto vždy se stop-lossem. Metodiku měníme jen podle čísel, ne dojmů.</span></div>
-
-        <p class="method-disc">Slouží jako podklad k vlastnímu rozhodnutí. Není to investiční doporučení — žádný nástroj negarantuje zisk.</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- O NÁS — co nabízíme -->
+  <!-- O NÁS — profesionální panel (přístup + důkazy + nabídka), bez prozrazení receptu -->
   <div class="pl-modal" id="aboutModal">
     <div class="profile-box">
       <button class="profile-close" onclick="closeAbout()"><i class="ti ti-x"></i></button>
       <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-building-store" style="color:var(--accent)"></i> O nás</h2>
-      <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">MY <span style="color:var(--accent);font-weight:700">STOCKS</span> — co nabízíme</div>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">MY <span style="color:var(--accent);font-weight:700">STOCKS</span> — náš přístup k investování</div>
       <div class="method-body">
-        <p class="method-intro">Jsme <b>investiční asistent</b> (ne broker). Pomáháme ti rozhodnout, <b>kdy koupit a kdy prodat</b>, na základě vlastní ověřené metody — ne dojmů ani náhodných tipů. Vše stojí na tvrdých datech a transparentních pravidlech.</p>
+        <p class="method-intro">Jsme <b>investiční asistent</b> (ne broker). Pomáháme rozhodnout <b>kdy koupit a kdy prodat</b> na základě vlastního, ověřeného systému — ne dojmů ani náhodných tipů.</p>
 
-        <div class="method-step"><div class="ms-ico">🧭</div><div>
-          <h4>Vlastní metoda</h4>
-          <p>Náš pětikrokový systém (Metoda MY STOCKS) hodnotí každou akcii: načasování, kvalitu firmy, potvrzení analytiků, řízení rizika a pravidla výstupu. <a class="profile-cloud-link" onclick="closeAbout();openMethod()">Jak hodnotíme?</a></p>
+        <div class="method-step"><div class="ms-ico">🧠</div><div>
+          <h4>Náš přístup</h4>
+          <p>Pracujeme s <b>proprietárním vícefaktorovým modelem</b>: spojujeme <b>technické načasování</b>, <b>kvalitu firmy</b> a <b>tržní konsenzus</b> do jednoho přehledného čísla — <b>MS Skóre</b> — a míry jistoty. Stejná data dají vždy stejný výsledek; žádné náhodné dojmy.</p>
         </div></div>
 
-        <div class="method-step"><div class="ms-ico">📈</div><div>
-          <h4>Sledování & signál</h4>
-          <p>Sleduj akcie, grafy a technický signál, nastav si cenová upozornění. Vše synchronizované napříč zařízeními.</p>
-        </div></div>
-
-        <div class="method-step"><div class="ms-ico">🎯</div><div>
-          <h4>Co koupit teď</h4>
-          <p>Skener „Sleva v trendu" ukáže akcie, které <b>právě teď</b> splňují náš backtestem ověřený nákupní signál — s cílem, stop-lossem a horizontem.</p>
-        </div></div>
-
-        <div class="method-step"><div class="ms-ico">🔍</div><div>
-          <h4>Hloubková analýza</h4>
-          <p>Ke každé akcii verdikt (MS Skóre), z čeho vychází, vstup/cíl/stop, scénáře, rizika, katalyzátory a exit plán. Stejný verdikt vidíš i v detailu akcie.</p>
+        <div class="method-step"><div class="ms-ico">🛡️</div><div>
+          <h4>Řízení rizika &amp; disciplína</h4>
+          <p>Ke každému signálu jasný <b>vstup, stop-loss a cíl</b> a pevná <b>pravidla výstupu</b>. Cílem je <b>kladná očekávaná hodnota v čase</b> — utínat ztráty, nechat zisky běžet. Disciplína místo emocí.</p>
         </div></div>
 
         <div class="method-step"><div class="ms-ico">📊</div><div>
-          <h4>Důkaz, ne sliby</h4>
-          <p>Backtest na <b>5 letech</b> (vč. propadu 2022) + track record reálných verdiktů. Ukazujeme úspěšnost i alfu proti indexu — poctivě, včetně slabších období. <a class="profile-cloud-link" onclick="closeAbout();openSim()">Kolik to může vydělat?</a></p>
+          <h4>Proč nám věřit — důkazy</h4>
+          <div id="about-proof" style="font-size:13px;line-height:1.6;color:var(--text2)"></div>
+          <p style="margin-top:8px"><a class="profile-cloud-link" onclick="closeAbout();openSim()">Kolik to může vydělat?</a></p>
         </div></div>
 
         <div class="method-step"><div class="ms-ico">💎</div><div>
-          <h4>Plány</h4>
-          <p><b>Start</b> — sledování, grafy, signál, upozornění. <b>Pro</b> — příležitosti, analytici, fundamenty, hloubková analýza (5/den). <b>Elite</b> — neomezená analýza, asistent k akciím, přehled trhu, track record. <a class="profile-cloud-link" onclick="closeAbout();openProfile('plans')">Zobrazit předplatné</a></p>
+          <h4>Co nabízíme</h4>
+          <p>Sledování a signály, skener <b>„co koupit teď"</b>, hloubková analýza s verdiktem a kompletním plánem obchodu, <b>„co prodat teď"</b> a veřejný track record. <a class="profile-cloud-link" onclick="closeAbout();openProfile('plans')">Zobrazit předplatné</a></p>
         </div></div>
 
-        <div class="method-proof"><i class="ti ti-shield-check"></i> <span>Naše krédo: <b>obhajitelná čísla místo prázdných slibů.</b> Co nefunguje v backtestu, do nástroje nedáváme.</span></div>
+        <div class="method-proof"><i class="ti ti-shield-check"></i> <span>Naše krédo: <b>obhajitelná čísla místo prázdných slibů.</b> Co neobstojí v ověření, do nástroje nedáváme. A jsme féroví — ani nejlepší signál není jistota, proto vždy se stop-lossem.</span></div>
 
         <p class="method-disc">MY STOCKS je informační nástroj a podklad k vlastnímu rozhodnutí. Není to investiční doporučení a žádný nástroj negarantuje zisk.</p>
       </div>
@@ -970,7 +910,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
       <div class="opp-head">
         <div class="opp-title">
           <i class="ti ti-target-arrow" style="color:var(--up)"></i> Co koupit teď — signál „Sleva v trendu"
-          <span class="opp-sub">Akcie, které <b>právě teď</b> splňují náš backtestem prověřený nákupní signál (pokles v uptrendu). Horizont ~2 týdny. <span id="signals-proof" style="color:var(--up)"></span> <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span>
+          <span class="opp-sub">Akcie, které <b>právě teď</b> splňují náš backtestem prověřený nákupní signál. Horizont ~2 týdny. <span id="signals-proof" style="color:var(--up)"></span> <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span>
         </div>
         <div class="opp-actions">
           <span class="opp-updated" id="signals-updated"></span>
@@ -1608,10 +1548,22 @@ function openProfile(view) {
 function closeProfile() {
     document.getElementById('profileModal').classList.remove('open');
 }
-function openMethod() { document.getElementById('methodModal').classList.add('open'); }
-function closeMethod() { document.getElementById('methodModal').classList.remove('open'); }
-function openAbout() { document.getElementById('aboutModal').classList.add('open'); }
+function openAbout() {
+    document.getElementById('aboutModal').classList.add('open');
+    const el = document.getElementById('about-proof');
+    if (!el) return;
+    const bp = btProof && (btProof.top && btProof.top.count ? btProof.top : btProof.buy);
+    if (bp && bp.win_rate != null) {
+        const alpha = (bp.alpha != null) ? ` a porážel index o <b style="color:var(--up)">+${bp.alpha} b.</b>` : '';
+        el.innerHTML = `Náš nákupní signál měl na <b>${btProof.period || '5letém backtestu'}</b> (bez nahlížení do budoucna) <b style="color:var(--up)">${bp.win_rate}% úspěšnost</b>${alpha} na ~${btProof.horizon_days || 10}denním horizontu — napříč ${btProof.ticker_count || 'desítkami'} akciemi${btProof.sample_count ? ' a ' + btProof.sample_count + ' obchody' : ''}, <b>včetně propadu 2022</b>. K tomu vedeme veřejný <b>track record</b> reálných verdiktů. Výsledky ukazujeme otevřeně, i slabší období.`;
+    } else {
+        el.innerHTML = `Náš systém je ověřený <b>5letým backtestem</b> (bez nahlížení do budoucna, vč. propadu 2022) a doplněný veřejným <b>track recordem</b> reálných verdiktů. Konkrétní čísla najdeš přímo u analýz.`;
+    }
+}
 function closeAbout() { document.getElementById('aboutModal').classList.remove('open'); }
+// „Jak hodnotíme?" odkazy teď otevírají jednotný panel O nás (bez prozrazení receptu)
+function openMethod() { openAbout(); }
+function closeMethod() { closeAbout(); }
 function openSim() { document.getElementById('simModal').classList.add('open'); runSim(); }
 function closeSim() { document.getElementById('simModal').classList.remove('open'); }
 function runSim() {
@@ -2372,7 +2324,7 @@ async function loadSignals(force) {
     const grid = document.getElementById('signals-grid');
     if (!hasFeature('pro')) {
         grid.innerHTML = lockedCardHTML('Co koupit teď — ověřený signál', 'pro',
-            'Akcie, které právě teď splňují náš backtestem prověřený nákupní signál (pokles v uptrendu).');
+            'Akcie, které právě teď splňují náš backtestem prověřený nákupní signál.');
         return;
     }
     if (signalsLoaded && !force) return;
@@ -2394,7 +2346,7 @@ async function loadSignals(force) {
 function renderSignals(list) {
     const grid = document.getElementById('signals-grid');
     if (!list.length) {
-        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Dnes žádný titul nesplňuje nákupní signál. To je v pořádku — model nakupuje jen ověřené situace (pokles v uptrendu), ne pořád. Mrkni sem zítra.</div>`;
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Dnes žádný titul nesplňuje nákupní signál. To je v pořádku — model nakupuje jen ověřené situace, ne pořád. Mrkni sem zítra.</div>`;
         return;
     }
     grid.innerHTML = list.map((o, i) => {

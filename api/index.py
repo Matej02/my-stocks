@@ -313,10 +313,10 @@ def _setup_note(score):
     if score is None:
         return ""
     if score >= VERDICT_BUY:
-        return "Pokles v uptrendu – nákupní zóna"
+        return "Technicky v nákupní zóně"
     if score >= VERDICT_SELL:
-        return "Neutrální zóna"
-    return "Slabý trend / překoupeno"
+        return "Technicky neutrální"
+    return "Technicky slabé"
 
 
 def _rating_label(buy, sell, neutral):
@@ -2190,7 +2190,7 @@ def run_backtest(tickers, horizon=10):
         "baseline": _bt_stats([(fwd, exc) for (_, fwd, exc, yr) in samples]),
         "buy_by_year": buy_by_year, "top_threshold": VERDICT_TOP,
         "generated": int(time.time()),
-        "note": f"Technické setup skóre (nákup poklesu v uptrendu), 5 let, žádný look-ahead. "
+        "note": f"Náš nákupní signál (MS Skóre), 5 let, žádný look-ahead. "
                 f"Koupit = skóre ≥{VERDICT_BUY}, Prodat = <{VERDICT_SELL}. "
                 f"Alfa = výnos navíc proti indexu (SPY).",
     }
@@ -2297,11 +2297,11 @@ def exit_signals():
             sma200 = ind.get("sma200")
             rsi = ind.get("rsi")
             if score < VERDICT_SELL:
-                level, reason = "sell", f"Slabý technický obraz (skóre {score})"
+                level, reason = "sell", "Technicky slabé – signál k výstupu"
             elif sma200 and price < sma200:
-                level, reason = "weak", "Cena pod 200denním průměrem (trend slábne)"
+                level, reason = "weak", "Oslabení dlouhodobého trendu"
             elif rsi is not None and rsi > 75:
-                level, reason = "weak", f"Překoupeno (RSI {rsi:.0f}) – zvaž výběr zisku"
+                level, reason = "weak", "Překoupeno – zvaž výběr zisku"
             else:
                 continue  # v pořádku → nezobrazovat
             prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
