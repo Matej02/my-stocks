@@ -1967,6 +1967,23 @@ def _grade(v, scale):
     return scale[-1][1]
 
 
+EARNINGS_NEAR_DAYS = 7  # výsledky do tolika dní = zvýšené riziko → snížíme jistotu
+
+
+def _days_to_earnings(facts):
+    """Počet dní do nejbližších výsledků z facts['next_earnings'] ('YYYY-MM-DD').
+    None když datum chybí. Záporné = už proběhly (stará data)."""
+    ne = (facts or {}).get("next_earnings")
+    if not ne:
+        return None
+    try:
+        today = datetime.now(timezone.utc).date()
+        ed = datetime.strptime(ne, "%Y-%m-%d").date()
+        return (ed - today).days
+    except Exception:
+        return None
+
+
 def compute_verdict_model(facts):
     """DETERMINISTICKÝ pravidlový verdikt z tvrdých dat – ne odhad AI.
     Skóre 0-100 ze čtyř pilířů (technika, valuace, růst & ziskovost, analytici);
@@ -2061,9 +2078,17 @@ def compute_verdict_model(facts):
     conviction = abs(composite - 50) / 50
     confidence = max(20, min(95, round((0.40 * wsum + 0.35 * agreement + 0.25 * conviction) * 100)))
 
+    # RIZIKO VÝSLEDKŮ: před blížícími se earnings (binární událost = velký skok
+    # ceny) snížíme jistotu a vrátíme příznak. NENÍ to win-% lever (nejde zpětně
+    # ověřit), je to upozornění na zvýšenou volatilitu / načasování.
+    dte = _days_to_earnings(facts)
+    earnings_in = dte if (dte is not None and 0 <= dte <= 14) else None
+    if earnings_in is not None and earnings_in <= EARNINGS_NEAR_DAYS:
+        confidence = max(20, confidence - 18)
+
     return {
         "score": composite, "verdict": verdict, "confidence": confidence,
-        "coverage_pct": round(wsum * 100),
+        "coverage_pct": round(wsum * 100), "earnings_in": earnings_in,
         "pillars": [{**p, "weight": round(p["weight"], 2)} for p in pillars],
     }
 
@@ -2182,6 +2207,7 @@ def deep_analysis(ticker):
         # Verdikt, jistotu i úrovně bereme VŽDY z výpočtu (no guesses), ne z AI
         report["verdict"] = model["verdict"]
         report["confidence"] = model["confidence"]
+        report["earnings_in"] = model.get("earnings_in")
         if levels:
             report["entry"] = levels["entry"]
             report["stop_loss"] = levels["stop_loss"]

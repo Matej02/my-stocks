@@ -696,7 +696,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·w</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·x</div>
 
 <div class="container">
   
@@ -2933,6 +2933,14 @@ function toggleMA() {
 }
 
 // --- TECHNICKÝ SIGNAL PANEL ---
+// Varování před blížícími se výsledky (earnings) – riziko velkého skoku ceny.
+function earnWarn(days) {
+    if (days == null) return '';
+    const txt = days <= 0 ? 'dnes' : (days === 1 ? 'zítra' : 'za ' + days + ' ' + (days < 5 ? 'dny' : 'dní'));
+    return `<div style="margin:8px 0;padding:9px 12px;border-radius:10px;background:rgba(255,179,71,0.10);border:1px solid rgba(255,179,71,0.32);color:#ffb347;font-size:12.5px;line-height:1.55">`
+        + `<i class="ti ti-calendar-event"></i> <b>Výsledky ${txt}.</b> Před výsledky cena často prudce skočí (nahoru i dolů) — proto jsme snížili jistotu. Zvaž menší pozici nebo počkej na reakci po zveřejnění.</div>`;
+}
+
 function renderVerdict(model) {
     const box = document.getElementById('verdict-box');
     if (!model || !model.verdict) { box.style.display = 'none'; return; }
@@ -2948,6 +2956,7 @@ function renderVerdict(model) {
         ' · pokrytí ' + (model.coverage_pct != null ? model.coverage_pct + '%' : '—');
     const pillars = (model.pillars || []).map(p => `${escapeHtml(p.label)} ${p.score}`).join(' · ');
     document.getElementById('vb-note').innerHTML =
+        earnWarn(model.earnings_in) +
         `Spočítáno z pilířů: ${pillars || '—'}. Kompletní rozbor (teze, scénáře, exit plán) najdeš v <b>Hloubkové analýze</b>. ` +
         `<a class="profile-cloud-link" onclick="detailTab('analysis')">Otevřít analýzu</a> · ` +
         `<a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a>`;
@@ -3338,6 +3347,7 @@ function renderDeepReport(d) {
             </div>
         </div>
         ${rp.headline ? `<div class="deep-headline">${escapeHtml(rp.headline)}</div>` : ''}
+        ${earnWarn(rp.earnings_in)}
         ${proofHtml}
         ${modelHtml}
         <div class="deep-levels">
