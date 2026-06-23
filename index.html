@@ -364,6 +364,8 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
 .plan-tag {font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--accent); margin-bottom:4px; min-height:14px;}
 .plan-cta {margin-top:6px; padding:10px; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--text2); font-weight:600; cursor:default; text-align:center; font-size:13px;}
 .plan-cta.active {background:var(--up-glow); color:var(--up); border-color:var(--up);}
+.plan-cta.plan-buy {background:var(--accent); color:#000; border-color:var(--accent); cursor:pointer; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px; width:100%; transition:filter .15s;}
+.plan-cta.plan-buy:hover {filter:brightness(1.08);}
 
 /* ============ ADMIN ============ */
 .admin-table {width:100%; border-collapse:collapse; font-size:13px; margin-top:10px;}
@@ -694,7 +696,7 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·u</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·v</div>
 
 <div class="container">
   
@@ -1227,6 +1229,8 @@ let authToken = localStorage.getItem('mystocks_token') || null;
 let authUser = localStorage.getItem('mystocks_user') || null;
 let cloudEnabled = false;
 let btProof = null;   // poslední backtest (důkaz úspěšnosti) z /api/backtest
+let billingEnabled = false;   // jsou nastavené platby (Stripe)?
+let billingPlans = [];
 let authTab = 'login';
 let syncTimer = null;
 
@@ -1560,6 +1564,9 @@ async function initAccount() {
     // Backtest „důkaz" (neblokující) – pro banner v analýze
     fetch(`${BACKEND_URL}/api/backtest`).then(r => r.json())
         .then(d => { if (d.ok) btProof = d.result; }).catch(() => {});
+    // Stav plateb (Stripe) – jestli zobrazit „Předplatit"
+    fetch(`${BACKEND_URL}/api/billing/config`).then(r => r.json())
+        .then(d => { if (d.ok) { billingEnabled = !!d.enabled; billingPlans = d.plans || []; } }).catch(() => {});
 
     if (cloudEnabled && authToken) {
         try {
@@ -2082,6 +2089,18 @@ const PLANS = [
         ['Track record signálů', 1] ] },
 ];
 
+async function startCheckout(plan) {
+    if (!authToken) { openProfile(); return; }
+    showToast('Přesměrovávám na platbu…', 'up', 'ti-credit-card');
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/billing/checkout`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ plan })
+        })).json();
+        if (d.ok && d.url) { window.location.href = d.url; }
+        else showToast(d.error || 'Platbu se nepodařilo spustit', 'down', 'ti-x');
+    } catch (e) { showToast('Chyba spojení se serverem', 'down', 'ti-x'); }
+}
+
 function renderPlans() {
     const cur = effPlan();
     const nowS = Date.now() / 1000;
@@ -2094,7 +2113,9 @@ function renderPlans() {
         const tag = pl.featured ? 'Nejoblíbenější' : '';
         const cta = isCur
             ? '<div class="plan-cta active"><i class="ti ti-check"></i> Tvůj plán</div>'
-            : '<div class="plan-cta">Připravujeme platby</div>';
+            : (billingEnabled && billingPlans.includes(pl.id)
+                ? `<button class="plan-cta plan-buy" onclick="startCheckout('${pl.id}')"><i class="ti ti-credit-card"></i> Předplatit</button>`
+                : '<div class="plan-cta">Připravujeme platby</div>');
         let priceHtml = `${pl.price} <small>${pl.period}</small>`;
         if (disc) {
             const num = parseFloat(pl.price.replace(/[^\d.,]/g, '').replace(',', '.'));
@@ -2427,6 +2448,28 @@ function refreshGate() {
 async function initGate() {
     await initAccount();
     if (refreshGate()) startMain();
+    handlePaidReturn();
+}
+
+// Návrat z platby (Stripe success_url ?paid=1) – obnovit plán a poděkovat
+async function handlePaidReturn() {
+    const params = new URLSearchParams(location.search);
+    if (!params.has('paid')) return;
+    const paid = params.get('paid') === '1';
+    history.replaceState(null, '', location.pathname);
+    if (!paid) { showToast('Platba zrušena', 'down', 'ti-x'); return; }
+    showToast('Děkujeme! Aktivuji předplatné…', 'up', 'ti-check');
+    // Webhook může dorazit s malým zpožděním – pár pokusů o refresh
+    for (let i = 0; i < 5; i++) {
+        try {
+            const me = await (await fetch(`${BACKEND_URL}/api/me`, { headers: authHeaders() })).json();
+            if (me.ok) { mySub = me.subscription; if (mySub && mySub.has_access) break; }
+        } catch (e) {}
+        await new Promise(r => setTimeout(r, 1500));
+    }
+    updateProfileBtn();
+    if (refreshGate() && !mainStarted) startMain();
+    showToast('Předplatné aktivní 🎉', 'up', 'ti-crown');
 }
 
 // ====================== SCANNER PŘÍLEŽITOSTÍ ======================

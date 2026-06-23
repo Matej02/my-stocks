@@ -917,6 +917,130 @@ def me():
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
 
+# ---------------------------------------------------------------------------
+# Platby přes Stripe (Checkout + webhook). Aktivuje se až nastavením env klíčů
+# (STRIPE_SECRET_KEY, STRIPE_PRICE_START/PRO/ELITE, STRIPE_WEBHOOK_SECRET).
+# Žádná knihovna navíc – Stripe REST přes requests.
+# ---------------------------------------------------------------------------
+def _stripe_prices():
+    return {"start": os.environ.get("STRIPE_PRICE_START"),
+            "pro": os.environ.get("STRIPE_PRICE_PRO"),
+            "elite": os.environ.get("STRIPE_PRICE_ELITE")}
+
+
+def stripe_enabled():
+    return bool(os.environ.get("STRIPE_SECRET_KEY") and any(_stripe_prices().values()))
+
+
+def _set_user_plan(email, plan, sub_id=None, cust_id=None):
+    rec = kv_get_json(f"user:{email}")
+    if not rec:
+        return
+    rec["plan"] = plan
+    rec["plan_until"] = None  # předplatné běží, dokud ho Stripe neukončí
+    if sub_id:
+        rec["stripe_sub"] = sub_id
+    if cust_id:
+        rec["stripe_customer"] = cust_id
+    kv_set_json(f"user:{email}", rec)
+
+
+@app.route("/api/billing/config")
+def billing_config():
+    prices = _stripe_prices()
+    return jsonify({"ok": True, "enabled": stripe_enabled(),
+                    "plans": [p for p in VALID_PLANS if prices.get(p)]})
+
+
+@app.route("/api/billing/checkout", methods=["POST"])
+def billing_checkout():
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Přihlas se."}), 401
+    if not stripe_enabled():
+        return jsonify({"ok": False, "error": "Platby zatím nejsou nastavené."}), 503
+    if not _rate_ok("checkout", 20, 300):
+        return jsonify({"ok": False, "error": "Příliš mnoho pokusů, zkus to za chvíli."}), 429
+    plan = ((request.get_json(silent=True) or {}).get("plan") or "").lower()
+    price = _stripe_prices().get(plan)
+    if not price:
+        return jsonify({"ok": False, "error": "Neplatný plán."}), 400
+    base = os.environ.get("APP_URL") or request.host_url.rstrip("/")
+    data = {
+        "mode": "subscription",
+        "line_items[0][price]": price,
+        "line_items[0][quantity]": "1",
+        "success_url": f"{base}/?paid=1",
+        "cancel_url": f"{base}/?paid=0",
+        "client_reference_id": user,
+        "customer_email": user,
+        "metadata[email]": user, "metadata[plan]": plan,
+        "subscription_data[metadata][email]": user,
+        "subscription_data[metadata][plan]": plan,
+        "allow_promotion_codes": "true",
+    }
+    # 20% sleva z promo kódu (3 měsíce) → Stripe kupón, pokud je nastavený
+    try:
+        rec = kv_get_json(f"user:{user}") or {}
+        coupon = os.environ.get("STRIPE_COUPON_20")
+        if coupon and rec.get("discount_pct") and (rec.get("discount_until") or 0) > int(time.time()):
+            data["discounts[0][coupon]"] = coupon
+            data.pop("allow_promotion_codes", None)  # discounts a promo kódy nejdou spolu
+    except Exception:
+        pass
+    try:
+        r = requests.post("https://api.stripe.com/v1/checkout/sessions",
+                          auth=(os.environ["STRIPE_SECRET_KEY"], ""), data=data, timeout=12)
+        j = r.json()
+        if r.status_code >= 300 or not j.get("url"):
+            return jsonify({"ok": False, "error": (j.get("error") or {}).get("message") or "Stripe chyba."}), 502
+        return jsonify({"ok": True, "url": j["url"]})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def _stripe_verify(payload, sig_header, secret):
+    """Ověří podpis Stripe webhooku (HMAC-SHA256). payload = raw bytes."""
+    try:
+        parts = dict(p.split("=", 1) for p in sig_header.split(",") if "=" in p)
+        t, v1 = parts.get("t"), parts.get("v1")
+        if not t or not v1:
+            return False
+        signed = t.encode() + b"." + payload
+        exp = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(exp, v1)
+    except Exception:
+        return False
+
+
+@app.route("/api/billing/webhook", methods=["POST"])
+def billing_webhook():
+    secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
+    payload = request.get_data()
+    if not secret or not _stripe_verify(payload, request.headers.get("Stripe-Signature", ""), secret):
+        return jsonify({"ok": False}), 400
+    try:
+        event = json.loads(payload)
+    except Exception:
+        return jsonify({"ok": False}), 400
+    typ = event.get("type", "")
+    obj = (event.get("data") or {}).get("object") or {}
+    try:
+        if typ == "checkout.session.completed":
+            email = (obj.get("metadata") or {}).get("email") or obj.get("client_reference_id") or obj.get("customer_email")
+            plan = (obj.get("metadata") or {}).get("plan")
+            if email and plan in VALID_PLANS:
+                _set_user_plan(email.lower(), plan, obj.get("subscription"), obj.get("customer"))
+        elif typ == "customer.subscription.deleted" or (
+                typ == "customer.subscription.updated" and obj.get("status") in ("canceled", "unpaid", "incomplete_expired")):
+            email = (obj.get("metadata") or {}).get("email")
+            if email:
+                _set_user_plan(email.lower(), "none")
+    except Exception:
+        pass
+    return jsonify({"ok": True})
+
+
 @app.route("/api/notifications", methods=["GET", "POST"])
 def notifications():
     user = _auth_user()
