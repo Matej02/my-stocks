@@ -672,13 +672,15 @@ body::before {content:'';position:fixed;top:-20%;left:-10%;width:55vw;height:55v
     <h2>Nové heslo</h2>
     <p>Nastav si nové heslo ke svému účtu.</p>
     <input type="password" id="resetInput" placeholder="Nové heslo (min. 6 znaků)" autocomplete="new-password"
-           onkeydown="if(event.key==='Enter') submitReset()">
+           onkeydown="if(event.key==='Enter') document.getElementById('resetInput2').focus()">
+    <input type="password" id="resetInput2" placeholder="Nové heslo znovu" autocomplete="new-password"
+           onkeydown="if(event.key==='Enter') submitReset()" style="margin-top:10px;">
     <div class="lock-error" id="resetError"></div>
     <button class="btn-primary" onclick="submitReset()"><i class="ti ti-check"></i> Uložit heslo</button>
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·r</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.22·s</div>
 
 <div class="container">
   
@@ -1499,7 +1501,7 @@ function authHeaders() {
 // Nastaví lokální stav z cloud portfolia (BEZ zpětného pushe do cloudu)
 function applyPortfolio(pf) {
     pf = pf || {};
-    myStocks = (Array.isArray(pf.watchlist) && pf.watchlist.length) ? pf.watchlist : DEFAULT_WATCHLIST.slice();
+    myStocks = Array.isArray(pf.watchlist) ? pf.watchlist : DEFAULT_WATCHLIST.slice();
     myAlerts = Array.isArray(pf.alerts) ? pf.alerts : [];
     localStorage.setItem('mystocks_portfolio', JSON.stringify(myStocks));
     localStorage.setItem('mystocks_alerts', JSON.stringify(myAlerts));
@@ -1757,8 +1759,10 @@ async function submitAuth() {
 
         if (endpoint === 'login') {
             applyPortfolio(d.portfolio);
-        } else if (!myStocks || !myStocks.length) {
-            myStocks = DEFAULT_WATCHLIST.slice();
+        } else {
+            // Nový účet začíná PRÁZDNÝ – žádné přednastavené akcie
+            myStocks = [];
+            localStorage.setItem('mystocks_portfolio', '[]');
         }
         document.getElementById('auth-password').value = '';
         document.getElementById('auth-invite').value = '';
@@ -1821,9 +1825,11 @@ function initResetFromUrl() {
 
 async function submitReset() {
     const pw = document.getElementById('resetInput').value;
+    const pw2 = document.getElementById('resetInput2').value;
     const err = document.getElementById('resetError');
     err.textContent = '';
     if (!pw || pw.length < 6) { err.textContent = 'Heslo musí mít aspoň 6 znaků.'; return; }
+    if (pw !== pw2) { err.textContent = 'Hesla se neshodují.'; return; }
     try {
         const r = await fetch(`${BACKEND_URL}/api/reset`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1995,14 +2001,14 @@ function addAllStarter() {
 
 // ====================== CENÍK PŘEDPLATNÉHO ======================
 const PLANS = [
-    { id: 'start', name: 'Start', price: '7,99 €', period: '/ měsíc', feats: [
+    { id: 'start', name: 'Start', price: '5 €', period: '/ měsíc', feats: [
         ['Neomezené sledování', 1], ['Grafy, Signal Score & technický budík', 1], ['Aktuální zprávy', 1],
         ['Cenová upozornění + sync', 1], ['Příležitosti & analytici', 0], ['Hloubková analýza', 0] ] },
-    { id: 'pro', name: 'Pro', price: '14,99 €', period: '/ měsíc', featured: true, feats: [
+    { id: 'pro', name: 'Pro', price: '10 €', period: '/ měsíc', featured: true, feats: [
         ['Vše ze Start', 1], ['🎯 Příležitosti s potenciálem', 1], ['Doporučení analytiků & cílové ceny', 1],
         ['Fundamenty (P/E, kapitalizace)', 1], ['🧠 Hloubková analýza (5/den)', 1],
         ['Asistent, přehled & track record', 0] ] },
-    { id: 'elite', name: 'Elite', price: '24,99 €', period: '/ měsíc', feats: [
+    { id: 'elite', name: 'Elite', price: '15 €', period: '/ měsíc', feats: [
         ['Vše z Pro', 1], ['🧠 Hloubková analýza (30/den)', 1], ['💬 Asistent k akcii', 1],
         ['Tržní briefing & „co prodat/přikoupit"', 1], ["Zdůvodnění u příležitostí", 1],
         ['Track record signálů', 1] ] },
@@ -2010,6 +2016,9 @@ const PLANS = [
 
 function renderPlans() {
     const cur = effPlan();
+    const nowS = Date.now() / 1000;
+    const disc = (mySub && mySub.discount_pct && mySub.discount_until && mySub.discount_until > nowS) ? mySub.discount_pct : 0;
+    const fmtCz = n => (Number.isInteger(n) ? String(n) : n.toFixed(2)).replace('.', ',');
     const cards = PLANS.map(pl => {
         const isCur = pl.id === cur;
         const feats = pl.feats.map(([t, ok]) =>
@@ -2018,17 +2027,28 @@ function renderPlans() {
         const cta = isCur
             ? '<div class="plan-cta active"><i class="ti ti-check"></i> Tvůj plán</div>'
             : '<div class="plan-cta">Připravujeme platby</div>';
+        let priceHtml = `${pl.price} <small>${pl.period}</small>`;
+        if (disc) {
+            const num = parseFloat(pl.price.replace(/[^\d.,]/g, '').replace(',', '.'));
+            if (!isNaN(num)) {
+                priceHtml = `<span style="text-decoration:line-through;color:var(--text2);font-size:17px;font-weight:600">${fmtCz(num)} €</span> ${fmtCz(num * (1 - disc / 100))} € <small>${pl.period}</small>`;
+            }
+        }
         return `<div class="plan-card ${pl.featured ? 'featured' : ''} ${isCur ? 'current' : ''}">
             <div class="plan-tag">${tag}</div>
             <div class="plan-name">${pl.name}</div>
-            <div class="plan-price">${pl.price} <small>${pl.period}</small></div>
+            <div class="plan-price">${priceHtml}</div>
             <ul class="plan-feats">${feats}</ul>
             ${cta}
         </div>`;
     }).join('');
+    const discNote = disc
+        ? `<p class="auth-hint" style="margin-top:14px;color:var(--up)"><i class="ti ti-discount-2"></i> Máš slevu <b>${disc} %</b> na první 3 měsíce předplatného (z promo kódu) — ceny výše ji už zahrnují.</p>`
+        : '';
     document.getElementById('pfview-plans').innerHTML = `
         <div class="plans-grid">${cards}</div>
-        <p class="auth-hint" style="margin-top:16px;">
+        ${discNote}
+        <p class="auth-hint" style="margin-top:10px;">
             <i class="ti ti-info-circle"></i> Online platby spustíme brzy. Do té doby plán aktivuje admin nebo zvací kód.
             Každý nový účet má prvních 7 dní plný <b>Pro</b> zdarma.
         </p>`;
@@ -2101,6 +2121,7 @@ function renderAdmin(users, invites) {
         <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap; align-items:center;">
             <input id="email-test-to" placeholder="komu poslat test (výchozí: ty)" class="admin-input" style="flex:1; min-width:180px;">
             <button class="btn-primary admin-mk" onclick="adminEmailTest()"><i class="ti ti-send"></i> Poslat test</button>
+            <button class="tool-btn" onclick="adminMorningTest()"><i class="ti ti-sun"></i> Ranní souhrn (test)</button>
         </div>
         <div id="email-test-result" style="font-size:12px; color:var(--text2); margin-bottom:18px;"></div>
 
@@ -2136,6 +2157,16 @@ function renderAdmin(users, invites) {
             <thead><tr><th>E-mail</th><th>Plán</th><th>Stav</th><th>Vytvořen</th><th>Změnit plán</th><th></th></tr></thead>
             <tbody>${rows || '<tr><td colspan="6" style="color:var(--text2)">Žádní uživatelé.</td></tr>'}</tbody>
         </table></div>`;
+}
+
+async function adminMorningTest() {
+    const out = document.getElementById('email-test-result');
+    out.innerHTML = '<i class="ti ti-loader spin"></i> Posílám ranní souhrn na tvůj e-mail…';
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/admin/morning-test`, { method: 'POST', headers: authHeaders() })).json();
+        if (d.ok) { out.innerHTML = `<span style="color:var(--up)"><i class="ti ti-check"></i> Ranní souhrn odeslán na ${escapeHtml(d.sent_to || '')}. Zkontroluj schránku (i spam).</span>`; showToast('Ranní souhrn odeslán', 'up', 'ti-sun'); }
+        else out.innerHTML = `<span style="color:var(--down)"><i class="ti ti-x"></i> Neodesláno: ${escapeHtml(d.error || 'neznámý důvod')}</span>`;
+    } catch (e) { out.innerHTML = '<span style="color:var(--down)">Chyba spojení se serverem.</span>'; }
 }
 
 async function adminEmailTest() {

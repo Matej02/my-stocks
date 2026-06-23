@@ -1343,6 +1343,8 @@ def search_ticker():
     query = request.args.get("q", "")
     if len(query) < 1:
         return jsonify({"ok": True, "results": []})
+    if not _rate_ok("search", 120, 60):
+        return jsonify({"ok": True, "results": []})  # tiše omezit nadměrné dotazy
     try:
         url = (f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(query)}"
                f"&quotesCount=40&newsCount=0&enableFuzzyQuery=true&listsCount=0")
@@ -2280,6 +2282,8 @@ def exit_signals():
     """„Co prodávat teď" – projde zadané (watchlist) tituly a označí ty, které
     PRÁVĚ TEĎ spouští exit/oslabení podle našeho technického skóre. Symetrie
     k nákupním signálům, deterministicky (stejné skóre)."""
+    if not _rate_ok("exitsig", 30, 60):
+        return jsonify({"ok": True, "count": 0, "results": [], "checked": 0})
     tickers = [t.strip().upper() for t in request.args.get("tickers", "").split(",") if t.strip()][:20]
     items = []
     for t in tickers:
@@ -2597,6 +2601,29 @@ def cron_backtest():
             return jsonify({"ok": False, "error": "Backtest nevrátil data."}), 502
         kv_set_json("backtest:latest", res)
         return jsonify({"ok": True, "buy": res.get("buy"), "horizon_days": horizon})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/morning-test", methods=["POST"])
+def admin_morning_test():
+    """Pošle ranní souhrn na admina – test, že to celé funguje."""
+    admin = _auth_admin()
+    if not admin:
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    if not email_enabled():
+        return jsonify({"ok": False, "error": "E-maily nejsou nastavené."}), 503
+    try:
+        top_opps = _top_opps_for_summary(3)
+        sig = kv_get_json(f"signals:{_today()}")
+        if not sig:
+            try:
+                sig = _scan_signals(); kv_set_json(f"signals:{_today()}", sig)
+            except Exception:
+                sig = {}
+        ok = send_email(admin, "☀️ Ranní přehled (test) – MY STOCKS",
+                        build_morning_summary_html(admin, top_opps, (sig or {}).get("results") or []))
+        return jsonify({"ok": ok, "sent_to": admin, "error": _LAST_EMAIL_ERROR["msg"]})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
