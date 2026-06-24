@@ -260,6 +260,54 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .gate-trust i {color:var(--up);}
 .gate-trust a {color:var(--accent); cursor:pointer;}
 
+/* ===== LANDING PAGE (úvodní stránka pro nepřihlášené) ===== */
+#gateWall.lock-screen {align-items:flex-start; overflow-y:auto; padding:0; background:radial-gradient(circle at 50% -8%, #15151f 0%, #08080e 55%);}
+.lp {width:100%; max-width:980px; margin:0 auto; padding:20px 22px 70px; animation:gateIn .5s ease both;}
+.lp-bar {display:flex; align-items:center; justify-content:space-between; margin-bottom:30px; padding:8px 0;}
+.lp-bar-actions {display:flex; gap:10px; align-items:center;}
+.lp-login {background:transparent; border:1px solid var(--border2); color:var(--text); padding:10px 18px; border-radius:11px; font-family:var(--fb); font-weight:600; font-size:14px; cursor:pointer; transition:all .15s;}
+.lp-login:hover {border-color:var(--text3);}
+.lp-join {background:var(--accent); color:#1a0e00; border:none; padding:10px 18px; border-radius:11px; font-family:var(--fb); font-weight:700; font-size:14px; cursor:pointer;}
+.lp-hero {text-align:center; padding:26px 0 10px;}
+.lp-hero h1 {font-family:var(--fh); font-weight:700; font-size:clamp(32px,6vw,52px); line-height:1.05; letter-spacing:-1.5px; margin-bottom:18px; color:var(--text);}
+.lp-hero h1 em {color:var(--accent); font-style:normal;}
+.lp-lead {color:var(--text2); font-size:clamp(15px,2.2vw,18px); max-width:560px; margin:0 auto 30px; line-height:1.6;}
+.lp-proof {display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:34px;}
+.lp-proof .c {background:var(--elev); border:1px solid var(--border); border-radius:16px; padding:18px 24px; min-width:148px;}
+.lp-proof .v {font-family:var(--fh); font-weight:700; font-size:30px;}
+.lp-proof .v.g {color:var(--up);}
+.lp-proof .l {font-size:12px; color:var(--text2); margin-top:5px;}
+.lp-bigcta {display:inline-flex; align-items:center; gap:10px; background:var(--accent); color:#1a0e00; font-family:var(--fb); font-weight:700; font-size:16px; border:none; border-radius:13px; padding:16px 34px; cursor:pointer; transition:transform .12s,opacity .15s;}
+.lp-bigcta:hover {opacity:.92;} .lp-bigcta:active {transform:scale(.98);}
+.lp-trust {display:flex; align-items:center; justify-content:center; gap:8px; font-size:12.5px; color:var(--text3); margin-top:16px; flex-wrap:wrap;}
+.lp-trust i {color:var(--up);}
+.lp-sec {margin-top:62px;}
+.lp-tag {font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--accent); font-weight:600; text-align:center; margin-bottom:10px;}
+.lp-h2 {font-family:var(--fh); font-weight:700; font-size:clamp(23px,4vw,32px); text-align:center; letter-spacing:-.5px; margin-bottom:30px; color:var(--text);}
+.lp-grid4 {display:grid; grid-template-columns:repeat(4,1fr); gap:14px;}
+.lp-card {background:var(--elev); border:1px solid var(--border); border-radius:16px; padding:20px;}
+.lp-card .ic {width:42px; height:42px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:21px; margin-bottom:14px;}
+.lp-card h3 {font-family:var(--fh); font-size:15px; font-weight:600; margin-bottom:6px; color:var(--text);}
+.lp-card p {font-size:12.5px; color:var(--text2); line-height:1.55;}
+.lp-card .w {font-size:11px; color:var(--text3); margin-top:12px; font-weight:600; letter-spacing:.3px;}
+.lp-fine {text-align:center; color:var(--text3); font-size:12.5px; margin:22px auto 0; max-width:620px; line-height:1.6;}
+.lp-plans {display:grid; grid-template-columns:repeat(3,1fr); gap:16px; align-items:start;}
+.lp-plan {background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:26px 22px; text-align:center; position:relative;}
+.lp-plan.feat {border-color:var(--border-accent);}
+.lp-plan-tag {position:absolute; top:-11px; left:50%; transform:translateX(-50%); background:var(--accent); color:#1a0e00; font-size:11px; font-weight:700; padding:4px 14px; border-radius:20px; white-space:nowrap;}
+.lp-plan .nm {font-family:var(--fh); font-weight:600; font-size:14px; letter-spacing:1px; text-transform:uppercase; color:var(--text2);}
+.lp-plan .pr {font-family:var(--fh); font-weight:700; font-size:36px; margin:10px 0 2px; color:var(--text);}
+.lp-plan .pr span {font-size:14px; color:var(--text2); font-weight:400;}
+.lp-plan ul {list-style:none; margin:18px 0; text-align:left;}
+.lp-plan li {font-size:13px; color:var(--text); padding:7px 0; display:flex; gap:9px; align-items:flex-start; border-top:1px solid var(--border);}
+.lp-plan li i {color:var(--up); font-size:15px; margin-top:1px; flex-shrink:0;}
+.lp-plan button {width:100%; border-radius:11px; padding:13px; font-weight:600; font-size:14px; font-family:var(--fb); cursor:pointer; border:1px solid var(--border2); background:transparent; color:var(--text); transition:all .15s;}
+.lp-plan.feat button {background:var(--accent); color:#1a0e00; border:none; font-weight:700;}
+.lp-final {text-align:center; margin-top:64px; padding:46px 24px; background:linear-gradient(160deg, var(--accent-soft), transparent 72%); border:1px solid var(--border-accent); border-radius:22px;}
+.lp-final h2 {font-family:var(--fh); font-weight:700; font-size:clamp(23px,4vw,30px); margin-bottom:22px; color:var(--text);}
+.lp-disc {color:var(--text3); font-size:12px; margin:24px auto 0; max-width:560px; line-height:1.6;}
+@media(max-width:760px){ .lp-grid4{grid-template-columns:repeat(2,1fr);} .lp-plans{grid-template-columns:1fr;} }
+
 /* ============ HLOUBKOVÁ ANALÝZA ============ */
 .deep-box {background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:20px;}
 .deep-head {display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
@@ -691,24 +739,110 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 <!-- ZÁMEK – zobrazí se jen když je nastaveno heslo (env APP_PASSWORD) -->
 <!-- PŘÍSTUPOVÁ ZEĎ – přihlášení / vybrat plán -->
 <div id="gateWall" class="lock-screen" style="display:none;">
-  <div class="gate-card">
-    <div class="gate-brand"><div class="bi"><i class="ti ti-chart-candle"></i></div><div class="bt">MY <span>STOCKS</span></div></div>
-    <div id="gate-auth">
-      <h1>Vědět, <em>kdy koupit</em> — ne hádat.</h1>
-      <p class="gate-lead">Investiční asistent s ověřeným edge. Verdikt ze 4 datových pilířů, ne pocit. A transparentně ukazujeme i to, co nefunguje.</p>
-      <div class="gate-proof">
-        <div class="gp"><div class="gpv g">~65 %</div><div class="gpl">trefnost TOP signálu</div></div>
-        <div class="gp"><div class="gpv">+2 %</div><div class="gpl">expectancy / obchod</div></div>
-        <div class="gp"><div class="gpv">5 let</div><div class="gpl">backtest vč. 2022</div></div>
+  <!-- NEPŘIHLÁŠENÝ: plná úvodní stránka -->
+  <div id="gate-auth" class="lp">
+    <div class="lp-bar">
+      <div class="gate-brand"><div class="bi"><i class="ti ti-chart-candle"></i></div><div class="bt">MY <span>STOCKS</span></div></div>
+      <div class="lp-bar-actions">
+        <button class="lp-login" onclick="openProfile()">Přihlásit</button>
+        <button class="lp-join" onclick="openProfile()">Vytvořit účet</button>
       </div>
-      <button class="gate-cta" onclick="openProfile()"><i class="ti ti-login-2"></i> Přihlásit / Vytvořit účet</button>
-      <div class="gate-trust"><i class="ti ti-shield-check"></i> Obhajitelná čísla místo prázdných slibů · stop-loss u každého obchodu</div>
     </div>
-    <div id="gate-noaccess" style="display:none;">
-      <h1 style="font-size:clamp(26px,5vw,34px);">Vyber si plán</h1>
-      <p class="gate-lead">Tvůj účet zatím nemá aktivní předplatné. Odemkni dnešní signály, hloubkovou analýzu i skener příležitostí.</p>
-      <button class="gate-cta" onclick="openProfile('plans')"><i class="ti ti-crown"></i> Vybrat předplatné</button>
-      <div class="gate-trust" style="margin-top:16px;"><a onclick="doLogout()">Odhlásit se</a></div>
+
+    <div class="lp-hero">
+      <h1>Vědět, <em>kdy koupit</em> — ne hádat.</h1>
+      <p class="lp-lead">Investiční asistent s ověřeným edge. Verdikt ze čtyř datových pilířů — ne pocit. A transparentně ukazujeme i to, co nefunguje.</p>
+      <div class="lp-proof">
+        <div class="c"><div class="v g">~65 %</div><div class="l">trefnost TOP signálu</div></div>
+        <div class="c"><div class="v">+2 %</div><div class="l">expectancy / obchod</div></div>
+        <div class="c"><div class="v">5 let</div><div class="l">backtest vč. 2022</div></div>
+      </div>
+      <button class="lp-bigcta" onclick="openProfile()"><i class="ti ti-rocket"></i> Vytvořit účet zdarma</button>
+      <div class="lp-trust"><i class="ti ti-shield-check"></i> Obhajitelná čísla místo prázdných slibů · stop-loss u každého obchodu</div>
+    </div>
+
+    <div class="lp-sec">
+      <div class="lp-tag">Jak to funguje</div>
+      <h2 class="lp-h2">Jeden verdikt ze čtyř tvrdých pilířů</h2>
+      <div class="lp-grid4">
+        <div class="lp-card"><div class="ic" style="background:var(--accent-soft);color:var(--accent)"><i class="ti ti-chart-line"></i></div><h3>Technika</h3><p>Nákup poklesu v dlouhodobém uptrendu — ne chytání padajícího nože.</p><div class="w">váha 30 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:var(--up-glow);color:var(--up)"><i class="ti ti-businessplan"></i></div><h3>Valuace</h3><p>Je akcie levná, nebo drahá vůči svým ziskům?</p><div class="w">váha 20 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:rgba(79,163,255,0.14);color:#4fa3ff"><i class="ti ti-trending-up"></i></div><h3>Růst &amp; ziskovost</h3><p>Roste firma, má marže a reálně vydělává?</p><div class="w">váha 25 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:var(--amber-soft);color:var(--amber)"><i class="ti ti-users-group"></i></div><h3>Analytici</h3><p>Konsenzus Wall Street a prostor k cílové ceně.</p><div class="w">váha 25 %</div></div>
+      </div>
+    </div>
+
+    <div class="lp-sec">
+      <div class="lp-tag">Důkaz, ne sliby</div>
+      <h2 class="lp-h2">Ověřeno na 5 letech dat — včetně propadu 2022</h2>
+      <div class="lp-proof">
+        <div class="c"><div class="v g">~65 %</div><div class="l">trefnost TOP signálu</div></div>
+        <div class="c"><div class="v g">+2 %</div><div class="l">expectancy / obchod</div></div>
+        <div class="c"><div class="v">&gt;53 %</div><div class="l">každý rok vč. 2022</div></div>
+        <div class="c"><div class="v">6 417</div><div class="l">testovaných obchodů</div></div>
+      </div>
+      <p class="lp-fine">Bez nahlížení do budoucna. ~40 % obchodů přesto skončí v mínusu — proto u každého počítáme stop-loss. Historická výkonnost nezaručuje budoucí výsledky.</p>
+    </div>
+
+    <div class="lp-sec">
+      <div class="lp-tag">Plány</div>
+      <h2 class="lp-h2">Začni už od 5 € měsíčně</h2>
+      <div class="lp-plans">
+        <div class="lp-plan">
+          <div class="nm">Start</div><div class="pr">5 €<span> / měs</span></div>
+          <ul><li><i class="ti ti-check"></i> Watchlist a přehled</li><li><i class="ti ti-check"></i> Hledání a novinky z trhu</li><li><i class="ti ti-check"></i> Začátečnický průvodce</li></ul>
+          <button onclick="openProfile('plans')">Začít se Start</button>
+        </div>
+        <div class="lp-plan feat">
+          <div class="lp-plan-tag">NEJOBLÍBENĚJŠÍ</div>
+          <div class="nm">Pro</div><div class="pr">10 €<span> / měs</span></div>
+          <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Skener příležitostí</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Exit signály „co prodat"</li></ul>
+          <button onclick="openProfile('plans')">Vybrat Pro</button>
+        </div>
+        <div class="lp-plan">
+          <div class="nm">Elite</div><div class="pr">15 €<span> / měs</span></div>
+          <ul><li><i class="ti ti-check"></i> Vše z Pro</li><li><i class="ti ti-check"></i> Hloubková analýza 30×/den</li><li><i class="ti ti-check"></i> Asistent + track record</li><li><i class="ti ti-check"></i> Watchlist bez limitu</li></ul>
+          <button onclick="openProfile('plans')">Vybrat Elite</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="lp-final">
+      <h2>Připraven přestat hádat a rozhodovat se podle dat?</h2>
+      <button class="lp-bigcta" onclick="openProfile()"><i class="ti ti-rocket"></i> Vytvořit účet zdarma</button>
+      <div class="lp-disc">MY STOCKS je nástroj pro vzdělávací a informační účely. Neposkytuje investiční poradenství. Historická výkonnost nezaručuje budoucí výsledky.</div>
+    </div>
+  </div>
+
+  <!-- PŘIHLÁŠENÝ BEZ PŘEDPLATNÉHO -->
+  <div id="gate-noaccess" class="lp" style="display:none;">
+    <div class="lp-bar">
+      <div class="gate-brand"><div class="bi"><i class="ti ti-chart-candle"></i></div><div class="bt">MY <span>STOCKS</span></div></div>
+      <div class="lp-bar-actions"><button class="lp-login" onclick="doLogout()">Odhlásit se</button></div>
+    </div>
+    <div class="lp-hero">
+      <h1>Vyber si plán a <em>začni</em>.</h1>
+      <p class="lp-lead">Tvůj účet zatím nemá aktivní předplatné. Odemkni dnešní signály, hloubkovou analýzu i skener příležitostí.</p>
+    </div>
+    <div class="lp-sec" style="margin-top:18px;">
+      <div class="lp-plans">
+        <div class="lp-plan">
+          <div class="nm">Start</div><div class="pr">5 €<span> / měs</span></div>
+          <ul><li><i class="ti ti-check"></i> Watchlist a přehled</li><li><i class="ti ti-check"></i> Hledání a novinky z trhu</li><li><i class="ti ti-check"></i> Začátečnický průvodce</li></ul>
+          <button onclick="openProfile('plans')">Předplatit Start</button>
+        </div>
+        <div class="lp-plan feat">
+          <div class="lp-plan-tag">NEJOBLÍBENĚJŠÍ</div>
+          <div class="nm">Pro</div><div class="pr">10 €<span> / měs</span></div>
+          <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Skener příležitostí</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Exit signály „co prodat"</li></ul>
+          <button onclick="openProfile('plans')">Předplatit Pro</button>
+        </div>
+        <div class="lp-plan">
+          <div class="nm">Elite</div><div class="pr">15 €<span> / měs</span></div>
+          <ul><li><i class="ti ti-check"></i> Vše z Pro</li><li><i class="ti ti-check"></i> Hloubková analýza 30×/den</li><li><i class="ti ti-check"></i> Asistent + track record</li><li><i class="ti ti-check"></i> Watchlist bez limitu</li></ul>
+          <button onclick="openProfile('plans')">Předplatit Elite</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -728,7 +862,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·d</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·e</div>
 
 <div class="container">
   
