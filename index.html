@@ -131,7 +131,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 /* PORTFOLIO P/L */
 .sc-pl {font-size:12px; margin-top:6px; color:var(--text2); border-top:1px solid var(--border); padding-top:6px; display:flex; justify-content:space-between;}
 .pl-val {font-weight:700; font-family:var(--fh);}
-.pl-modal {display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,0.82); align-items:center; justify-content:center;}
+.pl-modal {display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.82); align-items:center; justify-content:center;}
 .pl-modal.open {display:flex;}
 .pl-modal-box {background:#0F1218; border:1px solid rgba(255,255,255,0.12); border-radius:20px; padding:2rem; width:380px; max-width:90vw; position:relative;}
 .pl-modal-box h3 {font-family:var(--fh); font-size:20px; margin-bottom:1.5rem;}
@@ -744,6 +744,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
     <div class="lp-bar">
       <div class="gate-brand"><div class="bi"><i class="ti ti-chart-candle"></i></div><div class="bt">MY <span>STOCKS</span></div></div>
       <div class="lp-bar-actions">
+        <button class="lp-login" onclick="openAbout()">O nás</button>
         <button class="lp-login" onclick="openProfile()">Přihlásit</button>
         <button class="lp-join" onclick="openProfile()">Vytvořit účet</button>
       </div>
@@ -818,7 +819,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   <div id="gate-noaccess" class="lp" style="display:none;">
     <div class="lp-bar">
       <div class="gate-brand"><div class="bi"><i class="ti ti-chart-candle"></i></div><div class="bt">MY <span>STOCKS</span></div></div>
-      <div class="lp-bar-actions"><button class="lp-login" onclick="doLogout()">Odhlásit se</button></div>
+      <div class="lp-bar-actions"><button class="lp-login" onclick="openAbout()">O nás</button><button class="lp-login" onclick="openProfile()">Profil</button><button class="lp-login" onclick="doLogout()">Odhlásit se</button></div>
     </div>
     <div class="lp-hero">
       <h1>Vyber si plán a <em>začni</em>.</h1>
@@ -862,7 +863,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·g</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·h</div>
 
 <div class="container">
   
