@@ -619,14 +619,14 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .opp-actions {display:flex; align-items:center; gap:10px;}
 .opp-updated {font-size:11px; color:var(--text2); font-family:var(--fb);}
 .opp-filters {display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 4px; position:relative; z-index:1; align-items:center;}
-.opp-chip {background:var(--bg-glass); border:1px solid var(--border); padding:7px 14px; border-radius:20px; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; transition:all .2s;}
+.opp-chip {background:var(--surface); border:1px solid var(--border); padding:7px 14px; border-radius:10px; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; transition:all .2s;}
 .opp-chip:hover {border-color:var(--accent); color:var(--text);}
-.opp-chip.active {background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
+.opp-chip.active {background:var(--accent-soft); border-color:var(--border-accent); color:var(--accent); font-weight:600;}
 .opp-toggle {display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); cursor:pointer; margin-left:auto; font-family:var(--fb);}
 .opp-toggle input {accent-color:var(--accent); cursor:pointer;}
 .opp-grid {display:grid; grid-template-columns:repeat(auto-fill, minmax(265px, 1fr)); gap:14px; margin-top:16px; position:relative; z-index:1;}
 .opp-loading {color:var(--accent); padding:24px; font-size:14px;}
-.opp-card {background:var(--bg-glass); border:1px solid var(--border); border-radius:18px; padding:16px; cursor:pointer; transition:all .2s; position:relative; overflow:hidden;}
+.opp-card {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:16px; padding:17px; cursor:pointer; transition:transform .15s, border-color .2s, box-shadow .2s; position:relative; overflow:hidden;}
 .opp-card:hover {transform:translateY(-3px); border-color:var(--border-accent); box-shadow:0 10px 26px rgba(0,0,0,0.35);}
 .opp-card.moon {border-color:var(--accent); background:linear-gradient(160deg, rgba(255,122,0,0.10), transparent 70%);}
 .opp-rank {position:absolute; top:12px; right:14px; font-family:var(--fh); font-size:11px; color:var(--text2);}
@@ -669,7 +669,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .opp-disclaimer {font-size:10.5px; color:var(--text2); margin-top:14px; position:relative; z-index:1; opacity:.7;}
 
 /* ============ TECHNICKÝ SIGNAL PANEL ============ */
-.verdict-box {background:linear-gradient(135deg, rgba(255,122,0,0.10), rgba(255,255,255,0.02)); border:1px solid var(--border-accent); border-radius:16px; padding:18px 20px; margin-bottom:20px;}
+.verdict-box {background:linear-gradient(150deg, rgba(255,122,0,0.10), transparent 75%); border:1px solid var(--border-accent); border-radius:18px; padding:20px 22px; margin-bottom:20px;}
 .vb-main {display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;}
 .vb-label {font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text2);}
 .vb-verdict {font-family:var(--fh); font-weight:800; font-size:28px; line-height:1.1; margin-top:2px;}
@@ -678,7 +678,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .vb-score {font-family:var(--fh); font-weight:800; font-size:30px;}
 .vb-sub {font-size:11px; color:var(--text2);}
 .vb-note {font-size:12.5px; color:var(--text2); line-height:1.55; margin-top:12px; border-top:1px solid var(--border); padding-top:10px;}
-.signal-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:15px; padding:20px; margin-bottom:20px;}
+.signal-box {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:20px;}
 .signal-head {display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
 .signal-title {font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text2); display:flex; align-items:center; gap:8px;}
 .signal-title i {color:var(--accent);}
@@ -862,7 +862,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·e</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·f</div>
 
 <div class="container">
   
