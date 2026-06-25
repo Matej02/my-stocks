@@ -437,7 +437,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .plan-tag {font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--accent); margin-bottom:4px; min-height:14px;}
 .plan-cta {margin-top:6px; padding:10px; border-radius:10px; border:1px solid var(--border); background:transparent; color:var(--text2); font-weight:600; cursor:default; text-align:center; font-size:13px;}
 .plan-cta.active {background:var(--up-glow); color:var(--up); border-color:var(--up);}
-.plan-cta.plan-buy {background:var(--accent); color:#000; border-color:var(--accent); cursor:pointer; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px; width:100%; transition:filter .15s;}
+.plan-cta.plan-buy {background:var(--accent); color:#1a0e00; border-color:var(--accent); cursor:pointer; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px; width:100%; transition:opacity .15s;}
 .plan-cta.plan-buy:hover {filter:brightness(1.08);}
 
 /* ============ ADMIN ============ */
@@ -521,11 +521,11 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .sbuy-why {font-size:12px; color:var(--text2); line-height:1.4;}
 
 /* ============ ZÁLOŽKY V DETAILU AKCIE ============ */
-.detail-tabs {display:flex; gap:6px; margin-bottom:16px; background:var(--bg-glass); border:1px solid var(--border); padding:5px; border-radius:14px; overflow-x:auto;}
+.detail-tabs {display:flex; gap:4px; margin-bottom:16px; background:rgba(255,255,255,0.03); border:1px solid var(--border); padding:5px; border-radius:14px; overflow-x:auto;}
 .dtab {flex:1; min-width:max-content; display:flex; align-items:center; justify-content:center; gap:6px; padding:10px 12px; border:none; background:transparent; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; font-weight:600; border-radius:10px; transition:all .2s; white-space:nowrap;}
 .dtab i {font-size:16px;}
 .dtab:hover {color:var(--text);}
-.dtab.active {background:var(--accent); color:#000;}
+.dtab.active {background:var(--accent-soft); color:var(--accent);}
 .dpane {animation:fadeIn .25s ease;}
 @keyframes fadeIn {from{opacity:0} to{opacity:1}}
 
@@ -543,7 +543,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .profile-btn:hover {color:var(--accent); border-color:var(--accent);}
 .profile-btn.logged {color:var(--up); border-color:var(--up);}
 .profile-btn i {font-size:18px;}
-.profile-box {background:#12141c; border:1px solid var(--accent); border-radius:22px; padding:2rem; width:760px; max-width:94vw; max-height:90vh; overflow-y:auto; position:relative;}
+.profile-box {background:var(--surface); border:1px solid var(--border2); border-radius:22px; padding:2rem; width:760px; max-width:94vw; max-height:90vh; overflow-y:auto; position:relative;}
 .profile-close {position:absolute; top:16px; right:16px; background:rgba(255,255,255,0.05); border:1px solid var(--border); color:var(--text2); width:34px; height:34px; border-radius:10px; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center;}
 /* Metodika „Jak hodnotíme" */
 .method-intro {font-size:14px; line-height:1.6; color:var(--text); background:rgba(255,122,0,0.06); border:1px solid var(--border-accent); border-radius:12px; padding:12px 14px; margin:0 0 16px;}
@@ -862,7 +862,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·f</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·g</div>
 
 <div class="container">
   
