@@ -866,7 +866,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·j</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·k</div>
 
 <div class="container">
   
@@ -2847,7 +2847,7 @@ async function loadExitSignals() {
         list.innerHTML = d.results.map(o => `
             <div class="exit-row" onclick="loadStockDetail('${o.ticker}')">
                 <span class="exit-tag ${o.level}">${o.level === 'sell' ? 'Prodat' : 'Oslabení'}</span>
-                <span class="er-tk">${o.ticker}</span>
+                <span class="er-tk">${escapeHtml(niceName(o.ticker, o.name))} <span style="font-size:11px;color:var(--text3);font-weight:400">${o.ticker}</span></span>
                 <span class="er-reason">${escapeHtml(o.reason)}</span>
                 <span style="font-size:12px;color:var(--text2)">${(o.price ?? 0).toFixed(2)} ${o.currency || ''} · skóre ${o.score}</span>
             </div>`).join('') +
@@ -3308,12 +3308,14 @@ async function generatePortfolioEval(watchlistData) {
         return;
     }
     summaryEl.innerHTML = data.summary || '';
+    const nameByTk = {};
+    (watchlistData || []).forEach(s => { if (s && s.ticker) nameByTk[s.ticker] = s.name; });
 
     sellList.innerHTML = '';
     (data.sell || []).forEach(item => {
         sellList.innerHTML += `
         <div class="eval-ticker-pill" onclick="loadStockDetail('${item.ticker}')">
-            <div><div class="eval-ticker-name">${item.ticker}</div><div class="eval-ticker-reason">${item.reason}</div></div>
+            <div style="min-width:0"><div class="eval-ticker-name">${escapeHtml(niceName(item.ticker, nameByTk[item.ticker]))} <span style="font-size:11px;color:var(--text2);font-weight:400">${item.ticker}</span></div><div class="eval-ticker-reason">${escapeHtml(item.reason || '')}</div></div>
             <span class="eval-ticker-badge">${item.urgency || 'ZVÁŽIT'}</span>
         </div>`;
     });
@@ -3324,7 +3326,7 @@ async function generatePortfolioEval(watchlistData) {
     (data.buy || []).forEach(item => {
         buyList.innerHTML += `
         <div class="eval-ticker-pill" onclick="loadStockDetail('${item.ticker}')">
-            <div><div class="eval-ticker-name">${item.ticker}</div><div class="eval-ticker-reason">${item.reason}</div></div>
+            <div style="min-width:0"><div class="eval-ticker-name">${escapeHtml(niceName(item.ticker, nameByTk[item.ticker]))} <span style="font-size:11px;color:var(--text2);font-weight:400">${item.ticker}</span></div><div class="eval-ticker-reason">${escapeHtml(item.reason || '')}</div></div>
             <span class="eval-ticker-badge">${item.upside || '↑'}</span>
         </div>`;
     });
