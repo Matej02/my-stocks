@@ -869,7 +869,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·m</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·n</div>
 
 <div class="container">
   
@@ -1042,6 +1042,24 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
         <div class="method-step"><div class="ms-ico">💎</div><div>
           <h4>Co nabízíme</h4>
           <p>Sledování a signály, skener <b>„co koupit teď"</b>, hloubková analýza s verdiktem a kompletním plánem obchodu, <b>„co prodat teď"</b> a veřejný track record. <a class="profile-cloud-link" onclick="closeAbout();openProfile('plans')">Zobrazit předplatné</a></p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico"><i class="ti ti-help-circle" style="color:var(--accent)"></i></div><div>
+          <h4>Časté dotazy</h4>
+          <p><b>Jste broker?</b> Ne — jsme investiční asistent. Neprovádíme obchody ani nedržíme tvé peníze, dáváme ti podklady k rozhodnutí.<br>
+          <b>Garantujete zisk?</b> Ne. Žádný nástroj nezaručuje zisk; ukazujeme ověřenou úspěšnost a vždy počítáme se stop-lossem — část obchodů skončí v mínusu.<br>
+          <b>Jak často chodí signály?</b> Jen u ověřených situací — model nenakupuje pořád. I žádný signál za den je v pořádku.<br>
+          <b>Jak zruším předplatné?</b> Kdykoli ve svém profilu; přístup ti běží do konce zaplaceného období.</p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico"><i class="ti ti-credit-card" style="color:var(--accent)"></i></div><div>
+          <h4>Platby a vrácení peněz</h4>
+          <p>Platby probíhají bezpečně přes <b>Stripe</b>. Předplatné je <b>nevratné</b> — po zaplacení už nelze platbu vrátit zpět. Můžeš ho ale <b>kdykoli zrušit</b>, aby se ti další období už nestrhlo (přístup doběhne do konce zaplaceného období).</p>
+        </div></div>
+
+        <div class="method-step"><div class="ms-ico"><i class="ti ti-mail" style="color:var(--accent)"></i></div><div>
+          <h4>Podpora</h4>
+          <p>Něco nefunguje nebo máš dotaz? Napiš nám na <a class="profile-cloud-link" href="mailto:podpora@mystocks.cz">podpora@mystocks.cz</a> a ozveme se ti co nejdřív.</p>
         </div></div>
 
         <div class="method-proof"><i class="ti ti-shield-check"></i> <span>Naše krédo: <b>obhajitelná čísla místo prázdných slibů.</b> Co neobstojí v ověření, do nástroje nedáváme. A jsme féroví — ani nejlepší signál není jistota, proto vždy se stop-lossem.</span></div>
@@ -1776,15 +1794,20 @@ function updateProfileBtn() {
 }
 
 let pendingPfView = 'portfolio';
+// Při otevření modalu z úvodní stránky schováme gate, ať je modal vždy navrchu a klikatelný.
+function _hideGate() { var g = document.getElementById('gateWall'); if (g) g.style.display = 'none'; }
 function openProfile(view) {
     pendingPfView = view || 'portfolio';
+    _hideGate();
     document.getElementById('profileModal').classList.add('open');
     renderProfileView();
 }
 function closeProfile() {
     document.getElementById('profileModal').classList.remove('open');
+    refreshGate();
 }
 function openAbout() {
+    _hideGate();
     document.getElementById('aboutModal').classList.add('open');
     const el = document.getElementById('about-proof');
     if (!el) return;
@@ -1796,9 +1819,9 @@ function openAbout() {
         el.innerHTML = `Náš systém je ověřený <b>5letým backtestem</b> (bez nahlížení do budoucna, vč. propadu 2022) a doplněný veřejným <b>track recordem</b> reálných verdiktů. Konkrétní čísla najdeš přímo u analýz.`;
     }
 }
-function closeAbout() { document.getElementById('aboutModal').classList.remove('open'); }
-function openNews() { document.getElementById('newsModal').classList.add('open'); loadMarketNews(); }
-function closeNews() { document.getElementById('newsModal').classList.remove('open'); }
+function closeAbout() { document.getElementById('aboutModal').classList.remove('open'); refreshGate(); }
+function openNews() { _hideGate(); document.getElementById('newsModal').classList.add('open'); loadMarketNews(); }
+function closeNews() { document.getElementById('newsModal').classList.remove('open'); refreshGate(); }
 async function loadMarketNews() {
     const st = document.getElementById('market-status');
     const list = document.getElementById('market-news-list');
