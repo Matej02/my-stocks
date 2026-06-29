@@ -158,16 +158,16 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .period-label {font-size:11px; color:var(--text2); margin-left:4px; font-weight:400; font-family:var(--fb);}
 
 /* DASHBOARD PORTFOLIO HODNOCENÍ */
-.port-eval-box {background:linear-gradient(145deg, rgba(18,20,30,0.9) 0%, rgba(12,14,22,0.95) 100%); border:1px solid var(--border-accent); border-radius:20px; padding:2rem; margin-bottom:2.5rem; position:relative; overflow:hidden;}
-.port-eval-box::before {content:''; position:absolute; top:0; left:0; width:4px; height:100%; background:linear-gradient(180deg, var(--accent), var(--up)); box-shadow:0 0 15px var(--accent);}
+.port-eval-box {background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:20px; padding:2rem; margin-bottom:2.5rem; position:relative; overflow:hidden;}
+.port-eval-box::before {content:''; position:absolute; top:0; left:0; width:3px; height:100%; background:linear-gradient(180deg, var(--accent), var(--up));}
 .port-eval-header {display:flex; align-items:center; gap:10px; margin-bottom:1.2rem; font-family:var(--fh); font-size:20px; font-weight:700;}
 .port-eval-header i {color:var(--accent); font-size:24px;}
 .port-eval-grid {display:grid; grid-template-columns:1fr 1fr; gap:15px;}
 .eval-col-header {font-size:11px; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:6px;}
 .eval-sell-col .eval-col-header {color:var(--down);}
 .eval-buy-col .eval-col-header {color:var(--up);}
-.eval-ticker-pill {display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-radius:10px; margin-bottom:8px; cursor:pointer; transition:all 0.2s; font-size:14px;}
-.eval-ticker-pill:hover {transform:translateX(3px);}
+.eval-ticker-pill {display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 15px; border-radius:12px; margin-bottom:8px; cursor:pointer; transition:border-color .2s, transform .15s; font-size:14px; background:var(--elev); border:1px solid var(--border);}
+.eval-ticker-pill:hover {border-color:var(--border-accent); transform:translateY(-2px);}
 .eval-sell-col .eval-ticker-pill {background:rgba(255,61,0,0.07); border:1px solid rgba(255,61,0,0.2);}
 .eval-sell-col .eval-ticker-pill:hover {background:rgba(255,61,0,0.14); border-color:var(--down);}
 .eval-buy-col .eval-ticker-pill {background:rgba(0,230,118,0.06); border:1px solid rgba(0,230,118,0.2);}
@@ -225,7 +225,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ps-right {display:flex; flex-direction:column; align-items:center; justify-content:center; border-left:1px solid var(--border); padding-left:20px;}
 .ps-right h4 {font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px; align-self:flex-start;}
 .ps-toolbar {display:flex; gap:10px; margin-bottom:1.2rem; flex-wrap:wrap;}
-.tool-btn {background:var(--bg-glass); border:1px solid var(--border); padding:8px 14px; border-radius:12px; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; display:flex; align-items:center; gap:6px; transition:all .2s;}
+.tool-btn {background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:11px; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; display:flex; align-items:center; gap:6px; transition:all .2s;}
 .tool-btn:hover {color:var(--accent); border-color:var(--accent);}
 
 /* ============ ZÁMEK ============ */
@@ -866,7 +866,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·k</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·l</div>
 
 <div class="container">
   
