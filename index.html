@@ -634,6 +634,53 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-opp-row .r .s {font-family:var(--fh); font-weight:700; color:var(--up);}
 .ov-opp-row .r .h {font-size:11px; color:var(--text2);}
 
+/* ============ VÝSLEDKY / TRACK RECORD ============ */
+.tr-stats {display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:14px;}
+.tr-kpi {background:var(--elev); border:1px solid var(--border); border-radius:18px; padding:22px 18px; position:relative; overflow:hidden;}
+.tr-kpi.hero {border-color:var(--border-accent); background:linear-gradient(160deg, var(--accent-soft), transparent 70%);}
+.tr-kpi.good {border-color:rgba(0,230,118,0.35); background:linear-gradient(160deg, var(--up-glow), transparent 70%);}
+.tr-kpi .lbl {font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; font-weight:600;}
+.tr-kpi .val {font-family:var(--fh); font-size:36px; font-weight:800; line-height:1; margin:8px 0 4px;}
+.tr-kpi.hero .val, .tr-kpi.good .val {color:var(--up);}
+.tr-kpi .sub {font-size:12px; color:var(--text2);}
+
+.tr-year-grid {display:grid; grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); gap:10px;}
+.tr-year {background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:12px; padding:14px 12px; text-align:center;}
+.tr-year .yr {font-family:var(--fh); font-weight:700; font-size:14px; color:var(--text2); letter-spacing:.7px;}
+.tr-year .wr {font-family:var(--fh); font-weight:800; font-size:24px; margin-top:4px;}
+.tr-year.win .wr {color:var(--up);}
+.tr-year.loss .wr {color:var(--down);}
+.tr-year.win {border-color:rgba(0,230,118,0.35);}
+.tr-year.loss {border-color:rgba(255,61,0,0.35);}
+.tr-year .cn {font-size:11px; color:var(--text2); margin-top:3px;}
+
+.tr-fine {color:var(--text2); font-size:12px; margin-top:10px; line-height:1.5;}
+
+.tr-live-meta {font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.7px; font-weight:600;}
+.tr-live-list {display:flex; flex-direction:column; gap:6px;}
+.tr-live-row {display:grid; grid-template-columns:78px 1fr auto auto auto; gap:12px; align-items:center; padding:10px 14px; background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:11px; font-size:13px; cursor:pointer; transition:border-color .2s;}
+.tr-live-row:hover {border-color:var(--border-accent);}
+.tr-live-row.win {border-left:3px solid var(--up);}
+.tr-live-row.loss {border-left:3px solid var(--down);}
+.tr-live-row.open {border-left:3px solid var(--amber);}
+.tr-live-row .tkr {font-family:var(--fh); font-weight:700;}
+.tr-live-row .when {font-size:11px; color:var(--text2);}
+.tr-live-row .verdict {font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.7px; padding:3px 8px; border-radius:8px;}
+.tr-live-row .verdict.buy {background:var(--up-glow); color:var(--up);}
+.tr-live-row .verdict.hold {background:rgba(255,179,71,0.14); color:var(--amber);}
+.tr-live-row .verdict.sell {background:var(--down-glow); color:var(--down);}
+.tr-live-row .px {font-family:var(--fh); font-size:13px;}
+.tr-live-row .ret {font-family:var(--fh); font-weight:700; font-size:14px; min-width:62px; text-align:right;}
+.tr-live-row .ret.up {color:var(--up);}
+.tr-live-row .ret.down {color:var(--down);}
+@media (max-width:680px) {
+  .tr-live-row {grid-template-columns:60px 1fr auto auto; font-size:12px; padding:8px 10px;}
+  .tr-live-row .px {display:none;}
+}
+
+.tr-disclaim {margin-top:22px; padding:14px 18px; background:rgba(0,230,118,0.07); border:1px solid rgba(0,230,118,0.25); border-radius:14px; color:var(--text); font-size:13px; line-height:1.55; display:flex; gap:12px; align-items:flex-start;}
+.tr-disclaim i {color:var(--up); font-size:20px; flex-shrink:0; margin-top:1px;}
+
 /* ============ PROFIL & ÚČET ============ */
 .nav-actions {display:flex; align-items:center; gap:10px;}
 .profile-btn {background:var(--surface); border:1px solid var(--border); padding:10px 15px; border-radius:11px; color:var(--text2); cursor:pointer; display:flex; align-items:center; gap:8px; transition:all 0.2s; font-family:var(--fb); font-size:14px;}
@@ -1232,6 +1279,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
       <button class="dash-tab active" id="dtab-overview" onclick="switchTab('overview')"><i class="ti ti-layout-dashboard"></i> Přehled</button>
       <button class="dash-tab" id="dtab-portfolio" onclick="switchTab('portfolio')"><i class="ti ti-wallet"></i> Moje portfolio</button>
       <button class="dash-tab" id="dtab-opportunities" onclick="switchTab('opportunities')"><i class="ti ti-rocket"></i> Příležitosti</button>
+      <button class="dash-tab" id="dtab-results" onclick="switchTab('results')"><i class="ti ti-chart-histogram"></i> Výsledky</button>
       <button class="dash-tab" id="dtab-ai" onclick="switchTab('ai')"><i class="ti ti-bulb"></i> Doporučení</button>
     </div>
 
@@ -1296,6 +1344,46 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
         </div>
       </div>
     </div><!-- /section-overview -->
+
+    <!-- SEKCE: VÝSLEDKY (Track Record) -->
+    <div class="dash-section" id="section-results" style="display:none;">
+      <div class="ov-hero">
+        <h1>Naše <em>výsledky</em> — bez příkras.</h1>
+        <div class="sub">5letý backtest verifikuje signál včetně medvědího 2022. Live track-record sleduje verdikty, které appka aktuálně vydala. Nic neretušujeme.</div>
+      </div>
+
+      <!-- HLAVNÍ STATISTIKY -->
+      <div class="tr-stats" id="tr-stats">
+        <div class="ov-load"><i class="ti ti-loader spin"></i> Načítám výsledky backtestu…</div>
+      </div>
+
+      <!-- ROČNÍ ROZPAD -->
+      <div class="ov-card" style="margin-top:18px;">
+        <h3><i class="ti ti-calendar-stats"></i> Roční rozpad — drží signál i v medvědích letech?</h3>
+        <div class="tr-year-grid" id="tr-year-grid">
+          <div class="ov-load"><i class="ti ti-loader spin"></i> Načítám…</div>
+        </div>
+        <div class="tr-fine">Každý sloupec = trefnost našeho TOP signálu v daném roce. Cíl: >50 % i v propadovém 2022. <a onclick="openMethod()" style="color:var(--accent); cursor:pointer">Jak hodnotíme?</a></div>
+      </div>
+
+      <!-- LIVE TRACK RECORD -->
+      <div class="ov-card" style="margin-top:18px;">
+        <h3 style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <span><i class="ti ti-history"></i> Live track-record — verdikty, které appka aktuálně vydala</span>
+          <span class="tr-live-meta" id="tr-live-meta"></span>
+        </h3>
+        <div id="tr-live-list">
+          <div class="ov-load"><i class="ti ti-loader spin"></i> Načítám live verdikty…</div>
+        </div>
+        <div class="tr-fine">Přehrávat lze posledních 60 verdiktů. Návratnost počítáme od aktuální tržní ceny — zelená = signál drží, červená = zatím v mínusu.</div>
+      </div>
+
+      <!-- DISCLAIMER -->
+      <div class="tr-disclaim">
+        <i class="ti ti-shield-check"></i>
+        <div><b>Žádný look-ahead, žádné krášlení.</b> Backtest běží bez nahlížení do budoucnosti, ~35 % obchodů končí v mínusu — proto u každého počítáme stop-loss. Historická výkonnost nezaručuje budoucí výsledky.</div>
+      </div>
+    </div><!-- /section-results -->
 
     <!-- SEKCE: AI ANALÝZA -->
     <div class="dash-section" id="section-ai" style="display:none;">
@@ -1897,7 +1985,7 @@ async function loadWatchlistSilent() {
 let activeTab = 'overview';
 function switchTab(name) {
     activeTab = name;
-    ['overview', 'portfolio', 'opportunities', 'ai'].forEach(s => {
+    ['overview', 'portfolio', 'opportunities', 'results', 'ai'].forEach(s => {
         const sec = document.getElementById('section-' + s);
         const tab = document.getElementById('dtab-' + s);
         if (sec) sec.style.display = (s === name) ? 'block' : 'none';
@@ -1905,6 +1993,9 @@ function switchTab(name) {
     });
     if (name === 'overview') {
         loadOverview();
+    }
+    if (name === 'results') {
+        loadResults();
     }
     // Portfolio: překresli začátečnické portfolio
     if (name === 'portfolio') {
@@ -2269,6 +2360,116 @@ async function fetchOverviewOpps() {
             </div>`).join('')}</div>`;
     } catch(e) {
         box.innerHTML = '<div class="ov-empty">Skener teď není dostupný.</div>';
+    }
+}
+
+// ====================== VÝSLEDKY (TRACK RECORD) ======================
+let resultsLoaded = false;
+async function loadResults(force) {
+    if (resultsLoaded && !force) return;
+    resultsLoaded = true;
+    await Promise.allSettled([loadResultsBacktest(), loadResultsLive()]);
+}
+
+async function loadResultsBacktest() {
+    const kpis = document.getElementById('tr-stats');
+    const grid = document.getElementById('tr-year-grid');
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/backtest`)).json();
+        const r = (d && d.result) || null;
+        if (!r) {
+            kpis.innerHTML = '<div class="ov-empty">Backtest zatím neproběhl. Admin: spusť ho v profilu.</div>';
+            grid.innerHTML = '<div class="ov-empty">Není data k zobrazení.</div>';
+            return;
+        }
+        const top = r.top || {};
+        const buy = r.buy || {};
+        const base = r.baseline || {};
+        const wrTop = (top.win_rate ?? buy.win_rate ?? 0);
+        const expTop = (top.avg_return ?? buy.avg_return ?? 0);
+        const alpha = (top.alpha ?? buy.alpha ?? 0);
+        const samples = top.count ?? buy.count ?? r.sample_count ?? 0;
+        const baseWr = base.win_rate;
+        kpis.innerHTML = `
+            <div class="tr-kpi hero">
+                <div class="lbl">Trefnost TOP signálu</div>
+                <div class="val">${wrTop}%</div>
+                <div class="sub">${baseWr ? `Náhodný nákup: ${baseWr}% · edge ${(wrTop - baseWr).toFixed(1)} bodů` : '5letý backtest'}</div>
+            </div>
+            <div class="tr-kpi good">
+                <div class="lbl">Expectancy / obchod</div>
+                <div class="val">+${expTop}%</div>
+                <div class="sub">${r.horizon_days || 10}denní horizont</div>
+            </div>
+            <div class="tr-kpi">
+                <div class="lbl">Alpha vs. ${r.benchmark || 'SPY'}</div>
+                <div class="val" style="color:${alpha >= 0 ? 'var(--up)' : 'var(--down)'}">${alpha >= 0 ? '+' : ''}${alpha}%</div>
+                <div class="sub">Výnos navíc proti indexu</div>
+            </div>
+            <div class="tr-kpi">
+                <div class="lbl">Testovaných obchodů</div>
+                <div class="val">${samples.toLocaleString('cs-CZ')}</div>
+                <div class="sub">${r.period || '5 let'}</div>
+            </div>`;
+        const yrs = r.top_by_year || r.buy_by_year || {};
+        const ks = Object.keys(yrs).sort();
+        if (!ks.length) {
+            grid.innerHTML = '<div class="ov-empty">Roční rozpad není k dispozici.</div>';
+        } else {
+            grid.innerHTML = ks.map(y => {
+                const s = yrs[y] || {};
+                const wr = s.win_rate ?? 0;
+                const cn = s.count ?? 0;
+                const cls = wr >= 50 ? 'win' : 'loss';
+                return `<div class="tr-year ${cls}">
+                    <div class="yr">${y}</div>
+                    <div class="wr">${wr}%</div>
+                    <div class="cn">${cn} ${cn === 1 ? 'obchod' : (cn < 5 ? 'obchody' : 'obchodů')}</div>
+                </div>`;
+            }).join('');
+        }
+    } catch(e) {
+        kpis.innerHTML = '<div class="ov-empty" style="color:var(--down)">Backtest se nepodařilo načíst.</div>';
+        grid.innerHTML = '';
+    }
+}
+
+async function loadResultsLive() {
+    const list = document.getElementById('tr-live-list');
+    const meta = document.getElementById('tr-live-meta');
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/track-record`)).json();
+        const items = (d && d.items) || [];
+        const s = (d && d.stats) || {};
+        if (s.buy_win_rate != null) {
+            meta.textContent = `${s.buy_count} verdiktů · ${s.buy_win_rate}% trefnost`;
+        }
+        if (!items.length) {
+            list.innerHTML = '<div class="ov-empty">Zatím žádné live verdikty — appka začíná sbírat data.</div>';
+            return;
+        }
+        list.innerHTML = `<div class="tr-live-list">${items.map(v => {
+            const ret = v.return_pct;
+            const open = !ret && ret !== 0;
+            const cls = open ? 'open' : (ret > 0 ? 'win' : 'loss');
+            const retCls = ret > 0 ? 'up' : (ret < 0 ? 'down' : '');
+            const retTxt = ret == null ? '—' : `${ret > 0 ? '+' : ''}${ret.toFixed(1)}%`;
+            const vCls = (v.verdict || '').toLowerCase() === 'koupit' ? 'buy'
+                : (v.verdict || '').toLowerCase() === 'prodat' ? 'sell' : 'hold';
+            const when = v.ts ? new Date(v.ts * 1000).toLocaleDateString('cs-CZ', {day:'2-digit', month:'2-digit'}) : '';
+            return `<div class="tr-live-row ${cls}" onclick="loadStockDetail('${v.ticker || ''}')">
+                <div>
+                    <div class="tkr">${escapeHtml(v.ticker || '?')}</div>
+                    <div class="when">${when}</div>
+                </div>
+                <div style="min-width:0; overflow:hidden;"><span class="verdict ${vCls}">${escapeHtml(v.verdict || '')}</span></div>
+                <div class="px">${(v.price ?? '—')}${v.current ? ' → ' + v.current : ''}</div>
+                <div style="font-size:11px; color:var(--text2); white-space:nowrap;">${v.exit_label ? escapeHtml(v.exit_label.replace(/[✅🛑⏳]/g,'').trim()) : ''}</div>
+                <div class="ret ${retCls}">${retTxt}</div>
+            </div>`;
+        }).join('')}</div>`;
+    } catch(e) {
+        list.innerHTML = '<div class="ov-empty" style="color:var(--down)">Track record se nepodařilo načíst.</div>';
     }
 }
 
