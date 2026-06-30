@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MY STOCKS - Backend pro Vercel (Serverless Function)
+MY ADVANTAGE - Backend pro Vercel (Serverless Function)
 
 Data se tahají PŘÍMO z veřejných Yahoo Finance HTTP endpointů
 (v8/finance/chart, v1/finance/search, v10 quoteSummary) pomocí `requests`.
@@ -660,7 +660,7 @@ def send_email(to_email, subject, html):
             headers={"api-key": os.environ["BREVO_API_KEY"],
                      "Content-Type": "application/json", "accept": "application/json"},
             data=json.dumps({
-                "sender": {"email": os.environ["SENDER_EMAIL"], "name": "MY STOCKS"},
+                "sender": {"email": os.environ["SENDER_EMAIL"], "name": "MY ADVANTAGE"},
                 "to": [{"email": to_email}],
                 "subject": subject,
                 "htmlContent": html,
@@ -678,10 +678,10 @@ def send_email(to_email, subject, html):
 def _email_shell(title, body_html):
     return f"""<div style="font-family:Arial,sans-serif;background:#0b0d12;padding:32px;color:#e8eaf0">
       <div style="max-width:520px;margin:0 auto;background:#12141c;border:1px solid #23262f;border-radius:18px;padding:32px">
-        <div style="font-size:24px;font-weight:800;margin-bottom:18px">MY <span style="color:#FF7A00">STOCKS</span></div>
+        <div style="font-size:24px;font-weight:800;margin-bottom:18px">MY <span style="color:#FF7A00">ADVANTAGE</span></div>
         <h2 style="font-size:20px;margin:0 0 14px">{title}</h2>
         {body_html}
-        <p style="color:#9ba1b0;font-size:12px;margin-top:28px">Tento e-mail ti přišel z aplikace MY STOCKS.</p>
+        <p style="color:#9ba1b0;font-size:12px;margin-top:28px">Tento e-mail ti přišel z aplikace MY ADVANTAGE.</p>
       </div></div>"""
 
 
@@ -695,9 +695,9 @@ def send_welcome_email(email, eff="none"):
     else:
         body = ("<p style='line-height:1.6'>Tvůj účet je připravený. Pro přístup k funkcím si "
                 "vyber předplatné v profilu.</p>")
-    html = _email_shell("Vítej v MY STOCKS! 🎉",
+    html = _email_shell("Vítej v MY ADVANTAGE! 🎉",
                         body + "<p style='line-height:1.6'>Přejeme šťastnou ruku při investování!</p>")
-    return send_email(email, "Vítej v MY STOCKS 🎉", html)
+    return send_email(email, "Vítej v MY ADVANTAGE 🎉", html)
 
 
 def send_reset_email(email, link):
@@ -708,7 +708,7 @@ def send_reset_email(email, link):
         f"<p style='margin:22px 0'><a href='{link}' style='background:#FF7A00;color:#000;"
         f"text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:700'>Nastavit nové heslo</a></p>"
         f"<p style='color:#9ba1b0;font-size:12px'>Pokud jsi o reset nežádal, e-mail ignoruj.</p>")
-    return send_email(email, "Obnovení hesla – MY STOCKS", html)
+    return send_email(email, "Obnovení hesla – MY ADVANTAGE", html)
 
 
 # ---- Předplatné / plány ----
@@ -1214,7 +1214,7 @@ def admin_email_test():
     if not admin:
         return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
     to = _norm_email((request.get_json(silent=True) or {}).get("to")) or admin
-    ok = send_email(to, "Test e-mailu – MY STOCKS",
+    ok = send_email(to, "Test e-mailu – MY ADVANTAGE",
                     _email_shell("Test e-mailu ✅",
                                  "<p style='line-height:1.6'>Tohle je testovací e-mail z diagnostiky. "
                                  "Pokud ti dorazil, odesílání (a tím i reset hesla) funguje.</p>"))
@@ -2437,7 +2437,7 @@ def run_backtest(tickers, horizon=10):
         "baseline": _bt_stats([(fwd, exc) for (_, fwd, exc, yr, top_) in samples]),
         "buy_by_year": buy_by_year, "top_by_year": top_by_year, "top_threshold": VERDICT_TOP,
         "generated": int(time.time()),
-        "note": f"Náš nákupní signál (MS Skóre), 5 let, žádný look-ahead. "
+        "note": f"Náš nákupní signál (MA Skóre), 5 let, žádný look-ahead. "
                 f"Koupit = skóre ≥{VERDICT_BUY}, Prodat = <{VERDICT_SELL}. "
                 f"TOP = silný setup + klidný objem (bez prodejního tlaku). "
                 f"Alfa = výnos navíc proti indexu (SPY).",
@@ -2720,7 +2720,7 @@ def get_stock_detail(ticker):
         if div is not None:
             div = round(div * 100 if div < 1 else div, 2)
 
-        # Náš verdikt (MS Skóre) – stejný model jako Hloubková analýza, aby se
+        # Náš verdikt (MA Skóre) – stejný model jako Hloubková analýza, aby se
         # detail a analýza NIKDY nerozcházely. Počítá se jen při plném otevření.
         verdict_model = None
         verdict_levels = None
@@ -2875,7 +2875,7 @@ def admin_morning_test():
                 sig = _scan_signals(); kv_set_json(f"signals:{_today()}", sig)
             except Exception:
                 sig = {}
-        ok = send_email(admin, "☀️ Ranní přehled (test) – MY STOCKS",
+        ok = send_email(admin, "☀️ Ranní přehled (test) – MY ADVANTAGE",
                         build_morning_summary_html(admin, top_opps, (sig or {}).get("results") or []))
         return jsonify({"ok": ok, "sent_to": admin, "error": _LAST_EMAIL_ERROR["msg"]})
     except Exception as e:
@@ -2909,7 +2909,7 @@ def cron_morning():
             if not (rec.get("notif") or {}).get("morning"):
                 continue
             try:
-                send_email(email, "☀️ Ranní přehled trhu – MY STOCKS",
+                send_email(email, "☀️ Ranní přehled trhu – MY ADVANTAGE",
                            build_morning_summary_html(email, top_opps, top_signals))
                 sent += 1
             except Exception:
