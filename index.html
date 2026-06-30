@@ -634,6 +634,16 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-opp-row .r .s {font-family:var(--fh); font-weight:700; color:var(--up);}
 .ov-opp-row .r .h {font-size:11px; color:var(--text2);}
 
+/* ============ SEKTOROVÁ HEATMAPA ============ */
+.heatmap {display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:6px;}
+.heat-cell {position:relative; padding:14px 12px; border-radius:12px; cursor:pointer; transition:transform .12s, box-shadow .2s; min-height:84px; display:flex; flex-direction:column; justify-content:space-between; border:1px solid rgba(255,255,255,0.06); overflow:hidden;}
+.heat-cell:hover {transform:translateY(-2px); box-shadow:0 8px 22px rgba(0,0,0,0.4);}
+.heat-cell .hc-top {display:flex; align-items:center; gap:6px; font-size:11px; color:rgba(255,255,255,0.92); text-transform:uppercase; letter-spacing:.4px; font-weight:600;}
+.heat-cell .hc-top i {font-size:14px;}
+.heat-cell .hc-name {font-family:var(--fh); font-size:14px; font-weight:700; color:#fff; line-height:1.2; margin-top:4px;}
+.heat-cell .hc-pct {font-family:var(--fh); font-size:20px; font-weight:800; color:#fff; line-height:1; margin-top:6px;}
+.heat-cell .hc-tk {position:absolute; top:8px; right:10px; font-size:10px; color:rgba(255,255,255,0.6); font-weight:700; letter-spacing:.5px;}
+
 /* ============ VÝSLEDKY / TRACK RECORD ============ */
 .tr-stats {display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:14px;}
 .tr-kpi {background:var(--elev); border:1px solid var(--border); border-radius:18px; padding:22px 18px; position:relative; overflow:hidden;}
@@ -1332,6 +1342,15 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           <div class="ov-card">
             <h3><i class="ti ti-news"></i> Trh dnes</h3>
             <div class="ov-news" id="ov-news"><div class="ov-load"><i class="ti ti-loader spin"></i> Načítám novinky…</div></div>
+          </div>
+        </div>
+
+        <!-- SEKTOROVÁ HEATMAPA -->
+        <div class="ov-col-12">
+          <div class="ov-card">
+            <h3><i class="ti ti-grid-dots"></i> Sektorová heatmapa S&amp;P 500</h3>
+            <div class="heatmap" id="ov-sectors"><div class="ov-load"><i class="ti ti-loader spin"></i> Načítám sektory…</div></div>
+            <div class="tr-fine">Klik na sektor otevře jeho sektorový ETF v hloubkové analýze. Barva: zelená = roste, červená = padá, intenzita = velikost změny.</div>
           </div>
         </div>
 
@@ -2172,6 +2191,7 @@ async function loadOverview(force) {
         fetchOverviewSignal(),
         fetchOverviewNews(),
         fetchOverviewOpps(),
+        fetchOverviewSectors(),
     ];
     renderOverviewPortfolio();
     renderOverviewEvents();
@@ -2360,6 +2380,42 @@ async function fetchOverviewOpps() {
             </div>`).join('')}</div>`;
     } catch(e) {
         box.innerHTML = '<div class="ov-empty">Skener teď není dostupný.</div>';
+    }
+}
+
+async function fetchOverviewSectors() {
+    const box = document.getElementById('ov-sectors');
+    if (!box) return;
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/sectors`)).json();
+        const items = (d && d.items) || [];
+        if (!items.length) { box.innerHTML = '<div class="ov-empty">Sektorová data teď nejsou dostupná.</div>'; return; }
+        const heatColor = (pct) => {
+            const clamp = Math.max(-3, Math.min(3, pct));
+            const intensity = Math.min(1, Math.abs(clamp) / 2.5);
+            if (clamp >= 0) {
+                // zelená 0-3%
+                const a = 0.18 + intensity * 0.55;
+                return `rgba(0, 230, 118, ${a.toFixed(2)})`;
+            }
+            const a = 0.18 + intensity * 0.55;
+            return `rgba(255, 61, 0, ${a.toFixed(2)})`;
+        };
+        box.innerHTML = items.map(s => {
+            const pct = s.chg_pct || 0;
+            const bg = heatColor(pct);
+            const sign = pct >= 0 ? '+' : '';
+            return `<div class="heat-cell" style="background:${bg}" onclick="loadStockDetail('${s.ticker}')">
+                <span class="hc-tk">${s.ticker}</span>
+                <div>
+                    <div class="hc-top"><i class="ti ${s.icon}"></i></div>
+                    <div class="hc-name">${escapeHtml(s.label)}</div>
+                </div>
+                <div class="hc-pct">${sign}${pct.toFixed(2)}%</div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        box.innerHTML = '<div class="ov-empty">Sektorová heatmapa teď nedostupná.</div>';
     }
 }
 

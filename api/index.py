@@ -2740,6 +2740,46 @@ def get_calendar():
                     "updated": datetime.now(timezone.utc).strftime("%H:%M UTC")})
 
 
+# ---------------------------------------------------------------------------
+# SEKTOROVÁ HEATMAPA – 11 S&P 500 sektorů přes SPDR sektorové ETF
+# ---------------------------------------------------------------------------
+_SECTOR_ETFS = [
+    ("XLK",  "Technologie",      "ti-cpu"),
+    ("XLF",  "Finance",          "ti-building-bank"),
+    ("XLV",  "Zdravotnictví",    "ti-stethoscope"),
+    ("XLE",  "Energetika",       "ti-flame"),
+    ("XLY",  "Spotřeba (luxus)", "ti-shopping-bag"),
+    ("XLP",  "Spotřeba (denní)", "ti-shopping-cart"),
+    ("XLI",  "Průmysl",          "ti-tools"),
+    ("XLB",  "Materiály",        "ti-package"),
+    ("XLU",  "Utility",          "ti-bolt"),
+    ("XLRE", "Reality",          "ti-building"),
+    ("XLC",  "Komunikace",       "ti-broadcast"),
+]
+
+
+@app.route("/api/sectors")
+def get_sectors():
+    """Sektorová heatmapa – cache 15 min."""
+    cached = kv_get_json("sectors:snapshot")
+    if cached and (time.time() - cached.get("ts", 0) < 900):
+        return jsonify({"ok": True, "cached": True, **cached})
+    items = []
+    for (tk, label, icon) in _SECTOR_ETFS:
+        d = _fetch_macro_one(tk)
+        if not d:
+            continue
+        items.append({"ticker": tk, "label": label, "icon": icon,
+                      "price": d["price"], "chg_pct": d["chg_pct"]})
+    out = {"ts": int(time.time()), "items": items,
+           "updated": datetime.now(timezone.utc).strftime("%H:%M UTC")}
+    try:
+        kv_set_json("sectors:snapshot", out)
+    except Exception:
+        pass
+    return jsonify({"ok": True, "cached": False, **out})
+
+
 @app.route("/api/signals")
 def get_signals():
     """Živé nákupní signály podle BACKTESTEM OVĚŘENÉHO modelu. Kešováno 1×/den."""
