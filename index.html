@@ -634,6 +634,22 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-opp-row .r .s {font-family:var(--fh); font-weight:700; color:var(--up);}
 .ov-opp-row .r .h {font-size:11px; color:var(--text2);}
 
+/* ============ POSITION SIZING KALKULAČKA ============ */
+.sz-grid {display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:6px 0 8px;}
+.sz-field {display:flex; flex-direction:column; gap:5px;}
+.sz-field label {font-size:12px; color:var(--text2); font-weight:600; text-transform:uppercase; letter-spacing:.5px;}
+.sz-field input {background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:11px; color:var(--text); padding:10px 12px; font-family:var(--fb); font-size:14px;}
+.sz-field input:focus {outline:none; border-color:var(--accent);}
+.sz-field small {color:var(--text2); font-size:11px;}
+@media (max-width:600px) {.sz-grid {grid-template-columns:1fr;}}
+.sz-out {margin-top:14px; padding:0; background:transparent; min-height:0;}
+.sz-out.has {padding:16px 18px; background:linear-gradient(160deg, var(--accent-soft), transparent 75%); border:1px solid var(--border-accent); border-radius:14px;}
+.sz-out .res-hero {font-family:var(--fh); font-size:30px; font-weight:800; color:var(--accent); line-height:1; margin-bottom:8px;}
+.sz-out .res-line {display:flex; justify-content:space-between; padding:6px 0; border-top:1px dashed var(--border); font-size:13px;}
+.sz-out .res-line:first-of-type {border-top:0;}
+.sz-out .res-line b {font-family:var(--fh);}
+.sz-out .warn {color:var(--down); font-size:12px; margin-top:8px;}
+
 /* ============ SROVNÁVAČ AKCIÍ ============ */
 .cmp-sub {color:var(--text2); font-size:13px; margin:-4px 0 12px; line-height:1.4;}
 .cmp-inputs {display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
@@ -1107,6 +1123,47 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   <!-- TOASTY (upozornění) -->
   <div class="toast-wrap" id="toastWrap"></div>
 
+  <!-- POSITION SIZING KALKULAČKA MODAL -->
+  <div class="pl-modal" id="sizerModal">
+    <div class="pl-modal-box" style="max-width:600px;">
+      <h3><i class="ti ti-calculator" style="color:var(--accent)"></i> Kolik koupit? — kalkulačka</h3>
+      <div class="cmp-sub">Spočítá, kolik akcií koupit, ať při zasažení stop-lossu neztratíš víc než ti je milé.</div>
+
+      <div class="sz-grid">
+        <div class="sz-field">
+          <label>Kapitál na obchody (Kč nebo $)</label>
+          <input type="number" id="sz-cap" value="100000" min="0" step="1000">
+        </div>
+        <div class="sz-field">
+          <label>Riziko na obchod (% kapitálu)</label>
+          <input type="number" id="sz-risk" value="2" min="0.1" max="20" step="0.1">
+          <small>Profi standard: 1–2 %. Konzervativně 0,5–1 %.</small>
+        </div>
+        <div class="sz-field">
+          <label>Vstupní cena akcie (USD)</label>
+          <input type="number" id="sz-price" value="100" min="0" step="0.01">
+        </div>
+        <div class="sz-field">
+          <label>Stop-loss pod vstupem (%)</label>
+          <input type="number" id="sz-stop" value="5" min="0.5" max="50" step="0.1">
+          <small>Z naší analýzy obvykle 4–8 %.</small>
+        </div>
+        <div class="sz-field">
+          <label>Měnový kurz USD → Kč (volitelné)</label>
+          <input type="number" id="sz-fx" value="23.5" min="0" step="0.1">
+          <small>Pro převod ceny akcie na Kč. Nech 1, když počítáš v USD.</small>
+        </div>
+      </div>
+
+      <div class="sz-out" id="sz-out"></div>
+
+      <div class="pl-modal-btns">
+        <button class="btn-ghost" onclick="closeSizer()">Zavřít</button>
+        <button class="btn-primary" onclick="runSizer()"><i class="ti ti-calculator"></i> Spočítat</button>
+      </div>
+    </div>
+  </div>
+
   <!-- SROVNÁVAČ AKCIÍ MODAL -->
   <div class="pl-modal" id="compareModal">
     <div class="pl-modal-box" style="max-width:880px;">
@@ -1531,6 +1588,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
         <span class="live-badge" id="live-badge" style="display:none;"><i class="ti ti-point-filled"></i> LIVE</span>
         <button class="tool-btn" onclick="requestNotif()"><i class="ti ti-bell"></i> Notifikace</button>
         <button class="tool-btn" onclick="openCompare()"><i class="ti ti-arrows-shuffle"></i> Srovnat</button>
+        <button class="tool-btn" onclick="openSizer()"><i class="ti ti-calculator"></i> Kolik koupit?</button>
         <button class="tool-btn" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
         <button class="tool-btn" id="refresh-btn" onclick="loadWatchlist()"><i class="ti ti-refresh" id="refresh-ico"></i> Obnovit</button>
       </div>
@@ -2565,6 +2623,57 @@ async function loadResultsLive() {
     } catch(e) {
         list.innerHTML = '<div class="ov-empty" style="color:var(--down)">Track record se nepodařilo načíst.</div>';
     }
+}
+
+// ====================== POSITION SIZING KALKULAČKA ======================
+function openSizer(prefill) {
+    if (prefill) {
+        if (prefill.price != null) document.getElementById('sz-price').value = prefill.price;
+        if (prefill.stop_pct != null) document.getElementById('sz-stop').value = prefill.stop_pct;
+    }
+    document.getElementById('sz-out').className = 'sz-out';
+    document.getElementById('sz-out').innerHTML = '';
+    document.getElementById('sizerModal').classList.add('open');
+}
+function closeSizer() {
+    document.getElementById('sizerModal').classList.remove('open');
+}
+function runSizer() {
+    const cap = Math.max(0, parseFloat(document.getElementById('sz-cap').value) || 0);
+    const riskPct = Math.max(0.01, parseFloat(document.getElementById('sz-risk').value) || 0);
+    const px = Math.max(0.01, parseFloat(document.getElementById('sz-price').value) || 0);
+    const stopPct = Math.max(0.1, parseFloat(document.getElementById('sz-stop').value) || 0);
+    const fx = Math.max(0.01, parseFloat(document.getElementById('sz-fx').value) || 1);
+    const out = document.getElementById('sz-out');
+    if (!cap || !px) {
+        out.className = 'sz-out';
+        out.innerHTML = '<div class="ov-empty" style="color:var(--down)">Vyplň kapitál a cenu akcie.</div>';
+        return;
+    }
+    const maxRisk = cap * (riskPct / 100);            // v té samé měně jako kapitál
+    const stopAbs = px * (stopPct / 100);             // v USD na 1 akcii
+    const riskPerShareInCap = stopAbs * fx;           // riziko 1 akcie v měně kapitálu
+    const sharesRaw = maxRisk / riskPerShareInCap;
+    const shares = Math.floor(sharesRaw);
+    const posCost = shares * px * fx;
+    const posCostUsd = shares * px;
+    const exposureRatio = (posCost / cap) * 100;
+    const stopLossDollar = shares * stopAbs;
+    const stopLossInCap = stopLossDollar * fx;
+    const stopPrice = px * (1 - stopPct / 100);
+    const warn = exposureRatio > 100 ? '<div class="warn">⚠ Pozice je větší než tvůj kapitál — sniž riziko nebo zvyš stop-loss.</div>' : '';
+    const fmt = (v) => v.toLocaleString('cs-CZ', {maximumFractionDigits: 0});
+    out.className = 'sz-out has';
+    out.innerHTML = `
+        <div class="res-hero">${shares} ks akcií</div>
+        <div class="res-line"><span>Vstupní cena</span><b>${px.toFixed(2)} USD</b></div>
+        <div class="res-line"><span>Hodnota pozice</span><b>${fmt(posCost)} ${fx === 1 ? 'USD' : 'Kč'} <span style="color:var(--text2);font-weight:400">(${fmt(posCostUsd)} USD)</span></b></div>
+        <div class="res-line"><span>Stop-loss cena</span><b>${stopPrice.toFixed(2)} USD</b></div>
+        <div class="res-line"><span>Max ztráta při stop-lossu</span><b style="color:var(--down)">−${fmt(stopLossInCap)} ${fx === 1 ? 'USD' : 'Kč'}</b></div>
+        <div class="res-line"><span>Riziko vs. kapitál</span><b>${(stopLossInCap / cap * 100).toFixed(2)} %</b></div>
+        <div class="res-line"><span>Pozice / kapitál</span><b>${exposureRatio.toFixed(1)} %</b></div>
+        ${warn}
+        <div style="margin-top:10px; font-size:12px; color:var(--text2); line-height:1.5;">Klíč: ztrátu řídí stop-loss, ne počet akcií. Profi obchodník risuje na 1 obchodě obvykle <b>1–2 %</b> kapitálu — víc nedělej, dokud nemáš ověřený systém.</div>`;
 }
 
 // ====================== SROVNÁVAČ AKCIÍ ======================
@@ -4387,6 +4496,7 @@ function renderDeepReport(d) {
         </div>
         ${lv ? `<div class="deep-rr">Poměr zisk:riziko <b>${lv.rr ? lv.rr + ' : 1' : '—'}</b> · cíl <b style="color:var(--up)">+${lv.reward_pct}%</b> / stop <b style="color:var(--down)">−${lv.risk_pct}%</b> · horizont ~${lv.horizon_days} dní <span style="color:var(--text2)">(z volatility, ne odhad)</span></div>` : ''}
         ${lv ? `<div class="deep-exit"><b>🚪 Exit plán:</b> prodej při dosažení cíle <b>${fmt(rp.target_price)}</b>, při poklesu na stop <b>${fmt(rp.stop_loss)}</b>, nebo po ~2 týdnech, pokud nenastane ani jedno. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></div>` : ''}
+        ${(rp.entry && lv && lv.risk_pct) ? `<div style="margin:8px 0 14px;"><button class="tool-btn" onclick="openSizer({price:${rp.entry}, stop_pct:${lv.risk_pct}})"><i class="ti ti-calculator"></i> Kolik koupit? (kalkulačka pozice)</button></div>` : ''}
         ${liveHtml}
         ${sec('ti-bulb', 'Investiční teze', rp.thesis)}
         ${sec('ti-building-bank', 'Fundament', rp.fundamentals)}
