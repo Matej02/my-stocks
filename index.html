@@ -634,6 +634,21 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-opp-row .r .s {font-family:var(--fh); font-weight:700; color:var(--up);}
 .ov-opp-row .r .h {font-size:11px; color:var(--text2);}
 
+/* ============ ONBOARDING TOUR ============ */
+.onb-box {max-width:520px; text-align:center; padding:30px 28px;}
+.onb-prog {display:flex; gap:6px; justify-content:center; margin-bottom:18px;}
+.onb-prog .seg {width:32px; height:4px; background:var(--border); border-radius:99px;}
+.onb-prog .seg.active {background:var(--accent);}
+.onb-icon {width:74px; height:74px; margin:0 auto 14px; background:var(--accent-soft); border-radius:22px; display:flex; align-items:center; justify-content:center;}
+.onb-icon i {font-size:38px; color:var(--accent);}
+.onb-page h2 {font-family:var(--fh); font-size:24px; font-weight:700; margin:0 0 8px;}
+.onb-page p {color:var(--text2); font-size:14px; line-height:1.5; margin:0 0 18px;}
+.onb-bul {list-style:none; padding:0; margin:0; text-align:left; display:flex; flex-direction:column; gap:9px;}
+.onb-bul li {display:flex; align-items:center; gap:10px; font-size:13.5px; padding:9px 12px; background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:11px;}
+.onb-bul li i {color:var(--up); font-size:16px; flex-shrink:0;}
+.onb-bul li b {color:var(--text);}
+.onb-btns {margin-top:22px;}
+
 /* ============ POSITION SIZING KALKULAČKA ============ */
 .sz-grid {display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:6px 0 8px;}
 .sz-field {display:flex; flex-direction:column; gap:5px;}
@@ -1122,6 +1137,47 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 
   <!-- TOASTY (upozornění) -->
   <div class="toast-wrap" id="toastWrap"></div>
+
+  <!-- ONBOARDING TOUR (1. login) -->
+  <div class="pl-modal" id="onbModal">
+    <div class="pl-modal-box onb-box">
+      <div class="onb-prog" id="onb-prog"></div>
+      <div class="onb-page" data-page="0">
+        <div class="onb-icon"><i class="ti ti-rocket"></i></div>
+        <h2>Vítej v <span style="color:var(--accent)">MY ADVANTAGE</span></h2>
+        <p>Investiční asistent, který ti řekne <b>kdy koupit, kdy prodat a kolik</b>. Bez slibů — s čísly.</p>
+        <ul class="onb-bul">
+          <li><i class="ti ti-check"></i> <b>Top signál dne</b> – jeden konkrétní obchod, ne 50</li>
+          <li><i class="ti ti-check"></i> <b>Backtest 5 let</b> – ~65 % trefnost TOP signálu</li>
+          <li><i class="ti ti-check"></i> <b>Stop-loss u každého obchodu</b> – chráníme tě</li>
+        </ul>
+      </div>
+      <div class="onb-page" data-page="1" style="display:none;">
+        <div class="onb-icon"><i class="ti ti-layout-dashboard"></i></div>
+        <h2>Tvůj <span style="color:var(--accent)">Přehled</span></h2>
+        <p>Hlavní obrazovka shrnuje stav trhu, top signál dne, sektorové trendy, novinky a co se chystá tento týden.</p>
+        <ul class="onb-bul">
+          <li><i class="ti ti-pulse"></i> <b>Stav trhu</b> – VIX, výnosy, dolar, ropa, BTC</li>
+          <li><i class="ti ti-target-arrow"></i> <b>Top signál dne</b> – konkrétní akce</li>
+          <li><i class="ti ti-grid-dots"></i> <b>Sektorová heatmapa</b> – kdo dnes roste</li>
+        </ul>
+      </div>
+      <div class="onb-page" data-page="2" style="display:none;">
+        <div class="onb-icon"><i class="ti ti-zoom-scan"></i></div>
+        <h2>Hloubková <span style="color:var(--accent)">analýza</span></h2>
+        <p>Klikni na kterýkoli ticker → uvidíš <b>MA Skóre</b>, vstupní cenu, cíl, stop-loss, scénáře a kalkulačku <b>kolik koupit</b>.</p>
+        <ul class="onb-bul">
+          <li><i class="ti ti-search"></i> Vyhledej ticker nahoře (NVDA, AAPL, BTC-USD…)</li>
+          <li><i class="ti ti-arrows-shuffle"></i> Nebo zkus <b>Srovnat</b> – akcie vedle sebe</li>
+          <li><i class="ti ti-calculator"></i> Pak <b>Kolik koupit?</b> – ať neztratíš víc, než chceš</li>
+        </ul>
+      </div>
+      <div class="pl-modal-btns onb-btns">
+        <button class="btn-ghost" onclick="closeOnb()" id="onb-skip">Přeskočit</button>
+        <button class="btn-primary" onclick="nextOnb()" id="onb-next">Dál <i class="ti ti-arrow-right"></i></button>
+      </div>
+    </div>
+  </div>
 
   <!-- POSITION SIZING KALKULAČKA MODAL -->
   <div class="pl-modal" id="sizerModal">
@@ -2625,6 +2681,46 @@ async function loadResultsLive() {
     }
 }
 
+// ====================== ONBOARDING TOUR ======================
+let onbStep = 0;
+const ONB_PAGES = 3;
+function openOnbIfFirst() {
+    try {
+        if (localStorage.getItem('mystocks_onboarded')) return;
+        if (!authToken || !hasAccess()) return;
+        openOnb();
+    } catch(e) {}
+}
+function openOnb() {
+    onbStep = 0;
+    showOnbStep();
+    document.getElementById('onbModal').classList.add('open');
+}
+function showOnbStep() {
+    document.querySelectorAll('#onbModal .onb-page').forEach(p => {
+        p.style.display = (parseInt(p.dataset.page) === onbStep) ? 'block' : 'none';
+    });
+    const prog = document.getElementById('onb-prog');
+    prog.innerHTML = Array.from({length: ONB_PAGES}, (_, i) =>
+        `<span class="seg ${i <= onbStep ? 'active' : ''}"></span>`
+    ).join('');
+    const nextBtn = document.getElementById('onb-next');
+    if (onbStep >= ONB_PAGES - 1) {
+        nextBtn.innerHTML = 'Začít používat <i class="ti ti-check"></i>';
+    } else {
+        nextBtn.innerHTML = 'Dál <i class="ti ti-arrow-right"></i>';
+    }
+}
+function nextOnb() {
+    onbStep += 1;
+    if (onbStep >= ONB_PAGES) { closeOnb(); return; }
+    showOnbStep();
+}
+function closeOnb() {
+    try { localStorage.setItem('mystocks_onboarded', '1'); } catch(e) {}
+    document.getElementById('onbModal').classList.remove('open');
+}
+
 // ====================== POSITION SIZING KALKULAČKA ======================
 function openSizer(prefill) {
     if (prefill) {
@@ -3553,6 +3649,8 @@ function startMain() {
     mainStarted = true;
     // Default tab je Přehled — nahodíme widgety hned
     if (!investorSimple) loadOverview();
+    // Onboarding tour pro prvouživatele — krátká pauza, ať se UI zobrazí
+    setTimeout(openOnbIfFirst, 700);
 }
 
 // Rozhodne, zda ukázat přístupovou zeď, nebo appku. Vrací true = má přístup.
