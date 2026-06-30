@@ -744,6 +744,19 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ma-legend span {display:flex; align-items:center; gap:5px;}
 .ma-dot {width:10px; height:3px; border-radius:2px; display:inline-block;}
 @media (max-width:768px){ .port-summary{grid-template-columns:1fr;} .ps-right{border-left:none; border-top:1px solid var(--border); padding-left:0; padding-top:16px;} }
+/* ===== STAV TRHU – plovoucí okénko v rohu ===== */
+.mkt-widget {position:fixed; left:14px; bottom:12px; z-index:800; font-family:var(--fb);}
+.mkt-pill {display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border2); border-radius:20px; padding:7px 13px; cursor:pointer; font-size:12.5px; color:var(--text); box-shadow:0 6px 20px rgba(0,0,0,0.4); transition:border-color .2s;}
+.mkt-pill:hover {border-color:var(--border-accent);}
+.mkt-dot {width:8px; height:8px; border-radius:50%; flex-shrink:0; background:var(--text3);}
+.mkt-dot.open {background:var(--up); box-shadow:0 0 8px var(--up);}
+.mkt-dot.closed {background:var(--down);}
+.mkt-panel {position:absolute; left:0; bottom:calc(100% + 8px); width:258px; background:var(--surface); border:1px solid var(--border2); border-radius:14px; padding:15px 17px; box-shadow:0 14px 40px rgba(0,0,0,0.55); opacity:0; visibility:hidden; transform:translateY(6px); transition:opacity .18s, transform .18s, visibility .18s;}
+.mkt-widget:hover .mkt-panel, .mkt-widget.open .mkt-panel {opacity:1; visibility:visible; transform:none;}
+.mkt-panel .mp-title {font-family:var(--fh); font-weight:700; font-size:14px; display:flex; align-items:center; gap:8px; margin-bottom:9px; color:var(--text);}
+.mkt-panel .mp-status {font-size:13px; margin-bottom:9px; color:var(--text2);}
+.mkt-panel .mp-hours {font-size:11.5px; color:var(--text2); border-top:1px solid var(--border); padding-top:9px; line-height:1.55;}
+@media(max-width:560px){ .mkt-widget{left:10px; bottom:10px;} .mkt-panel{width:230px;} }
 </style>
 </head>
 <body>
@@ -889,7 +902,16 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·o</div>
+<div class="mkt-widget" id="mktWidget" onclick="this.classList.toggle('open')" title="Stav trhu">
+  <div class="mkt-pill"><span class="mkt-dot" id="mkt-dot"></span><span id="mkt-pill-label">Trh…</span></div>
+  <div class="mkt-panel">
+    <div class="mp-title"><span class="mkt-dot" id="mkt-dot2"></span> US trh — NYSE &amp; Nasdaq</div>
+    <div class="mp-status" id="mkt-status">…</div>
+    <div class="mp-hours"><i class="ti ti-clock" style="font-size:12px;vertical-align:-1px"></i> Obchodní hodiny <b>15:30–22:00 SELČ</b> (po–pá). Krypto se obchoduje nonstop 24/7.</div>
+  </div>
+</div>
+
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·p</div>
 
 <div class="container">
   
@@ -1503,9 +1525,37 @@ function lockedCardHTML(title, minPlan, desc) {
 // Historie AI chatu pro aktuální akcii
 let chatHistory = [];
 
+function updateMarketWidget() {
+    const el = document.getElementById('mkt-status'); if (!el) return;
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Prague', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+    const get = t => (parts.find(p => p.type === t) || {}).value;
+    const wd = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 }[get('weekday')];
+    const mins = parseInt(get('hour'), 10) * 60 + parseInt(get('minute'), 10);
+    const OPEN = 15 * 60 + 30, CLOSE = 22 * 60;
+    const weekday = wd >= 1 && wd <= 5;
+    const open = weekday && mins >= OPEN && mins < CLOSE;
+    document.querySelectorAll('.mkt-dot').forEach(d => d.className = 'mkt-dot ' + (open ? 'open' : 'closed'));
+    const hm = t => String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+    const pill = document.getElementById('mkt-pill-label');
+    if (open) {
+        if (pill) pill.textContent = 'US trh otevřen';
+        el.innerHTML = '<b style="color:var(--up)">Otevřeno</b> · zavírá ve ' + hm(CLOSE);
+    } else {
+        if (pill) pill.textContent = 'US trh zavřen';
+        let when;
+        if (weekday && mins < OPEN) when = 'dnes';
+        else if (wd === 5 && mins >= CLOSE) when = 'v pondělí';
+        else if (wd === 6) when = 'v pondělí';
+        else when = 'zítra';
+        el.innerHTML = '<b style="color:var(--down)">Zavřeno</b> · otevírá ' + when + ' v ' + hm(OPEN);
+    }
+}
+function initMarketWidget() { updateMarketWidget(); setInterval(updateMarketWidget, 30000); }
+
 document.addEventListener("DOMContentLoaded", () => {
     initResetFromUrl();
     initGate();
+    initMarketWidget();
 
     const searchInput = document.getElementById('searchInput');
     const searchDropdown = document.getElementById('searchDropdown');
