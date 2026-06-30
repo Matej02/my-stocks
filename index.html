@@ -35,6 +35,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .brand-icon {width:45px; height:45px; background:var(--accent); border-radius:13px; display:flex; align-items:center; justify-content:center; color:#1a0e00; font-size:24px;}
 .brand-text {font-family:var(--fh); font-size:26px; font-weight:800; letter-spacing:1px;}
 .brand-text span {color:var(--accent);}
+.applogo {background:url("data:image/png;base64,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") center/cover; border-radius:12px; flex-shrink:0;}
 
 /* LIVE SEARCH */
 .search-box {position:relative; width: 450px;}
@@ -312,7 +313,12 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .lp-final {text-align:center; margin-top:64px; padding:46px 24px; background:linear-gradient(160deg, var(--accent-soft), transparent 72%); border:1px solid var(--border-accent); border-radius:22px;}
 .lp-final h2 {font-family:var(--fh); font-weight:700; font-size:clamp(23px,4vw,30px); margin-bottom:22px; color:var(--text);}
 .lp-disc {color:var(--text3); font-size:12px; margin:24px auto 0; max-width:560px; line-height:1.6;}
-@media(max-width:760px){ .lp-grid4{grid-template-columns:repeat(2,1fr);} .lp-plans{grid-template-columns:1fr;} }
+.lp-faq {display:grid; grid-template-columns:repeat(2,1fr); gap:14px;}
+.lp-faq-item {background:var(--elev); border:1px solid var(--border); border-radius:14px; padding:18px 20px;}
+.lp-faq-item h4 {font-family:var(--fh); font-size:14px; font-weight:600; margin-bottom:6px; color:var(--text);}
+.lp-faq-item p {font-size:13px; color:var(--text2); line-height:1.55;}
+.lp-faq-item p a {color:var(--accent);}
+@media(max-width:760px){ .lp-grid4{grid-template-columns:repeat(2,1fr);} .lp-plans{grid-template-columns:1fr;} .lp-faq{grid-template-columns:1fr;} }
 
 /* ============ HLOUBKOVÁ ANALÝZA ============ */
 .deep-box {background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:20px;}
@@ -748,7 +754,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   <!-- NEPŘIHLÁŠENÝ: plná úvodní stránka -->
   <div id="gate-auth" class="lp">
     <div class="lp-bar">
-      <div class="gate-brand"><div class="bi"><i class="ti ti-chart-candle"></i></div><div class="bt">MY <span>STOCKS</span></div></div>
+      <div class="gate-brand"><div class="applogo" style="width:42px;height:42px"></div><div class="bt">MY <span>STOCKS</span></div></div>
       <div class="lp-bar-actions">
         <button class="lp-login" onclick="openAbout()">O nás</button>
         <button class="lp-login" onclick="openProfile()">Přihlásit</button>
@@ -814,6 +820,20 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
       </div>
     </div>
 
+    <div class="lp-sec">
+      <div class="lp-tag">Časté dotazy</div>
+      <h2 class="lp-h2">Co se nejčastěji ptáte</h2>
+      <div class="lp-faq">
+        <div class="lp-faq-item"><h4>Jste broker?</h4><p>Ne — jsme investiční asistent. Neprovádíme obchody ani nedržíme tvé peníze; dáváme ti podklady k rozhodnutí.</p></div>
+        <div class="lp-faq-item"><h4>Garantujete zisk?</h4><p>Ne. Žádný nástroj nezaručuje zisk. Ukazujeme ověřenou úspěšnost a vždy počítáme se stop-lossem — část obchodů skončí v mínusu.</p></div>
+        <div class="lp-faq-item"><h4>Jak často chodí signály?</h4><p>Jen u ověřených situací — model nenakupuje pořád. I žádný signál za den je v pořádku.</p></div>
+        <div class="lp-faq-item"><h4>Jak zruším předplatné?</h4><p>Kdykoli ve svém profilu. Přístup ti běží do konce zaplaceného období.</p></div>
+        <div class="lp-faq-item"><h4>Vrácení peněz?</h4><p>Platby jsou nevratné — po zaplacení nelze platbu vrátit zpět. Předplatné lze ale kdykoli zrušit.</p></div>
+        <div class="lp-faq-item"><h4>Podpora</h4><p>Něco nefunguje? Napiš na <a href="mailto:podpora@mystocks.cz">podpora@mystocks.cz</a> a ozveme se.</p></div>
+      </div>
+      <p style="text-align:center;margin-top:20px"><a onclick="openAbout()" style="color:var(--accent);cursor:pointer">Více o nás a jak hodnotíme →</a></p>
+    </div>
+
     <div class="lp-final">
       <h2>Připraven přestat hádat a rozhodovat se podle dat?</h2>
       <button class="lp-bigcta" onclick="openProfile()"><i class="ti ti-rocket"></i> Vytvořit účet zdarma</button>
@@ -824,7 +844,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   <!-- PŘIHLÁŠENÝ BEZ PŘEDPLATNÉHO -->
   <div id="gate-noaccess" class="lp" style="display:none;">
     <div class="lp-bar">
-      <div class="gate-brand"><div class="bi"><i class="ti ti-chart-candle"></i></div><div class="bt">MY <span>STOCKS</span></div></div>
+      <div class="gate-brand"><div class="applogo" style="width:42px;height:42px"></div><div class="bt">MY <span>STOCKS</span></div></div>
       <div class="lp-bar-actions"><button class="lp-login" onclick="openAbout()">O nás</button><button class="lp-login" onclick="openProfile()">Profil</button><button class="lp-login" onclick="doLogout()">Odhlásit se</button></div>
     </div>
     <div class="lp-hero">
@@ -869,13 +889,13 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·n</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·o</div>
 
 <div class="container">
   
   <div class="navbar">
     <div class="brand" onclick="closeDetail()">
-      <div class="brand-icon"><i class="ti ti-activity-heartbeat"></i></div>
+      <div class="applogo" style="width:45px;height:45px"></div>
       <div class="brand-text">MY <span>STOCKS</span></div>
     </div>
     
