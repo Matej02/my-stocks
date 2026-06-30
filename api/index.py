@@ -1985,6 +1985,72 @@ def _grade(v, scale):
 EARNINGS_NEAR_DAYS = 7  # výsledky do tolika dní = zvýšené riziko → snížíme jistotu
 
 
+# ─── PILÍŘ „NÁLADA & INSTITUCE" — pomocné výpočty ──────────────────────────────
+# Tady BERE verdikt z dalších zdrojů: sentiment titulků, insider obchody, revize
+# analytiků. Všechno transparentně z DAT, nic nevymyšleno. Pokud zdroj chybí,
+# pilíř má snížené pokrytí (model si automaticky přerozdělí váhy).
+
+_POS_KW = {"beat", "beats", "surge", "surges", "soar", "soars", "rally", "rallies",
+           "jump", "jumps", "upgrade", "upgrades", "outperform", "raises", "raised",
+           "boost", "boosts", "strong", "record", "growth", "rises", "wins",
+           "bullish", "exceed", "exceeds", "approval", "approved", "launch",
+           "expand", "deal", "partnership", "breakthrough", "profit", "profits"}
+_NEG_KW = {"miss", "misses", "plunge", "plunges", "drop", "drops", "fall", "falls",
+           "downgrade", "downgrades", "cut", "cuts", "warning", "warns", "weak",
+           "loss", "losses", "decline", "declines", "concern", "concerns", "lawsuit",
+           "investigation", "probe", "fraud", "delay", "delays", "resign", "resigns",
+           "bearish", "recall", "recalls", "halt", "halts", "ban", "banned", "scandal"}
+
+
+def _news_sentiment(headlines):
+    """Skóre sentimentu 0-100 z titulků (>50 pozitivní, <50 negativní).
+    Jednoduchá keyword analýza – transparentní a robustní. Vrací (score, pos, neg, n)."""
+    if not headlines:
+        return None
+    pos = neg = 0
+    for h in headlines:
+        if not h:
+            continue
+        words = {w.strip(".,!?:;()[]\"'").lower() for w in h.split()}
+        pos += len(words & _POS_KW)
+        neg += len(words & _NEG_KW)
+    total = pos + neg
+    if total == 0:
+        return (50, 0, 0, len(headlines))  # neutrální
+    raw = pos / total  # 0..1
+    score = round(20 + raw * 60)  # konzervativně 20..80, ne extrémy
+    return (max(15, min(85, score)), pos, neg, len(headlines))
+
+
+def _insider_net_score(live_signals):
+    """Z `live_signals` zjistí směr insiderů. Vrací (score 0-100, text) nebo None."""
+    if not live_signals:
+        return None
+    for ls in live_signals:
+        t = (ls.get("t") or "").lower()
+        if "insider" in t and "naku" in t:
+            return (70, "Insideři spíše nakupují")
+        if "insider" in t and "prod" in t:
+            return (30, "Insideři spíše prodávají")
+    return None
+
+
+def _analyst_trend_score(live_signals):
+    """Trend revizí doporučení (přibývá Buy?). Vrací (score 0-100, text) nebo None."""
+    if not live_signals:
+        return None
+    for ls in live_signals:
+        t = (ls.get("t") or "").lower()
+        if "zvyšují optimismus" in t:
+            return (72, "Analytici zvyšují optimismus")
+        if "snižují optimismus" in t:
+            return (32, "Analytici snižují optimismus")
+    return None
+
+
+
+
+
 def _days_to_earnings(facts):
     """Počet dní do nejbližších výsledků z facts['next_earnings'] ('YYYY-MM-DD').
     None když datum chybí. Záporné = už proběhly (stará data)."""
@@ -2078,8 +2144,35 @@ def compute_verdict_model(facts):
     elif cscore is not None:
         ascore = round(cscore)
     if ascore is not None:
-        pillars.append({"key": "analysts", "label": "Analytici", "weight": 0.25,
+        pillars.append({"key": "analysts", "label": "Analytici", "weight": 0.22,
                         "score": int(ascore), "note": cnote or ""})
+
+    # 5) NÁLADA & INSTITUCE – sentiment titulků + insider obchody + revize analytiků.
+    #    Transparentně agreguje 3 nezávislé zdroje. Pilíř má smysl, jen když máme
+    #    aspoň 1 z dílčích signálů; jinak se vůbec nepřidá a model přerozdělí váhy.
+    sub_scores = []
+    sub_notes = []
+    ns = _news_sentiment(facts.get("headlines"))
+    if ns:
+        s_sc, pos, neg, n = ns
+        sub_scores.append(s_sc)
+        if pos or neg:
+            sub_notes.append(f"titulky {pos}+/{neg}- ({n})")
+        else:
+            sub_notes.append(f"titulky neutrální ({n})")
+    ins = _insider_net_score(facts.get("live_signals"))
+    if ins:
+        sub_scores.append(ins[0]); sub_notes.append(ins[1])
+    ar = _analyst_trend_score(facts.get("live_signals"))
+    if ar:
+        sub_scores.append(ar[0]); sub_notes.append(ar[1])
+    if sub_scores:
+        sentiment_score = int(round(sum(sub_scores) / len(sub_scores)))
+        pillars.append({"key": "sentiment", "label": "Nálada & instituce", "weight": 0.13,
+                        "score": sentiment_score, "note": " · ".join(sub_notes)})
+
+    # Sníží váhy ostatních pilířů proporčně, aby suma byla pořád ~1
+    # (já volil 0.30/0.20/0.25/0.22/0.13 = 1.10; přepočet níže)
 
     # Kompozitní skóre – váhy přepočítané podle dostupných pilířů
     wsum = sum(p["weight"] for p in pillars)
