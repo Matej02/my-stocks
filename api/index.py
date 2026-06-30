@@ -2780,6 +2780,86 @@ def get_sectors():
     return jsonify({"ok": True, "cached": False, **out})
 
 
+# ---------------------------------------------------------------------------
+# SROVNÁVAČ AKCIÍ – 2–3 tickery vedle sebe (rychlá metrika)
+# ---------------------------------------------------------------------------
+def _compare_one(ticker):
+    """Rychlá metriky pro srovnání – Yahoo chart + technické skóre + Finnhub fundamenty."""
+    try:
+        daily = yahoo_chart(ticker, "1y", "1d")
+        meta = daily.get("meta", {}) or {}
+        q = ((daily.get("indicators") or {}).get("quote") or [{}])[0]
+        raw_cl = q.get("close") or []
+        raw_vl = q.get("volume") or []
+        closes, vols = [], []
+        for k, c in enumerate(raw_cl):
+            if c is not None:
+                closes.append(c)
+                v = raw_vl[k] if k < len(raw_vl) else None
+                vols.append(v if v is not None else 0)
+        if not closes:
+            return None
+        price = meta.get("regularMarketPrice") or closes[-1]
+        prev = meta.get("previousClose") or meta.get("chartPreviousClose") or (closes[-2] if len(closes) >= 2 else price)
+        chg = ((price - prev) / prev * 100.0) if prev else 0
+        out = {
+            "ticker": ticker,
+            "name": meta.get("shortName") or meta.get("longName") or ticker,
+            "currency": meta.get("currency", "USD"),
+            "price": round(price, 2),
+            "change_pct": round(chg, 2),
+        }
+        if len(closes) >= 210:
+            try:
+                ind = compute_indicators(closes, vols)
+                sc = tech_setup_score(price, ind)
+                if sc is not None:
+                    out["ma_score"] = sc
+                out["rsi"] = ind.get("rsi")
+                out["volatility_pct"] = ind.get("volatility")
+            except Exception:
+                pass
+        # Finnhub fundamenty (klíčové metriky)
+        fk = os.environ.get("FINNHUB_KEY")
+        if fk:
+            try:
+                base = "https://finnhub.io/api/v1"
+                metric = (requests.get(f"{base}/stock/metric", params={"symbol": ticker, "metric": "all", "token": fk}, timeout=5).json() or {}).get("metric", {}) or {}
+                prof = requests.get(f"{base}/stock/profile2", params={"symbol": ticker, "token": fk}, timeout=4).json() or {}
+                pt = requests.get(f"{base}/stock/price-target", params={"symbol": ticker, "token": fk}, timeout=4).json() or {}
+                out["market_cap_musd"] = prof.get("marketCapitalization")
+                out["pe"] = metric.get("peTTM")
+                out["revenue_growth_pct"] = metric.get("revenueGrowthTTMYoy")
+                out["profit_margin_pct"] = metric.get("netProfitMarginTTM")
+                out["roe_pct"] = metric.get("roeTTM")
+                out["debt_to_equity"] = metric.get("totalDebt/totalEquityQuarterly")
+                tm = pt.get("targetMean")
+                if isinstance(tm, (int, float)) and tm and price:
+                    out["target_upside_pct"] = round((tm / price - 1) * 100, 1)
+            except Exception:
+                pass
+        return out
+    except Exception:
+        return None
+
+
+@app.route("/api/compare")
+def api_compare():
+    tickers = [t.strip().upper() for t in request.args.get("tickers", "").split(",") if t.strip()][:3]
+    if not tickers:
+        return jsonify({"ok": True, "results": []})
+    cached = kv_get_json("compare:" + ",".join(tickers))
+    if cached and (time.time() - cached.get("ts", 0) < 600):
+        return jsonify({"ok": True, "cached": True, **cached})
+    res = [r for r in (_compare_one(t) for t in tickers) if r]
+    out = {"ts": int(time.time()), "results": res}
+    try:
+        kv_set_json("compare:" + ",".join(tickers), out)
+    except Exception:
+        pass
+    return jsonify({"ok": True, "cached": False, **out})
+
+
 @app.route("/api/signals")
 def get_signals():
     """Živé nákupní signály podle BACKTESTEM OVĚŘENÉHO modelu. Kešováno 1×/den."""

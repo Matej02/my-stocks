@@ -634,6 +634,25 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-opp-row .r .s {font-family:var(--fh); font-weight:700; color:var(--up);}
 .ov-opp-row .r .h {font-size:11px; color:var(--text2);}
 
+/* ============ SROVNÁVAČ AKCIÍ ============ */
+.cmp-sub {color:var(--text2); font-size:13px; margin:-4px 0 12px; line-height:1.4;}
+.cmp-inputs {display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+.cmp-input {background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:11px; color:var(--text); padding:11px 13px; font-family:var(--fb); font-size:14px; text-transform:uppercase; letter-spacing:.5px;}
+.cmp-input:focus {outline:none; border-color:var(--accent);}
+@media (max-width:680px) {.cmp-inputs {grid-template-columns:1fr;}}
+
+.cmp-table {display:grid; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+.cmp-row {display:grid; background:var(--elev); padding:12px 14px; align-items:center; font-size:13px;}
+.cmp-row.head {background:rgba(255,255,255,0.04); font-family:var(--fh); font-weight:700; text-transform:uppercase; letter-spacing:.7px; font-size:12px; color:var(--text2);}
+.cmp-row .lbl {font-weight:600; color:var(--text2); font-size:12px; text-transform:uppercase; letter-spacing:.6px;}
+.cmp-cell {font-family:var(--fh); font-weight:600; padding:0 4px;}
+.cmp-cell.best {color:var(--up);}
+.cmp-cell.worst {color:var(--down);}
+.cmp-cell.muted {color:var(--text2);}
+.cmp-ticker {display:flex; flex-direction:column; gap:2px;}
+.cmp-ticker .t {font-family:var(--fh); font-weight:800; font-size:16px; color:var(--text);}
+.cmp-ticker .n {font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
 /* ============ SEKTOROVÁ HEATMAPA ============ */
 .heatmap {display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:6px;}
 .heat-cell {position:relative; padding:14px 12px; border-radius:12px; cursor:pointer; transition:transform .12s, box-shadow .2s; min-height:84px; display:flex; flex-direction:column; justify-content:space-between; border:1px solid rgba(255,255,255,0.06); overflow:hidden;}
@@ -1088,6 +1107,24 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   <!-- TOASTY (upozornění) -->
   <div class="toast-wrap" id="toastWrap"></div>
 
+  <!-- SROVNÁVAČ AKCIÍ MODAL -->
+  <div class="pl-modal" id="compareModal">
+    <div class="pl-modal-box" style="max-width:880px;">
+      <h3><i class="ti ti-arrows-shuffle" style="color:var(--accent)"></i> Srovnat akcie</h3>
+      <div class="cmp-sub">Zadej 2 nebo 3 tickery a srovnej je vedle sebe. Vyhrávající hodnoty zvýrazníme zeleně.</div>
+      <div class="cmp-inputs" id="cmp-inputs">
+        <input type="text" class="cmp-input" placeholder="např. AAPL" maxlength="10" autocomplete="off">
+        <input type="text" class="cmp-input" placeholder="např. MSFT" maxlength="10" autocomplete="off">
+        <input type="text" class="cmp-input" placeholder="(volitelné) GOOGL" maxlength="10" autocomplete="off">
+      </div>
+      <div class="pl-modal-btns" style="margin-top:14px;">
+        <button class="btn-ghost" onclick="closeCompare()">Zavřít</button>
+        <button class="btn-primary" onclick="runCompare()"><i class="ti ti-arrows-shuffle"></i> Porovnat</button>
+      </div>
+      <div id="cmp-result" style="margin-top:18px;"></div>
+    </div>
+  </div>
+
   <!-- ALERT MODAL -->
   <div class="pl-modal" id="alertModal">
     <div class="pl-modal-box">
@@ -1493,6 +1530,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
       <div class="ps-toolbar" id="ps-toolbar">
         <span class="live-badge" id="live-badge" style="display:none;"><i class="ti ti-point-filled"></i> LIVE</span>
         <button class="tool-btn" onclick="requestNotif()"><i class="ti ti-bell"></i> Notifikace</button>
+        <button class="tool-btn" onclick="openCompare()"><i class="ti ti-arrows-shuffle"></i> Srovnat</button>
         <button class="tool-btn" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
         <button class="tool-btn" id="refresh-btn" onclick="loadWatchlist()"><i class="ti ti-refresh" id="refresh-ico"></i> Obnovit</button>
       </div>
@@ -2526,6 +2564,103 @@ async function loadResultsLive() {
         }).join('')}</div>`;
     } catch(e) {
         list.innerHTML = '<div class="ov-empty" style="color:var(--down)">Track record se nepodařilo načíst.</div>';
+    }
+}
+
+// ====================== SROVNÁVAČ AKCIÍ ======================
+function openCompare(prefill) {
+    const inputs = document.querySelectorAll('#cmp-inputs .cmp-input');
+    if (prefill && prefill.length) {
+        inputs.forEach((el, i) => { el.value = prefill[i] || ''; });
+    } else {
+        // Prefill první 2-3 z watchlistu
+        const wl = (myStocks || []).slice(0, 3);
+        inputs.forEach((el, i) => { if (!el.value) el.value = wl[i] || ''; });
+    }
+    document.getElementById('cmp-result').innerHTML = '';
+    document.getElementById('compareModal').classList.add('open');
+}
+function closeCompare() {
+    document.getElementById('compareModal').classList.remove('open');
+}
+
+const _CMP_METRICS = [
+    { key: 'price',                lbl: 'Cena',                fmt: (v, r) => v == null ? '—' : v.toFixed(2) + ' ' + (r.currency || ''),               better: 'n' },
+    { key: 'change_pct',           lbl: 'Dnes',                fmt: (v) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%',                  better: 'high' },
+    { key: 'ma_score',             lbl: 'MA skóre',            fmt: (v) => v == null ? '—' : v + ' / 100',                                              better: 'high' },
+    { key: 'pe',                   lbl: 'P/E (TTM)',           fmt: (v) => v == null ? '—' : v.toFixed(1),                                              better: 'lowpos' },
+    { key: 'market_cap_musd',      lbl: 'Tržní kap.',          fmt: (v) => v == null ? '—' : (v >= 1000 ? (v/1000).toFixed(1) + ' B$' : Math.round(v) + ' M$'), better: 'n' },
+    { key: 'revenue_growth_pct',   lbl: 'Růst tržeb YoY',      fmt: (v) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%',                  better: 'high' },
+    { key: 'profit_margin_pct',    lbl: 'Čistá marže',         fmt: (v) => v == null ? '—' : v.toFixed(1) + '%',                                        better: 'high' },
+    { key: 'roe_pct',              lbl: 'ROE',                 fmt: (v) => v == null ? '—' : v.toFixed(1) + '%',                                        better: 'high' },
+    { key: 'debt_to_equity',       lbl: 'Dluh / vlastní kap.', fmt: (v) => v == null ? '—' : v.toFixed(2),                                              better: 'low' },
+    { key: 'target_upside_pct',    lbl: 'Cíl analytiků',       fmt: (v) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%',                  better: 'high' },
+    { key: 'rsi',                  lbl: 'RSI(14)',             fmt: (v) => v == null ? '—' : v.toFixed(0),                                              better: 'n' },
+    { key: 'volatility_pct',       lbl: 'Volatilita',          fmt: (v) => v == null ? '—' : v.toFixed(1) + '%',                                        better: 'low' },
+];
+
+function _cmpRank(values, dir) {
+    const vals = values.map((v, i) => ({ i, v })).filter(x => typeof x.v === 'number' && !isNaN(x.v));
+    if (vals.length < 2) return {};
+    let best, worst;
+    if (dir === 'high') {
+        best = vals.reduce((a, b) => b.v > a.v ? b : a);
+        worst = vals.reduce((a, b) => b.v < a.v ? b : a);
+    } else if (dir === 'low') {
+        best = vals.reduce((a, b) => b.v < a.v ? b : a);
+        worst = vals.reduce((a, b) => b.v > a.v ? b : a);
+    } else if (dir === 'lowpos') {
+        const pos = vals.filter(x => x.v > 0);
+        if (pos.length < 2) return {};
+        best = pos.reduce((a, b) => b.v < a.v ? b : a);
+        worst = pos.reduce((a, b) => b.v > a.v ? b : a);
+    } else return {};
+    return best.v === worst.v ? {} : { best: best.i, worst: worst.i };
+}
+
+async function runCompare() {
+    const inputs = [...document.querySelectorAll('#cmp-inputs .cmp-input')];
+    const tickers = inputs.map(el => el.value.trim().toUpperCase()).filter(Boolean);
+    const out = document.getElementById('cmp-result');
+    if (tickers.length < 2) {
+        out.innerHTML = '<div class="ov-empty" style="color:var(--down)">Zadej alespoň 2 tickery.</div>';
+        return;
+    }
+    out.innerHTML = '<div class="ov-load"><i class="ti ti-loader spin"></i> Načítám data pro porovnání…</div>';
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/compare?tickers=${tickers.join(',')}`)).json();
+        const rows = (d && d.results) || [];
+        if (rows.length < 2) {
+            out.innerHTML = '<div class="ov-empty" style="color:var(--down)">Některý ticker se nepodařilo načíst. Zkontroluj symbol.</div>';
+            return;
+        }
+        const n = rows.length;
+        const cols = `60px repeat(${n}, 1fr)`;
+        // Hlavička
+        let html = `<div class="cmp-table">`;
+        html += `<div class="cmp-row head" style="grid-template-columns:${cols}"><div class="lbl">Ukazatel</div>` + rows.map(r => `
+            <div class="cmp-ticker">
+                <span class="t">${escapeHtml(r.ticker)}</span>
+                <span class="n">${escapeHtml(r.name || '')}</span>
+            </div>`).join('') + `</div>`;
+        // Tělo
+        _CMP_METRICS.forEach(m => {
+            const values = rows.map(r => r[m.key]);
+            const rank = _cmpRank(values, m.better);
+            html += `<div class="cmp-row" style="grid-template-columns:${cols}"><div class="lbl">${m.lbl}</div>`;
+            values.forEach((v, i) => {
+                let cls = 'cmp-cell';
+                if (rank.best === i) cls += ' best';
+                else if (rank.worst === i) cls += ' worst';
+                else if (v == null) cls += ' muted';
+                html += `<div class="${cls}">${m.fmt(v, rows[i])}</div>`;
+            });
+            html += `</div>`;
+        });
+        html += `</div>`;
+        out.innerHTML = html;
+    } catch (e) {
+        out.innerHTML = '<div class="ov-empty" style="color:var(--down)">Srovnání se nepodařilo načíst.</div>';
     }
 }
 
