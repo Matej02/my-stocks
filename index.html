@@ -638,6 +638,15 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-opp-row .r .s {font-family:var(--fh); font-weight:700; color:var(--up);}
 .ov-opp-row .r .h {font-size:11px; color:var(--text2);}
 
+/* ============ WATCHLIST SKUPINY (TAGY) ============ */
+.wl-tags {display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;}
+.wl-chip {background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text2); padding:6px 12px; border-radius:999px; cursor:pointer; font-size:12px; font-weight:600; font-family:var(--fb); transition:border-color .2s, color .2s;}
+.wl-chip:hover {border-color:var(--border-accent); color:var(--text);}
+.wl-chip.active {background:var(--accent-soft); border-color:var(--accent); color:var(--accent);}
+.sc-tag {font-size:11px; font-weight:600; padding:3px 8px; border-radius:999px; background:rgba(255,122,0,0.13); color:var(--accent); border:1px solid var(--border-accent); cursor:pointer; white-space:nowrap; transition:opacity .2s;}
+.sc-tag.empty {background:transparent; color:var(--text2); border:1px dashed var(--border); opacity:.55;}
+.sc-tag:hover {opacity:1;}
+
 /* ============ ONBOARDING TOUR ============ */
 .onb-box {max-width:520px; text-align:center; padding:30px 28px;}
 .onb-prog {display:flex; gap:6px; justify-content:center; margin-bottom:18px;}
@@ -1680,6 +1689,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           <option value="price_desc">Řadit: nejdražší</option>
         </select>
       </div>
+      <div class="wl-tags" id="wl-tags"></div>
       <div class="grid-watchlist" id="watch-grid"></div>
       <div id="watch-empty" class="port-empty" style="display:none;">Zatím nic nesleduješ. Najdi akcii a přidej ji tlačítkem „Sledovat" v detailu.</div>
     </div><!-- /section-portfolio -->
@@ -3934,13 +3944,15 @@ function stockCardHTML(s) {
     const isUp = s.change_pct >= 0;
     const hasAlert = myAlerts.some(a => a.ticker === s.ticker);
     const bell = hasAlert ? '<i class="ti ti-bell-ringing" style="color:var(--accent); font-size:14px;"></i>' : '';
+    const tag = (myTags && myTags[s.ticker]) || '';
+    const tagChip = `<span class="sc-tag${tag ? '' : ' empty'}" onclick="event.stopPropagation();editTag('${s.ticker}')">${tag ? '#' + escapeHtml(tag) : '+ skupina'}</span>`;
     return `<div class="stock-card" onclick="loadStockDetail('${s.ticker}')">
         <div class="sc-head">
             <div style="min-width:0">
                 <div class="sc-name">${escapeHtml(niceName(s.ticker, s.name))}</div>
                 <div class="sc-sub">${s.ticker}</div>
             </div>
-            ${bell}
+            <div style="display:flex; align-items:center; gap:8px;">${tagChip}${bell}</div>
         </div>
         <div class="sc-foot">
             <div class="sc-price">${s.price.toFixed(s.price < 10 ? 3 : 2)} <span>${s.currency}</span></div>
@@ -3969,8 +3981,36 @@ async function loadExitSignals() {
     } catch (e) { box.style.display = 'none'; }
 }
 
+let myTags = JSON.parse(localStorage.getItem('mystocks_tags') || '{}');
+let activeTag = '';
+function editTag(ticker) {
+    const cur = myTags[ticker] || '';
+    const v = prompt('Skupina pro ' + ticker + ' (např. „AI", „Dividendy", „Růst"). Nech prázdné a smaž skupinu.', cur);
+    if (v === null) return;
+    const clean = v.trim().replace(/[#,;\n]/g, '').slice(0, 20);
+    if (clean) myTags[ticker] = clean; else delete myTags[ticker];
+    localStorage.setItem('mystocks_tags', JSON.stringify(myTags));
+    renderWatchCards(lastWatchlistData);
+}
+function setActiveTag(t) {
+    activeTag = t || '';
+    renderWatchCards(lastWatchlistData);
+}
+
+function renderWatchTagsBar() {
+    const bar = document.getElementById('wl-tags');
+    if (!bar) return;
+    const tags = [...new Set(Object.values(myTags || {}).filter(Boolean))].sort();
+    if (!tags.length) { bar.innerHTML = ''; return; }
+    const chip = (k, label) => `<button class="wl-chip${activeTag === k ? ' active' : ''}" onclick="setActiveTag('${k.replace(/'/g,"\\'")}')">${escapeHtml(label)}</button>`;
+    bar.innerHTML = chip('', '🌐 Vše') + tags.map(t => chip(t, '#' + t)).join('');
+}
+
 function renderWatchCards(results) {
     results = Array.isArray(results) ? results.slice() : [];
+    if (activeTag) {
+        results = results.filter(r => (myTags[r.ticker] || '') === activeTag);
+    }
     const sort = (document.getElementById('watch-sort') || {}).value || 'change_desc';
     const cmp = {
         change_desc: (a, b) => (b.change_pct ?? 0) - (a.change_pct ?? 0),
@@ -3983,6 +4023,7 @@ function renderWatchCards(results) {
     watchGrid.innerHTML = results.map(stockCardHTML).join('');
     document.getElementById('watch-empty').style.display = results.length ? 'none' : 'block';
     renderPortfolioSummary(results);
+    renderWatchTagsBar();
 }
 
 function renderPortfolioSummary(results) {
