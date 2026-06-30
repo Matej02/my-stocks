@@ -1329,6 +1329,14 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           <span style="font-size:12px; color:var(--text2);">jen to podstatné — co koupit teď</span>
         </div>
 
+        <div class="level-row" id="risk-row">
+          <span class="level-lbl"><i class="ti ti-shield-half"></i> Tolerance rizika:</span>
+          <button class="level-btn" id="risk-conservative" onclick="setRisk('conservative')">Konzervativní</button>
+          <button class="level-btn" id="risk-balanced" onclick="setRisk('balanced')">Vyvážená</button>
+          <button class="level-btn" id="risk-aggressive" onclick="setRisk('aggressive')">Agresivní</button>
+        </div>
+        <p class="auth-hint" id="risk-hint" style="text-align:left; margin:0 0 8px;"></p>
+
         <div class="level-row" id="notif-row" style="display:none;">
           <span class="level-lbl"><i class="ti ti-mail"></i> Ranní souhrn e-mailem:</span>
           <label class="switch"><input type="checkbox" id="notif-morning" onchange="saveNotif()"><span class="slider"></span></label>
@@ -2932,6 +2940,7 @@ function renderProfileView() {
     authView.style.display = 'none';
     pfView.style.display = 'block';
     renderLevelButtons();
+    renderRiskButtons();
     const st = document.getElementById('simple-toggle'); if (st) st.checked = investorSimple;
 
     // Nastavení (úroveň investora, zjednodušený režim, ranní souhrn) ukaž jen
@@ -3154,7 +3163,43 @@ const RISK_DESC = {
 function setRisk(r) {
     investorRisk = r;
     localStorage.setItem('mystocks_risk', r);
+    renderRiskButtons();
     renderStarter();
+    // Při změně profilu znovu načti opportunities/signals (frontend filtruje)
+    if (typeof renderOpps === 'function' && oppData && oppData.length) renderOpps();
+    if (typeof signalsLoaded !== 'undefined' && signalsLoaded) loadSignals(true);
+    showToast('Tolerance rizika: ' + ({conservative:'Konzervativní', balanced:'Vyvážená', aggressive:'Agresivní'})[r], 'up', 'ti-shield-half');
+}
+
+function renderRiskButtons() {
+    ['conservative','balanced','aggressive'].forEach(k => {
+        const b = document.getElementById('risk-' + k);
+        if (b) b.classList.toggle('active', investorRisk === k);
+    });
+    const hint = document.getElementById('risk-hint');
+    if (hint) hint.textContent = ({
+        conservative: 'Skener vyfiltruje vysokou volatilitu a malé firmy. Jen zavedené, stabilní tituly.',
+        balanced: 'Standardní mix bez agresivních spekulací. Doporučujeme většině uživatelů.',
+        aggressive: 'Bez filtru — uvidíš i růstové small-caps s vyšší volatilitou a vyšším potenciálem.',
+    })[investorRisk] || '';
+}
+
+// Filtr podle rizikového profilu (frontend) – vrací true, pokud titul projde
+function riskFilterPass(o) {
+    if (investorRisk === 'aggressive' || !investorRisk) return true;
+    const vol = o.volatility_pct;
+    const mcap = o.market_cap;
+    if (investorRisk === 'conservative') {
+        if (typeof vol === 'number' && vol > 35) return false;
+        if (typeof mcap === 'number' && mcap < 10e9) return false;  // < 10 mld $
+        return true;
+    }
+    if (investorRisk === 'balanced') {
+        if (typeof vol === 'number' && vol > 55) return false;
+        if (typeof mcap === 'number' && mcap < 2e9) return false;   // < 2 mld $
+        return true;
+    }
+    return true;
 }
 
 // ===== Notifikace (ranní souhrn e-mailem) =====
@@ -3753,8 +3798,12 @@ async function loadSignals(force) {
 
 function renderSignals(list) {
     const grid = document.getElementById('signals-grid');
+    const beforeN = list.length;
+    list = (list || []).filter(o => riskFilterPass(o));
+    const filteredOut = beforeN - list.length;
     if (!list.length) {
-        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Dnes žádný titul nesplňuje nákupní signál. To je v pořádku — model nakupuje jen ověřené situace, ne pořád. Mrkni sem zítra.</div>`;
+        const extra = filteredOut > 0 ? ` (${filteredOut} ${filteredOut === 1 ? 'titul vyfiltrován' : 'titulů vyfiltrováno'} dle tvého rizikového profilu)` : '';
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Dnes žádný titul nesplňuje nákupní signál${extra}. To je v pořádku — model nakupuje jen ověřené situace, ne pořád. Mrkni sem zítra.</div>`;
         return;
     }
     grid.innerHTML = list.map((o, i) => {
@@ -3815,9 +3864,12 @@ function tierClass(tier) {
 
 function renderOpportunities() {
     const grid = document.getElementById('opp-grid');
-    const list = oppData.slice();
+    const all = oppData.slice();
+    const list = all.filter(o => riskFilterPass(o));
+    const filteredOut = all.length - list.length;
     if(!list.length) {
-        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Žádné příležitosti k zobrazení. Zkus jiný filtr nebo Skenovat.</div>`;
+        const extra = filteredOut > 0 ? ` Tvůj rizikový profil ${filteredOut} titulů vyfiltroval — zkus „Vyvážená/Agresivní" v profilu.` : '';
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Žádné příležitosti k zobrazení.${extra} Zkus jiný filtr nebo Skenovat.</div>`;
         return;
     }
 
