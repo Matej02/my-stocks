@@ -2609,6 +2609,137 @@ def _scan_signals():
             "updated": datetime.now(timezone.utc).strftime("%H:%M UTC"), "date": _today()}
 
 
+# ---------------------------------------------------------------------------
+# MAKRO SNÍMEK – stav trhu na první pohled (VIX, US10Y, DXY, ropa, BTC)
+# ---------------------------------------------------------------------------
+_MACRO_TICKERS = [
+    # (yahoo_ticker, label, unit, regime_low, regime_high, lower_is_calm)
+    # lower_is_calm=True -> nízká hodnota = "klid" (zelená), vysoká = "stres" (červená)
+    ("^VIX",      "VIX",     "",   15,  25,  True),   # strach na akciích
+    ("^TNX",      "US10Y",   "%",  3.5, 4.7, True),   # 10letý vládní výnos
+    ("DX-Y.NYB",  "DXY",     "",   100, 106, True),   # americký dolar
+    ("CL=F",      "Ropa",    "$",  65,  85,  False),  # neutrální (kontext)
+    ("BTC-USD",   "Bitcoin", "$",  60000, 100000, False),  # neutrální
+]
+
+def _fetch_macro_one(ticker):
+    """Jeden makro instrument – cena + denní změna."""
+    try:
+        d = yahoo_chart(ticker, "5d", "1d")
+        meta = d.get("meta", {}) or {}
+        closes = [c for c in (((d.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []) if c is not None]
+        if not closes:
+            return None
+        price = meta.get("regularMarketPrice") or closes[-1]
+        prev = meta.get("chartPreviousClose") or (closes[-2] if len(closes) >= 2 else price)
+        chg_pct = ((price - prev) / prev * 100.0) if prev else 0.0
+        return {"price": float(price), "chg_pct": round(chg_pct, 2)}
+    except Exception:
+        return None
+
+
+def _macro_regime(value, low, high, lower_is_calm):
+    """Vrátí 'calm' / 'neutral' / 'stress' podle režimu."""
+    if value is None:
+        return "neutral"
+    if lower_is_calm:
+        if value <= low: return "calm"
+        if value >= high: return "stress"
+        return "neutral"
+    else:
+        # Pro „neutrální" instrumenty (ropa, BTC) jen značíme extrémy
+        if value <= low: return "low"
+        if value >= high: return "high"
+        return "mid"
+
+
+@app.route("/api/macro")
+def get_macro():
+    """Makro snímek – kešováno na 30 minut."""
+    cached = kv_get_json("macro:snapshot")
+    if cached and (time.time() - cached.get("ts", 0) < 1800):
+        return jsonify({"ok": True, "cached": True, **cached})
+    items = []
+    for (tk, label, unit, lo, hi, low_calm) in _MACRO_TICKERS:
+        d = _fetch_macro_one(tk)
+        if not d:
+            continue
+        items.append({
+            "ticker": tk, "label": label, "unit": unit,
+            "price": d["price"], "chg_pct": d["chg_pct"],
+            "regime": _macro_regime(d["price"], lo, hi, low_calm),
+        })
+    out = {"ts": int(time.time()), "items": items,
+           "updated": datetime.now(timezone.utc).strftime("%H:%M UTC")}
+    try:
+        kv_set_json("macro:snapshot", out)
+    except Exception:
+        pass
+    return jsonify({"ok": True, "cached": False, **out})
+
+
+# ---------------------------------------------------------------------------
+# KALENDÁŘ UDÁLOSTÍ – earnings z Finnhubu pro watchlist + makro presety
+# ---------------------------------------------------------------------------
+def _macro_events_window(days=10):
+    """Statické přibližné US makro události (CPI/FOMC/NFP/PPI/Retail/Jobless).
+    Vrací jen události spadající do okna [dnes, dnes+days].
+    Posloupnost: měsíční CPI cca 12., PPI cca 13., Retail cca 16., FOMC 8×/rok,
+    NFP první pátek v měsíci, Jobless každý čtvrtek."""
+    today = datetime.now(timezone.utc).date()
+    end = today + timedelta(days=days)
+    out = []
+    cur = today
+    while cur <= end:
+        # Jobless claims – každý čtvrtek
+        if cur.weekday() == 3:
+            out.append({"date": cur.strftime("%Y-%m-%d"), "name": "Jobless Claims (týdenní)", "kind": "macro", "weight": "low"})
+        # NFP – první pátek v měsíci
+        if cur.weekday() == 4 and cur.day <= 7:
+            out.append({"date": cur.strftime("%Y-%m-%d"), "name": "NFP – zaměstnanost USA", "kind": "macro", "weight": "high"})
+        # CPI cca 10.-13., PPI cca 11.-14., Retail Sales cca 15.-17.
+        if cur.day == 12 and cur.weekday() < 5:
+            out.append({"date": cur.strftime("%Y-%m-%d"), "name": "US CPI – inflace", "kind": "macro", "weight": "high"})
+        if cur.day == 13 and cur.weekday() < 5:
+            out.append({"date": cur.strftime("%Y-%m-%d"), "name": "US PPI – ceny výrobců", "kind": "macro", "weight": "mid"})
+        if cur.day == 16 and cur.weekday() < 5:
+            out.append({"date": cur.strftime("%Y-%m-%d"), "name": "Retail Sales", "kind": "macro", "weight": "mid"})
+        cur += timedelta(days=1)
+    return out
+
+
+@app.route("/api/calendar")
+def get_calendar():
+    """Vrátí earnings z Finnhubu pro daný seznam tickerů + makro presety."""
+    tickers_param = request.args.get("tickers", "").upper()
+    days = max(1, min(int(request.args.get("days", "10") or 10), 30))
+    tickers = [t.strip() for t in tickers_param.split(",") if t.strip()][:30]
+    today = datetime.now(timezone.utc).date()
+    end = today + timedelta(days=days)
+    today_s = today.strftime("%Y-%m-%d")
+    end_s = end.strftime("%Y-%m-%d")
+    fk = os.environ.get("FINNHUB_KEY")
+    items = []
+    if fk and tickers:
+        for t in tickers:
+            try:
+                cal = requests.get("https://finnhub.io/api/v1/calendar/earnings",
+                                   params={"from": today_s, "to": end_s, "symbol": t, "token": fk},
+                                   timeout=5).json() or {}
+                for e in (cal.get("earningsCalendar") or [])[:1]:
+                    d = e.get("date")
+                    if not d or d < today_s or d > end_s:
+                        continue
+                    items.append({"date": d, "ticker": t, "name": t,
+                                  "kind": "earnings", "hour": e.get("hour", "")})
+            except Exception:
+                continue
+    items += _macro_events_window(days=days)
+    items.sort(key=lambda x: (x["date"], x.get("kind") != "earnings"))
+    return jsonify({"ok": True, "items": items[:20],
+                    "updated": datetime.now(timezone.utc).strftime("%H:%M UTC")})
+
+
 @app.route("/api/signals")
 def get_signals():
     """Živé nákupní signály podle BACKTESTEM OVĚŘENÉHO modelu. Kešováno 1×/den."""
