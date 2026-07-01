@@ -4103,10 +4103,15 @@ function detailTab(name) {
 // isNew = true → čerstvé otevření akcie (resetuj analýzu, chat, načti zprávy/analytiky).
 // isNew = false → jen lehké překreslení (změna období grafu, přepnutí sledování) –
 //                 analýza, chat i otevřená záložka zůstanou zachované.
+let _dashScrollY = 0;
 async function loadStockDetail(ticker, isNew = true) {
+    // Uložit pozici scrollu v dashboardu jen při reálném otevření (ne při rerender po přidání do sledování)
+    if (isNew) _dashScrollY = window.scrollY || window.pageYOffset || 0;
     document.getElementById('dashboard').style.display = 'none';
     const detail = document.getElementById('detail-view');
     detail.style.display = 'block';
+    // Skok nahoru bez animace — jako by uživatel navigoval na novou stránku
+    if (isNew) window.scrollTo(0, 0);
     if (isNew) detailTab('overview');
 
     document.getElementById('d-ticker').innerHTML = `<i class="ti ti-loader spin"></i>`;
@@ -4349,6 +4354,8 @@ function closeDetail() {
     document.getElementById('dashboard').style.display = 'block';
     document.getElementById('searchInput').value = '';
     document.getElementById('period-perf-badge').style.display = 'none';
+    // Vrátit uživatele na původní pozici v dashboardu (žádné poskakování)
+    requestAnimationFrame(() => window.scrollTo(0, _dashScrollY || 0));
     
     // Reset grafu — 6M je index 4 (1D, 1T, 1M, 3M, 6M, 1Y, MAX)
     chartType = 'area'; chartPeriod = '6mo'; showMA = false;
