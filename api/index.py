@@ -3154,6 +3154,111 @@ def _ticker_synonyms(ticker):
     return list(synonyms)
 
 
+# ---------------------------------------------------------------------------
+# SJEDNOCENÝ NEWS FEED – Yahoo + všechny RSS zdroje sloučené do jednoho seznamu
+# Legální: každá položka má odkaz zpět na originál (fair use, jako Google News).
+# ---------------------------------------------------------------------------
+def _source_domain(url):
+    """Vytáhne doménu z URL pro decentní atribuci ('patria.cz', 'fool.com'...)."""
+    if not url: return ""
+    try:
+        from urllib.parse import urlparse
+        h = urlparse(url).hostname or ""
+        h = h.lower()
+        if h.startswith("www."): h = h[4:]
+        if h.startswith("feeds."): h = h[6:]
+        return h
+    except Exception:
+        return ""
+
+
+def _parse_rss_time(pub):
+    """Best-effort čas pubDate → unix timestamp; None při neúspěchu."""
+    if not pub: return None
+    try:
+        from email.utils import parsedate_to_datetime
+        dt = parsedate_to_datetime(pub)
+        if dt is not None:
+            return int(dt.timestamp())
+    except Exception:
+        pass
+    # ISO8601
+    try:
+        s = pub.strip().replace("Z", "+00:00")
+        return int(datetime.fromisoformat(s).timestamp())
+    except Exception:
+        pass
+    return None
+
+
+@app.route("/api/news-feed")
+def api_news_feed():
+    """Sjednocený feed: Yahoo (per-ticker) + RSS zdroje. Filtr podle tickeru,
+    když je zadaný. Vrací jednotný tvar {title, link, source, source_domain, ts}."""
+    ticker = (request.args.get("ticker") or "").upper()
+    limit = max(5, min(40, int(request.args.get("limit", "25") or 25)))
+    items = []
+
+    # 1) Yahoo News (jen když je ticker) – nejrelevantnější k dané akci
+    if ticker:
+        try:
+            r = requests.get(f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(ticker)}&quotesCount=0&newsCount=12",
+                             headers=HEADERS, timeout=6)
+            data = r.json() or {}
+            for n in (data.get("news") or [])[:12]:
+                if not n.get("title"):
+                    continue
+                items.append({
+                    "title": n.get("title"),
+                    "link": n.get("link") or "",
+                    "source": n.get("publisher") or "Yahoo Finance",
+                    "source_domain": _source_domain(n.get("link") or "") or "finance.yahoo.com",
+                    "ts": n.get("providerPublishTime") or None,
+                })
+        except Exception:
+            pass
+
+    # 2) Všechny RSS zdroje (filtrované na ticker synonyma, když je zadaný)
+    syn = _ticker_synonyms(ticker) if ticker else []
+    for key in _RSS_SOURCES.keys():
+        try:
+            rss = _fetch_rss(key)
+        except Exception:
+            continue
+        for n in rss:
+            if syn:
+                hay = ((n.get("title") or "") + " " + (n.get("summary") or "")).lower()
+                if not any(s in hay for s in syn):
+                    continue
+            items.append({
+                "title": n.get("title"),
+                "link": n.get("link") or "",
+                "source": n.get("source") or _RSS_SOURCES[key]["label"],
+                "source_domain": _source_domain(n.get("link") or ""),
+                "ts": _parse_rss_time(n.get("pub_date")),
+            })
+
+    # Deduplikace podle URL/titulku
+    seen = set()
+    dedup = []
+    for it in items:
+        key = (it.get("link") or "") + "|" + (it.get("title") or "")
+        if key in seen:
+            continue
+        seen.add(key)
+        dedup.append(it)
+
+    # Řazení: nejnovější první; položky bez data na konec
+    now = int(time.time())
+    dedup.sort(key=lambda x: -(x.get("ts") or 0))
+    return jsonify({
+        "ok": True,
+        "count": len(dedup),
+        "items": dedup[:limit],
+        "updated": datetime.now(timezone.utc).strftime("%H:%M UTC"),
+    })
+
+
 @app.route("/api/rss")
 def api_rss():
     """Vrací seznam novinek z externích zdrojů. src=patria|fool|all, ticker= filtr."""

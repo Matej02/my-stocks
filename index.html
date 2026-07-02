@@ -692,6 +692,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .news-src:hover {border-color:var(--border-accent); color:var(--text);}
 .news-src.active {background:var(--accent-soft); border-color:var(--accent); color:var(--accent);}
 .news-fine {color:var(--text2); font-size:11px; margin-top:12px; line-height:1.5;}
+.news-src-tag {display:inline-block; font-size:10.5px; color:var(--text2); background:rgba(255,255,255,0.04); border:1px solid var(--border); padding:2px 8px; border-radius:6px; margin-left:8px; letter-spacing:.2px;}
 .sec-list {display:flex; flex-direction:column; gap:6px;}
 .sec-row {display:grid; grid-template-columns:88px 1fr auto; gap:14px; align-items:center; padding:11px 14px; background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:12px; text-decoration:none; color:var(--text); cursor:pointer; transition:border-color .2s;}
 .sec-row:hover {border-color:var(--border-accent);}
@@ -1972,20 +1973,13 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
         <!-- ZPRÁVY -->
         <div class="dpane" id="dpane-news" style="display:none;">
           <div class="news-src-tabs" id="news-src-tabs">
-            <button class="news-src active" data-src="yahoo" onclick="setNewsSrc('yahoo')">🌐 Yahoo</button>
-            <button class="news-src" data-src="patria" onclick="setNewsSrc('patria')">🇨🇿 Patria</button>
-            <button class="news-src" data-src="kurzy" onclick="setNewsSrc('kurzy')">🇨🇿 Kurzy</button>
-            <button class="news-src" data-src="fool" onclick="setNewsSrc('fool')">🇺🇸 Motley Fool</button>
-            <button class="news-src" data-src="cnbc" onclick="setNewsSrc('cnbc')">🇺🇸 CNBC</button>
-            <button class="news-src" data-src="seekingalpha" onclick="setNewsSrc('seekingalpha')">🇺🇸 SeekingAlpha</button>
-            <button class="news-src" data-src="marketwatch" onclick="setNewsSrc('marketwatch')">🇺🇸 MarketWatch</button>
-            <button class="news-src" data-src="reuters" onclick="setNewsSrc('reuters')">🌐 Reuters</button>
+            <button class="news-src active" data-src="all" onclick="setNewsSrc('all')">🌟 Vše</button>
             <button class="news-src" data-src="sec" onclick="setNewsSrc('sec')">📄 SEC podání</button>
           </div>
           <div class="news-box" id="news-box">
             <div id="news-list"><div style="color:var(--text2); font-size:13px;"><i class="ti ti-loader spin"></i> Načítám zprávy...</div></div>
           </div>
-          <div class="news-fine">Diverzita zdrojů: Yahoo (agregát), Patria (CZ redakce, silná u ČEZ/KOMB), Motley Fool (US teze), SEC (oficiální filings). Novinky se aktualizují ~30 min.</div>
+          <div class="news-fine">Sjednocený feed z <b>9 zdrojů</b>: Yahoo, Patria, Kurzy.cz, Motley Fool, CNBC, Seeking Alpha, MarketWatch, Reuters a oficiální SEC podání. Klik na titulek otevře originál u zdroje. Aktualizace ~30 min.</div>
         </div>
 
         <!-- AI CHAT -->
@@ -2686,18 +2680,20 @@ async function fetchOverviewNews() {
     const box = document.getElementById('ov-news');
     if (!box) return;
     try {
-        const d = await (await fetch(`${BACKEND_URL}/api/market-news`)).json();
-        const list = (d && d.results) || [];
+        // Sjednocený feed napříč všemi zdroji (Yahoo + RSS)
+        const d = await (await fetch(`${BACKEND_URL}/api/news-feed?limit=8`)).json();
+        const list = (d && d.items) || [];
         if (!list.length) {
             box.innerHTML = '<div class="ov-empty">Žádné aktuální novinky.</div>';
             return;
         }
-        box.innerHTML = list.slice(0, 5).map(n => {
-            const when = formatNewsTime(n.time) || '';
+        box.innerHTML = list.slice(0, 6).map(n => {
+            const when = n.ts ? formatNewsTime(n.ts) : '';
             const link = n.link ? `onclick="window.open('${n.link.replace(/'/g, "\\'")}', '_blank', 'noopener')"` : '';
+            const dom = n.source_domain ? `<span class="news-src-tag">z: ${escapeHtml(n.source_domain)}</span>` : '';
             return `<div class="ov-news-row" ${link}>
                 <div class="meta">${when}</div>
-                <div class="txt">${escapeHtml(n.title)}</div>
+                <div class="txt">${escapeHtml(n.title)}${dom}</div>
             </div>`;
         }).join('');
     } catch(e) {
@@ -5207,13 +5203,12 @@ async function loadTopHolders(ticker) {
 }
 
 let _currentNewsTicker = null;
-let _currentNewsSrc = 'yahoo';
+let _currentNewsSrc = 'all';
 async function loadNews(ticker) {
     _currentNewsTicker = ticker;
-    _currentNewsSrc = 'yahoo';
-    // Reset zdrojových tabů
-    document.querySelectorAll('.news-src').forEach(b => b.classList.toggle('active', b.dataset.src === 'yahoo'));
-    return loadNewsFromSource('yahoo');
+    _currentNewsSrc = 'all';
+    document.querySelectorAll('.news-src').forEach(b => b.classList.toggle('active', b.dataset.src === 'all'));
+    return loadNewsFromSource('all');
 }
 function setNewsSrc(src) {
     _currentNewsSrc = src;
@@ -5228,7 +5223,20 @@ async function loadNewsFromSource(src) {
     if (!ticker) return;
     list.innerHTML = '<div style="color:var(--text2); font-size:13px;"><i class="ti ti-loader spin"></i> Načítám zprávy...</div>';
     try {
-        if (src === 'yahoo') {
+        if (src === 'all') {
+            const d = await (await fetch(`${BACKEND_URL}/api/news-feed?ticker=${encodeURIComponent(ticker)}&limit=30`)).json();
+            const items = (d && d.items) || [];
+            if (!items.length) { list.innerHTML = '<div style="color:var(--text2); font-size:13px;">Nenašli jsme žádné aktuální zprávy k této akcii.</div>'; return; }
+            list.innerHTML = items.map(n => {
+                const when = n.ts ? formatNewsTime(n.ts) : '';
+                const safe = n.link ? `href="${n.link}" target="_blank" rel="noopener noreferrer nofollow"` : '';
+                const dom = n.source_domain ? `<span class="news-src-tag">z: ${escapeHtml(n.source_domain)}</span>` : '';
+                return `<a class="news-item" ${safe}>
+                    <div class="news-title">${escapeHtml(n.title)}</div>
+                    <div class="news-meta">${when ? '<i class="ti ti-clock"></i> ' + when : ''}${dom}</div>
+                </a>`;
+            }).join('');
+        } else if (src === 'yahoo') {
             const d = await (await fetch(`${BACKEND_URL}/api/news/${encodeURIComponent(ticker)}`)).json();
             const arr = d && d.results;
             if (!arr || !arr.length) { list.innerHTML = '<div style="color:var(--text2); font-size:13px;">Žádné aktuální zprávy z Yahoo.</div>'; return; }
