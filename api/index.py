@@ -2926,7 +2926,7 @@ def api_compare():
 # Poskytuje: 10-K (roční), 10-Q (kvartální), 8-K (materiální události),
 # Form 4 (insider transakce). SEC vyžaduje User-Agent s kontaktem.
 # ---------------------------------------------------------------------------
-SEC_UA = os.environ.get("SEC_UA") or "MY ADVANTAGE contact@myadvantage.cz"
+SEC_UA = os.environ.get("SEC_UA") or "MY ADVANTAGE contact@myadvantage.site"
 SEC_HEADERS = {"User-Agent": SEC_UA, "Accept": "application/json"}
 
 # Popisky forem v češtině + kritičnost pro obchodní rozhodnutí
@@ -3021,11 +3021,41 @@ _RSS_SOURCES = {
         "url": "https://www.patria.cz/rss/zpravodajstvi.xml",
         "fallback": "https://www.patria.cz/rss/rss.xml",
     },
+    "kurzy": {
+        "label": "Kurzy.cz",
+        "flag": "🇨🇿",
+        "url": "https://www.kurzy.cz/rss/aktuality.xml",
+        "fallback": "https://www.kurzy.cz/rss/",
+    },
     "fool": {
         "label": "Motley Fool",
         "flag": "🇺🇸",
         "url": "https://www.fool.com/a/feeds/rss/main.aspx",
         "fallback": "https://www.fool.com/feeds/index.aspx",
+    },
+    "cnbc": {
+        "label": "CNBC",
+        "flag": "🇺🇸",
+        "url": "https://www.cnbc.com/id/10001147/device/rss/rss.html",
+        "fallback": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+    },
+    "seekingalpha": {
+        "label": "Seeking Alpha",
+        "flag": "🇺🇸",
+        "url": "https://seekingalpha.com/market_currents.xml",
+        "fallback": "https://seekingalpha.com/feed.xml",
+    },
+    "marketwatch": {
+        "label": "MarketWatch",
+        "flag": "🇺🇸",
+        "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+        "fallback": "http://feeds.marketwatch.com/marketwatch/topstories/",
+    },
+    "reuters": {
+        "label": "Reuters Business",
+        "flag": "🌐",
+        "url": "https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best",
+        "fallback": "https://www.reutersagency.com/feed/?best-topics=business-finance",
     },
 }
 
@@ -3410,7 +3440,7 @@ def ai_chat():
 # SEO STRÁNKY PER TICKER – veřejná landing page pro každou akcii
 # Google ji indexuje → organický traffic hledající "NVDA analýza" apod.
 # ---------------------------------------------------------------------------
-APP_URL = os.environ.get("APP_URL", "https://my-stocks-kappa.vercel.app").rstrip("/")
+APP_URL = os.environ.get("APP_URL", "https://myadvantage.site").rstrip("/")
 
 
 def _html_escape(s):

@@ -667,7 +667,9 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .hd-row .c.neu {background:rgba(255,255,255,0.05); color:var(--text2);}
 
 /* ============ VÍCE ZDROJŮ ZPRÁV + SEC ============ */
-.news-src-tabs {display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;}
+.news-src-tabs {display:flex; gap:6px; margin-bottom:14px; overflow-x:auto; padding-bottom:4px; scrollbar-width:thin;}
+.news-src-tabs::-webkit-scrollbar {height:4px;}
+.news-src-tabs::-webkit-scrollbar-thumb {background:var(--border-accent); border-radius:2px;}
 .news-src {background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text2); padding:8px 14px; border-radius:11px; cursor:pointer; font-size:12.5px; font-weight:600; font-family:var(--fb); transition:all .18s;}
 .news-src:hover {border-color:var(--border-accent); color:var(--text);}
 .news-src.active {background:var(--accent-soft); border-color:var(--accent); color:var(--accent);}
@@ -1098,7 +1100,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
         <div class="lp-faq-item"><h4>Jak často chodí signály?</h4><p>Jen u ověřených situací — model nenakupuje pořád. I žádný signál za den je v pořádku.</p></div>
         <div class="lp-faq-item"><h4>Jak zruším předplatné?</h4><p>Kdykoli ve svém profilu. Přístup ti běží do konce zaplaceného období.</p></div>
         <div class="lp-faq-item"><h4>Vrácení peněz?</h4><p>Platby jsou nevratné — po zaplacení nelze platbu vrátit zpět. Předplatné lze ale kdykoli zrušit.</p></div>
-        <div class="lp-faq-item"><h4>Podpora</h4><p>Něco nefunguje? Napiš na <a href="mailto:podpora@myadvantage.cz">podpora@myadvantage.cz</a> a ozveme se.</p></div>
+        <div class="lp-faq-item"><h4>Podpora</h4><p>Něco nefunguje? Napiš na <a href="mailto:podpora@myadvantage.site">podpora@myadvantage.site</a> a ozveme se.</p></div>
       </div>
       <p style="text-align:center;margin-top:20px"><a onclick="openAbout()" style="color:var(--accent);cursor:pointer">Více o nás a jak hodnotíme →</a></p>
     </div>
@@ -1465,7 +1467,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 
         <div class="method-step"><div class="ms-ico"><i class="ti ti-mail" style="color:var(--accent)"></i></div><div>
           <h4>Podpora</h4>
-          <p>Něco nefunguje nebo máš dotaz? Napiš nám na <a class="profile-cloud-link" href="mailto:podpora@myadvantage.cz">podpora@myadvantage.cz</a> a ozveme se ti co nejdřív.</p>
+          <p>Něco nefunguje nebo máš dotaz? Napiš nám na <a class="profile-cloud-link" href="mailto:podpora@myadvantage.site">podpora@myadvantage.site</a> a ozveme se ti co nejdřív.</p>
         </div></div>
 
         <div class="method-proof"><i class="ti ti-shield-check"></i> <span>Naše krédo: <b>obhajitelná čísla místo prázdných slibů.</b> Co neobstojí v ověření, do nástroje nedáváme. A jsme féroví — ani nejlepší signál není jistota, proto vždy se stop-lossem.</span></div>
@@ -1887,9 +1889,14 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
         <!-- ZPRÁVY -->
         <div class="dpane" id="dpane-news" style="display:none;">
           <div class="news-src-tabs" id="news-src-tabs">
-            <button class="news-src active" data-src="yahoo" onclick="setNewsSrc('yahoo')">🌐 Yahoo Finance</button>
+            <button class="news-src active" data-src="yahoo" onclick="setNewsSrc('yahoo')">🌐 Yahoo</button>
             <button class="news-src" data-src="patria" onclick="setNewsSrc('patria')">🇨🇿 Patria</button>
+            <button class="news-src" data-src="kurzy" onclick="setNewsSrc('kurzy')">🇨🇿 Kurzy</button>
             <button class="news-src" data-src="fool" onclick="setNewsSrc('fool')">🇺🇸 Motley Fool</button>
+            <button class="news-src" data-src="cnbc" onclick="setNewsSrc('cnbc')">🇺🇸 CNBC</button>
+            <button class="news-src" data-src="seekingalpha" onclick="setNewsSrc('seekingalpha')">🇺🇸 SeekingAlpha</button>
+            <button class="news-src" data-src="marketwatch" onclick="setNewsSrc('marketwatch')">🇺🇸 MarketWatch</button>
+            <button class="news-src" data-src="reuters" onclick="setNewsSrc('reuters')">🌐 Reuters</button>
             <button class="news-src" data-src="sec" onclick="setNewsSrc('sec')">📄 SEC podání</button>
           </div>
           <div class="news-box" id="news-box">
@@ -4982,22 +4989,22 @@ async function loadNewsFromSource(src) {
                     <div class="news-meta"><i class="ti ti-building-broadcast-tower"></i> ${escapeHtml(n.publisher || 'Zdroj')}${when ? ' • ' + when : ''}</div>
                 </a>`;
             }).join('');
-        } else if (src === 'patria' || src === 'fool') {
+        } else if (src === 'patria' || src === 'kurzy' || src === 'fool' || src === 'cnbc' || src === 'seekingalpha' || src === 'marketwatch' || src === 'reuters') {
+            const srcLabel = ({patria:'Patria', kurzy:'Kurzy.cz', fool:'Motley Fool', cnbc:'CNBC', seekingalpha:'Seeking Alpha', marketwatch:'MarketWatch', reuters:'Reuters'})[src];
             const d = await (await fetch(`${BACKEND_URL}/api/rss?src=${src}&ticker=${encodeURIComponent(ticker)}`)).json();
             let items = (d && d.items) || [];
             let filtered = items.length;
             if (!items.length) {
-                // Fallback: zkus i bez filtru na ticker
                 const d2 = await (await fetch(`${BACKEND_URL}/api/rss?src=${src}`)).json();
                 items = (d2 && d2.items) || [];
                 filtered = 0;
             }
-            if (!items.length) { list.innerHTML = `<div style="color:var(--text2); font-size:13px;">Zdroj ${src === 'patria' ? 'Patria' : 'Motley Fool'} teď nevrací nic.</div>`; return; }
+            if (!items.length) { list.innerHTML = `<div style="color:var(--text2); font-size:13px;">Zdroj ${escapeHtml(srcLabel)} teď nevrací nic.</div>`; return; }
             const preface = filtered === 0 ? `<div style="color:var(--text2); font-size:12px; margin-bottom:10px;">Přímo pro <b>${escapeHtml(ticker)}</b> nic — zobrazuji nejnovější tržní přehled.</div>` : '';
             list.innerHTML = preface + items.slice(0, 15).map(n => {
                 const when = formatRssTime(n.pub_date);
                 const safe = n.link ? `href="${n.link}" target="_blank" rel="noopener noreferrer"` : '';
-                const source = n.source || (src === 'patria' ? 'Patria' : 'Motley Fool');
+                const source = n.source || srcLabel;
                 return `<a class="news-item" ${safe}>
                     <div class="news-title">${escapeHtml(n.title)}</div>
                     <div class="news-meta"><i class="ti ti-building-broadcast-tower"></i> ${escapeHtml(source)}${when ? ' • ' + when : ''}</div>
