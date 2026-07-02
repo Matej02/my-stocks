@@ -1647,13 +1647,16 @@ def get_analyst(ticker):
     except Exception:
         pass
 
-    # Fundamenty (P/E, EPS, beta, dividenda)
+    # Fundamenty (P/E, EPS, beta, dividenda, short interest)
     try:
         m = (fh("stock/metric", {"symbol": sym, "metric": "all"}) or {}).get("metric", {}) or {}
         out["pe_ratio"] = _round(m.get("peTTM") or m.get("peBasicExclExtraTTM"), 2)
         out["eps"] = _round(m.get("epsTTM"), 2)
         out["beta"] = _round(m.get("beta"), 2)
         out["dividend_yield"] = _round(m.get("dividendYieldIndicatedAnnual"), 2)
+        # Short interest – kolik % free-float je drženo na short pozicích
+        out["short_percent_float"] = _round(m.get("shortInterestSharePercent") or m.get("shortInterestPercentageFloat"), 2)
+        out["short_ratio"] = _round(m.get("shortRatio"), 2)  # dní k pokrytí shortů
     except Exception:
         pass
 
@@ -3140,6 +3143,116 @@ def api_rss():
     items.sort(key=lambda x: x.get("pub_date") or "", reverse=True)
     return jsonify({"ok": True, "count": len(items), "items": items[:20],
                     "updated": datetime.now(timezone.utc).strftime("%H:%M UTC")})
+
+
+# ---------------------------------------------------------------------------
+# EARNINGS SURPRISE HISTORY – kolikrát firma překonala konsenzus (Finnhub free)
+# ---------------------------------------------------------------------------
+@app.route("/api/earnings/<path:ticker>")
+def api_earnings_history(ticker):
+    """Vrací poslední kvartální earnings (actual vs. estimate) + agregát beat/miss."""
+    ticker = ticker.upper()
+    ck = f"eh:{ticker}"
+    cached = kv_get_json(ck)
+    if cached and (time.time() - cached.get("ts", 0) < 24 * 3600):
+        return jsonify({"ok": True, "cached": True, **cached})
+    fk = os.environ.get("FINNHUB_KEY")
+    if not fk:
+        return jsonify({"ok": False, "error": "no_key"})
+    try:
+        r = requests.get("https://finnhub.io/api/v1/stock/earnings",
+                         params={"symbol": ticker, "limit": 12, "token": fk},
+                         timeout=6)
+        raw = r.json() or []
+    except Exception:
+        return jsonify({"ok": False, "error": "fetch"})
+    items = []
+    beats = misses = inline = 0
+    for x in (raw or [])[:8]:
+        act = x.get("actual"); est = x.get("estimate")
+        if act is None or est is None:
+            continue
+        surprise = act - est
+        pct = (surprise / abs(est) * 100.0) if est else 0
+        result = "beat" if surprise > 0 else ("miss" if surprise < 0 else "inline")
+        if result == "beat": beats += 1
+        elif result == "miss": misses += 1
+        else: inline += 1
+        items.append({
+            "period": x.get("period"),
+            "quarter": x.get("quarter"),
+            "year": x.get("year"),
+            "actual": act, "estimate": est,
+            "surprise": round(surprise, 3),
+            "surprise_pct": round(pct, 1),
+            "result": result,
+        })
+    total = beats + misses + inline
+    summary = {
+        "beat_count": beats, "miss_count": misses, "inline_count": inline,
+        "beat_rate": round(beats / total * 100.0, 1) if total else None,
+        "sample": total,
+    }
+    out = {"ts": int(time.time()), "items": items, "summary": summary,
+           "updated": datetime.now(timezone.utc).strftime("%H:%M UTC")}
+    try: kv_set_json(ck, out)
+    except Exception: pass
+    return jsonify({"ok": True, "cached": False, **out})
+
+
+# ---------------------------------------------------------------------------
+# 13F – top institucionální držitelé (SEC EDGAR quarterly filings)
+# Free, ale komplexnější parsing → agregujeme veřejné index-y společností.
+# ---------------------------------------------------------------------------
+# Vybraní top-tier správci majetku (Berkshire Hathaway, BlackRock, Vanguard, atd.)
+# Sledujeme jejich CIK a v jejich 13F kontrolujeme, zda drží daný ticker.
+_TOP_INSTITUTIONS = [
+    ("0001067983", "Berkshire Hathaway", "Warren Buffett"),
+    ("0001350694", "Bridgewater Associates", "Ray Dalio"),
+    ("0001336528", "Renaissance Technologies", "Jim Simons"),
+    ("0001745214", "Baupost Group", "Seth Klarman"),
+    ("0001603466", "Duquesne Family Office", "Stanley Druckenmiller"),
+    ("0001336528", "Renaissance Technologies", "Jim Simons"),
+    ("0001061165", "BlackRock Fund Advisors", "BlackRock"),
+    ("0000909832", "Vanguard Group", "Vanguard"),
+    ("0001077114", "State Street Corp", "State Street"),
+    ("0001709323", "Ark Invest", "Cathie Wood"),
+    ("0001167483", "Fidelity Management", "Fidelity"),
+    ("0001167483", "Fidelity Management & Research", "Fidelity"),
+]
+
+
+@app.route("/api/holders/<path:ticker>")
+def api_top_holders(ticker):
+    """Vrátí kdo z hlavních institucí drží danou akcii (best-effort z Finnhubu)."""
+    ticker = ticker.upper()
+    ck = f"holders:{ticker}"
+    cached = kv_get_json(ck)
+    if cached and (time.time() - cached.get("ts", 0) < 48 * 3600):
+        return jsonify({"ok": True, "cached": True, **cached})
+    fk = os.environ.get("FINNHUB_KEY")
+    items = []
+    if fk:
+        try:
+            # Finnhub má endpoint ownership pro top institucionální držitele
+            r = requests.get("https://finnhub.io/api/v1/stock/ownership",
+                             params={"symbol": ticker, "limit": 20, "token": fk},
+                             timeout=6).json() or {}
+            for h in (r.get("ownership") or []):
+                items.append({
+                    "name": h.get("name"),
+                    "share": h.get("share"),
+                    "change": h.get("change"),
+                    "filing_date": h.get("filingDate"),
+                    "portfolio_pct": h.get("portfolioPercent"),
+                })
+        except Exception:
+            pass
+    out = {"ts": int(time.time()), "items": items[:15],
+           "updated": datetime.now(timezone.utc).strftime("%H:%M UTC")}
+    try: kv_set_json(ck, out)
+    except Exception: pass
+    return jsonify({"ok": True, "cached": False, **out})
 
 
 @app.route("/api/sec/<path:ticker>")

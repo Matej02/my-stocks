@@ -638,6 +638,34 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-opp-row .r .s {font-family:var(--fh); font-weight:700; color:var(--up);}
 .ov-opp-row .r .h {font-size:11px; color:var(--text2);}
 
+/* ============ EARNINGS SURPRISE + INSTITUCIONÁLNÍ DRŽITELÉ ============ */
+.es-box, .hd-box {background:var(--elev); border:1px solid var(--border); border-radius:16px; padding:18px 20px; margin-top:20px;}
+.es-head {display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;}
+.es-summary {font-family:var(--fh); font-size:14px; font-weight:700; padding:6px 12px; border-radius:11px; background:rgba(255,255,255,0.04); color:var(--text2);}
+.es-summary.good {background:var(--up-glow); color:var(--up);}
+.es-summary.bad {background:var(--down-glow); color:var(--down);}
+.es-grid {display:grid; grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:8px;}
+.es-cell {background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:11px; padding:11px 10px; text-align:center; position:relative;}
+.es-cell.beat {border-left:3px solid var(--up);}
+.es-cell.miss {border-left:3px solid var(--down);}
+.es-cell.inline {border-left:3px solid var(--amber);}
+.es-cell .q {font-family:var(--fh); font-size:11px; color:var(--text2); font-weight:700; letter-spacing:.5px;}
+.es-cell .r {font-family:var(--fh); font-weight:800; font-size:16px; margin-top:4px;}
+.es-cell.beat .r {color:var(--up);}
+.es-cell.miss .r {color:var(--down);}
+.es-cell.inline .r {color:var(--amber);}
+.es-cell .a {font-size:11px; color:var(--text2); margin-top:2px;}
+.es-fine {color:var(--text2); font-size:11px; margin-top:12px; line-height:1.5;}
+
+.hd-list {display:flex; flex-direction:column; gap:6px;}
+.hd-row {display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:center; padding:10px 14px; background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:11px;}
+.hd-row .n {font-family:var(--fh); font-weight:600; font-size:14px;}
+.hd-row .p {font-family:var(--fh); font-weight:700; font-size:14px; color:var(--text);}
+.hd-row .c {font-family:var(--fh); font-weight:700; font-size:12px; padding:3px 9px; border-radius:8px;}
+.hd-row .c.up {background:var(--up-glow); color:var(--up);}
+.hd-row .c.down {background:var(--down-glow); color:var(--down);}
+.hd-row .c.neu {background:rgba(255,255,255,0.05); color:var(--text2);}
+
 /* ============ VÍCE ZDROJŮ ZPRÁV + SEC ============ */
 .news-src-tabs {display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;}
 .news-src {background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text2); padding:8px 14px; border-radius:11px; cursor:pointer; font-size:12.5px; font-weight:600; font-family:var(--fb); transition:all .18s;}
@@ -1817,6 +1845,25 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
             <div class="metric-box"><div class="metric-lbl">52W Low</div><div class="metric-val" id="d-low">--</div></div>
             <div class="metric-box"><div class="metric-lbl">Beta</div><div class="metric-val" id="d-beta">--</div></div>
             <div class="metric-box"><div class="metric-lbl">Dividenda</div><div class="metric-val" id="d-div">--</div></div>
+            <div class="metric-box" title="Kolik % free-floatu je drženo na short pozicích"><div class="metric-lbl">Short int.</div><div class="metric-val" id="d-short">--</div></div>
+            <div class="metric-box" title="Dní k pokrytí všech shortů při průměrném objemu"><div class="metric-lbl">Short ratio</div><div class="metric-val" id="d-shortr">--</div></div>
+          </div>
+
+          <!-- EARNINGS SURPRISE HISTORY -->
+          <div class="es-box" id="es-box" style="display:none;">
+            <div class="es-head">
+              <div class="signal-title" style="margin:0"><i class="ti ti-chart-arrows-vertical" style="color:var(--accent)"></i> Beat/miss track — kolikrát firma překonala odhad analytiků</div>
+              <div class="es-summary" id="es-summary"></div>
+            </div>
+            <div class="es-grid" id="es-grid"></div>
+            <div class="es-fine">Zdroj: Finnhub. Beat = firma dodala víc EPS, než analytici čekali → kvalitní management / silná operativa.</div>
+          </div>
+
+          <!-- TOP INSTITUCIONÁLNÍ DRŽITELÉ -->
+          <div class="hd-box" id="hd-box" style="display:none;">
+            <div class="signal-title" style="margin-bottom:12px;"><i class="ti ti-crown" style="color:var(--accent)"></i> Kdo drží tuto akcii — top institucionální držitelé</div>
+            <div id="hd-list"></div>
+            <div class="es-fine">Zdroj: SEC 13F filings (přes Finnhub). Kvartální data, poslední veřejný filing. Změna = přidali/ubrali.</div>
           </div>
         </div>
 
@@ -4186,6 +4233,13 @@ async function loadStockDetail(ticker, isNew = true) {
         document.getElementById('d-vol').innerText = ind.volatility != null ? ind.volatility.toFixed(1)+'%' : 'N/A';
         document.getElementById('d-beta').innerText = data.beta != null ? data.beta.toFixed(2) : 'N/A';
         document.getElementById('d-div').innerText = data.dividend_yield != null ? data.dividend_yield.toFixed(2)+'%' : '—';
+        const shortEl = document.getElementById('d-short');
+        if (shortEl) {
+            shortEl.innerText = data.short_percent_float != null ? data.short_percent_float.toFixed(2)+'%' : '—';
+            shortEl.style.color = data.short_percent_float > 20 ? 'var(--down)' : (data.short_percent_float > 10 ? 'var(--amber)' : 'var(--text)');
+        }
+        const shortREl = document.getElementById('d-shortr');
+        if (shortREl) shortREl.innerText = data.short_ratio != null ? data.short_ratio.toFixed(1)+' d' : '—';
 
         renderSignal(data);
         if (isNew) renderVerdict(data.model);
@@ -4196,6 +4250,8 @@ async function loadStockDetail(ticker, isNew = true) {
             resetChat(data.ticker);
             loadNews(data.ticker);
             loadAnalyst(data.ticker, data.price);
+            loadEarningsHistory(data.ticker);
+            loadTopHolders(data.ticker);
         }
 
         const btnWatch = document.getElementById('btn-toggle-watch');
@@ -4815,6 +4871,69 @@ async function loadAnalyst(ticker, price) {
                 (r.period ? `<div class="rec-period">Data k ${r.period} • ${total} analytiků</div>` : '');
         } else { rEl.innerHTML = ''; }
     } catch (e) { /* tiché selhání – panel zůstane skrytý */ }
+}
+
+async function loadEarningsHistory(ticker) {
+    const box = document.getElementById('es-box');
+    const grid = document.getElementById('es-grid');
+    const sum = document.getElementById('es-summary');
+    if (!box) return;
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/earnings/${encodeURIComponent(ticker)}`)).json();
+        const items = (d && d.items) || [];
+        const s = (d && d.summary) || {};
+        if (!items.length) { box.style.display = 'none'; return; }
+        box.style.display = 'block';
+        // Souhrn: beat rate
+        const br = s.beat_rate;
+        if (br != null) {
+            const cls = br >= 75 ? 'good' : (br < 50 ? 'bad' : '');
+            sum.className = 'es-summary ' + cls;
+            sum.textContent = `${s.beat_count}/${s.sample} beat · ${br}%`;
+        } else {
+            sum.textContent = '';
+        }
+        grid.innerHTML = items.slice().reverse().map(x => {
+            const q = x.year && x.quarter ? `Q${x.quarter}/${String(x.year).slice(2)}` : (x.period || '');
+            const sign = x.surprise_pct >= 0 ? '+' : '';
+            return `<div class="es-cell ${x.result}" title="Actual: ${x.actual} | Est: ${x.estimate}">
+                <div class="q">${escapeHtml(q)}</div>
+                <div class="r">${sign}${x.surprise_pct}%</div>
+                <div class="a">${x.result === 'beat' ? 'beat' : x.result === 'miss' ? 'miss' : 'na odhad'}</div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        box.style.display = 'none';
+    }
+}
+
+async function loadTopHolders(ticker) {
+    const box = document.getElementById('hd-box');
+    const list = document.getElementById('hd-list');
+    if (!box) return;
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/holders/${encodeURIComponent(ticker)}`)).json();
+        const items = (d && d.items) || [];
+        if (!items.length) { box.style.display = 'none'; return; }
+        box.style.display = 'block';
+        list.innerHTML = items.slice(0, 10).map(h => {
+            const share = h.share ? h.share.toLocaleString('en-US') : '—';
+            let chg = '', chgCls = 'neu', chgTxt = '';
+            if (typeof h.change === 'number' && h.change !== 0) {
+                chgCls = h.change > 0 ? 'up' : 'down';
+                chgTxt = (h.change > 0 ? '+' : '') + h.change.toLocaleString('en-US');
+            } else if (h.change === 0) {
+                chgTxt = 'beze změny';
+            }
+            return `<div class="hd-row">
+                <div class="n">${escapeHtml(h.name || '—')}</div>
+                <div class="p">${share} akcií</div>
+                <div class="c ${chgCls}">${chgTxt || 'nová'}</div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        box.style.display = 'none';
+    }
 }
 
 let _currentNewsTicker = null;
