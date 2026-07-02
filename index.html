@@ -903,6 +903,8 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .profile-btn:hover {color:var(--accent); border-color:var(--accent);}
 .profile-btn.logged {color:var(--up); border-color:var(--up);}
 .profile-btn i {font-size:18px;}
+.notif-dot {display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; background:var(--down); color:#fff; font-size:10.5px; font-weight:800; border-radius:99px; font-family:var(--fh); animation:notifPulse 2s infinite;}
+@keyframes notifPulse {0%,100%{box-shadow:0 0 0 0 rgba(255,61,0,0.4);} 50%{box-shadow:0 0 0 6px rgba(255,61,0,0);}}
 .profile-box {background:var(--surface); border:1px solid var(--border2); border-radius:22px; padding:2rem; width:760px; max-width:94vw; max-height:90vh; overflow-y:auto; position:relative;}
 .profile-close {position:absolute; top:16px; right:16px; background:rgba(255,255,255,0.05); border:1px solid var(--border); color:var(--text2); width:34px; height:34px; border-radius:10px; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center;}
 /* Metodika „Jak hodnotíme" */
@@ -1288,6 +1290,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
       <button class="profile-btn" id="profileBtn" onclick="openProfile()" title="Profil & portfolio">
         <i class="ti ti-user-circle"></i>
         <span id="profileBtnLabel">Profil</span>
+        <span class="notif-dot" id="notif-dot" style="display:none;">0</span>
       </button>
     </div>
   </div>
@@ -1529,6 +1532,12 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           <span class="level-lbl"><i class="ti ti-calendar-week"></i> Sobotní shrnutí týdne:</span>
           <label class="switch"><input type="checkbox" id="notif-weekly" onchange="saveNotif()"><span class="slider"></span></label>
           <span style="font-size:12px; color:var(--text2);">výkon watchlistu, klíčové události, top signály — každou sobotu ráno</span>
+        </div>
+
+        <div class="level-row" id="notif-push-row" style="display:none;">
+          <span class="level-lbl"><i class="ti ti-bell-ringing"></i> Notifikace v prohlížeči:</span>
+          <button class="tool-btn" id="notif-push-btn" onclick="handleNotifPushClick()"><i class="ti ti-bell"></i> Zapnout</button>
+          <span style="font-size:12px; color:var(--text2);">systémové okno při nové události u tvých akcií (funguje když je appka otevřená)</span>
         </div>
 
         <!-- REFERRAL PROGRAM -->
@@ -2447,6 +2456,8 @@ function switchTab(name) {
     });
     if (name === 'overview') {
         loadOverview();
+        // Po otevření Přehledu uživatel události "viděl" – vynulujeme dot
+        markNotifSeen();
     }
     if (name === 'results') {
         loadResults();
@@ -3502,6 +3513,12 @@ function renderProfileView() {
         refBox.style.display = authToken ? 'block' : 'none';
         if (authToken) loadReferral();
     }
+    // Push notif toggle
+    const npr = document.getElementById('notif-push-row');
+    if (npr) {
+        npr.style.display = (authToken && hasAccess) ? 'flex' : 'none';
+        updateNotifPushBtn();
+    }
     if (authToken) {
         acct.style.display = 'flex';
         localNote.style.display = 'none';
@@ -3752,6 +3769,95 @@ function riskFilterPass(o) {
         return true;
     }
     return true;
+}
+
+// ===== In-app notifikace (dot na profilu) + browser Notification API =====
+let _notifLastCount = 0;
+let _notifBrowserGranted = false;
+function updateNotifPushBtn() {
+    const btn = document.getElementById('notif-push-btn');
+    if (!btn) return;
+    if (!("Notification" in window)) {
+        btn.innerHTML = '<i class="ti ti-alert-circle"></i> Nepodporováno';
+        btn.disabled = true;
+        return;
+    }
+    const p = Notification.permission;
+    if (p === 'granted') {
+        btn.innerHTML = '<i class="ti ti-check"></i> Zapnuto';
+        btn.style.color = 'var(--up)';
+        btn.style.borderColor = 'var(--up)';
+    } else if (p === 'denied') {
+        btn.innerHTML = '<i class="ti ti-x"></i> Zablokováno v prohlížeči';
+        btn.disabled = true;
+    } else {
+        btn.innerHTML = '<i class="ti ti-bell"></i> Zapnout';
+    }
+}
+
+async function handleNotifPushClick() {
+    const ok = await requestBrowserNotifPerm();
+    updateNotifPushBtn();
+    if (ok) {
+        try {
+            new Notification('MY ADVANTAGE ✅', {
+                body: 'Notifikace zapnuté. Uvidíš je, když se u tvých akcií něco stane.',
+                icon: '/logo/icon-192.png',
+            });
+        } catch(e) {}
+        showToast('Notifikace zapnuty', 'up', 'ti-bell-ringing');
+    }
+}
+
+async function requestBrowserNotifPerm() {
+    if (!("Notification" in window)) return false;
+    if (Notification.permission === 'granted') { _notifBrowserGranted = true; return true; }
+    if (Notification.permission === 'denied') return false;
+    try {
+        const r = await Notification.requestPermission();
+        _notifBrowserGranted = r === 'granted';
+        return _notifBrowserGranted;
+    } catch(e) { return false; }
+}
+
+async function pollNotifUnread() {
+    if (!authToken) return;
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/notifications/unread`, { headers: authHeaders() });
+        const d = await r.json();
+        const cnt = (d && d.count) || 0;
+        const dot = document.getElementById('notif-dot');
+        if (dot) {
+            if (cnt > 0) { dot.style.display = 'inline-flex'; dot.textContent = cnt > 9 ? '9+' : cnt; }
+            else { dot.style.display = 'none'; }
+        }
+        // Nová událost od minulého pollu → browser notifikace, když má user povoleno
+        if (_notifBrowserGranted && cnt > _notifLastCount && d.items && d.items.length) {
+            const top = d.items[0];
+            try {
+                const n = new Notification('MY ADVANTAGE — ' + (top.ticker || ''), {
+                    body: (top.title || '') + '\n' + (top.hint || ''),
+                    icon: '/logo/icon-192.png',
+                    badge: '/logo/icon-96.png',
+                    tag: 'ma-event-' + (top.ticker || ''),
+                });
+                n.onclick = () => { window.focus(); if (top.ticker) loadStockDetail(top.ticker); };
+            } catch(e) {}
+        }
+        _notifLastCount = cnt;
+    } catch(e) {}
+}
+
+async function markNotifSeen() {
+    if (!authToken) return;
+    try {
+        await fetch(`${BACKEND_URL}/api/notifications/seen`, {
+            method: 'POST', headers: authHeaders()
+        });
+        _notifLastCount = 0;
+        const dot = document.getElementById('notif-dot');
+        if (dot) dot.style.display = 'none';
+    } catch(e) {}
 }
 
 // ===== Referral program =====
@@ -4281,6 +4387,10 @@ function startMain() {
     if (!investorSimple) loadOverview();
     // Onboarding tour pro prvouživatele — krátká pauza, ať se UI zobrazí
     setTimeout(openOnbIfFirst, 700);
+    // Notifikační polling každé 3 minuty (in-app dot + browser Notification API)
+    if (Notification && Notification.permission === 'granted') _notifBrowserGranted = true;
+    setTimeout(pollNotifUnread, 2000);
+    setInterval(pollNotifUnread, 3 * 60 * 1000);
 }
 
 // Rozhodne, zda ukázat přístupovou zeď, nebo appku. Vrací true = má přístup.

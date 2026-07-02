@@ -1067,6 +1067,56 @@ def _activate_referral_bonus(referee_email, referee_rec):
     kv_set_json(f"user:{referee_email}", referee_rec)
 
 
+@app.route("/api/notifications/unread")
+def api_notifications_unread():
+    """Vrátí počet nových událostí od posledního checkpointu uživatele.
+    Klient uloží ts_last_seen do KV při otevření Přehledu."""
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": True, "count": 0, "items": []})
+    rec = kv_get_json(f"user:{user}") or {}
+    last_seen = int(rec.get("events_seen_ts") or 0)
+    pf = kv_get_json(f"portfolio:{user}") or {}
+    tickers = (pf.get("watchlist") or [])[:20]
+    if not tickers:
+        return jsonify({"ok": True, "count": 0, "items": []})
+    from datetime import date as _date
+    today = datetime.now(timezone.utc).date()
+    # Načti události za 7 dní a spočítej ty novější než last_seen
+    events = []
+    for t in tickers:
+        try:
+            events += _events_for_ticker(t, since_days=7)
+        except Exception:
+            continue
+    fresh = []
+    for e in events:
+        try:
+            d = _date.fromisoformat(e.get("date", ""))
+            e_ts = int(datetime(d.year, d.month, d.day, tzinfo=timezone.utc).timestamp())
+            if e_ts >= last_seen:
+                fresh.append(e)
+        except Exception:
+            continue
+    fresh.sort(key=lambda x: x.get("date") or "", reverse=True)
+    return jsonify({"ok": True, "count": len(fresh), "items": fresh[:5],
+                    "last_seen": last_seen,
+                    "now": int(time.time())})
+
+
+@app.route("/api/notifications/seen", methods=["POST"])
+def api_notifications_seen():
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    rec = kv_get_json(f"user:{user}")
+    if not rec:
+        return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
+    rec["events_seen_ts"] = int(time.time())
+    kv_set_json(f"user:{user}", rec)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/referral")
 def api_referral():
     """Vrátí referral kód + statistiky pro přihlášeného uživatele."""
