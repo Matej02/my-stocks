@@ -638,6 +638,21 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-opp-row .r .s {font-family:var(--fh); font-weight:700; color:var(--up);}
 .ov-opp-row .r .h {font-size:11px; color:var(--text2);}
 
+/* ============ PORTFOLIO PERFORMANCE ============ */
+.pfp-range {display:flex; gap:4px; background:rgba(255,255,255,0.04); border:1px solid var(--border); padding:3px; border-radius:10px;}
+.pfp-r {background:transparent; border:none; color:var(--text2); padding:6px 12px; border-radius:8px; cursor:pointer; font-family:var(--fb); font-size:11.5px; font-weight:700; letter-spacing:.4px;}
+.pfp-r:hover {color:var(--text);}
+.pfp-r.active {background:var(--accent-soft); color:var(--accent);}
+.pfp-stats {display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:14px;}
+.pfp-stat {background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:12px; padding:11px 14px;}
+.pfp-stat .l {font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.7px; font-weight:600;}
+.pfp-stat .v {font-family:var(--fh); font-weight:800; font-size:22px; margin-top:3px;}
+.pfp-stat.hero {border-color:var(--border-accent); background:linear-gradient(160deg, var(--accent-soft), transparent 75%);}
+.pfp-stat.hero .v {color:var(--accent);}
+.pfp-stat .v.up {color:var(--up);}
+.pfp-stat .v.down {color:var(--down);}
+.pfp-fine {color:var(--text2); font-size:11.5px; margin-top:12px; line-height:1.5;}
+
 /* ============ UDÁLOSTI U TVÝCH AKCIÍ ============ */
 .ov-alerts {display:flex; flex-direction:column; gap:6px;}
 .ov-alert {display:grid; grid-template-columns:auto 68px 1fr auto; gap:12px; align-items:center; padding:10px 14px; background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:11px; cursor:pointer; transition:border-color .2s;}
@@ -1645,6 +1660,24 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           </div>
         </div>
 
+        <!-- PORTFOLIO PERFORMANCE (equal-weighted watchlist vs SPY) -->
+        <div class="ov-col-12">
+          <div class="ov-card">
+            <h3 style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+              <span><i class="ti ti-chart-line"></i> Výkon tvé watchlist vs S&amp;P 500</span>
+              <div class="pfp-range" id="pfp-range">
+                <button class="pfp-r active" data-days="30" onclick="setPfpRange(30)">30D</button>
+                <button class="pfp-r" data-days="90" onclick="setPfpRange(90)">3M</button>
+                <button class="pfp-r" data-days="180" onclick="setPfpRange(180)">6M</button>
+                <button class="pfp-r" data-days="365" onclick="setPfpRange(365)">1R</button>
+              </div>
+            </h3>
+            <div class="pfp-stats" id="pfp-stats"></div>
+            <div id="pfp-chart" style="width:100%; min-height:280px;"></div>
+            <div class="pfp-fine">Equal-weighted index z akcií, které sleduješ (bez ohledu na tvé skutečné pozice). SPY = S&amp;P 500 ETF jako srovnávací baseline. Alfa = <b>o kolik % tvůj výběr překonal trh</b>.</div>
+          </div>
+        </div>
+
         <!-- UDÁLOSTI U TVÝCH AKCIÍ -->
         <div class="ov-col-12">
           <div class="ov-card">
@@ -2538,6 +2571,7 @@ async function loadOverview(force) {
         fetchOverviewOpps(),
         fetchOverviewSectors(),
         fetchOverviewAlerts(),
+        fetchOverviewPerf(),
     ];
     renderOverviewPortfolio();
     renderOverviewEvents();
@@ -2728,6 +2762,89 @@ async function fetchOverviewOpps() {
             </div>`).join('')}</div>`;
     } catch(e) {
         box.innerHTML = '<div class="ov-empty">Skener teď není dostupný.</div>';
+    }
+}
+
+let _pfpDays = 30;
+let _pfpChart = null;
+function setPfpRange(days) {
+    _pfpDays = days;
+    document.querySelectorAll('.pfp-r').forEach(b => b.classList.toggle('active', parseInt(b.dataset.days) === days));
+    fetchOverviewPerf(true);
+}
+
+async function fetchOverviewPerf(force) {
+    const stats = document.getElementById('pfp-stats');
+    const chartEl = document.getElementById('pfp-chart');
+    if (!chartEl) return;
+    const tk = (myStocks || []).slice(0, 20).join(',');
+    if (!tk) {
+        stats.innerHTML = '';
+        chartEl.innerHTML = '<div class="ov-empty">Nejdřív si přidej pár tickerů do sledování — pak uvidíš, jak by tvé picky letěly.</div>';
+        return;
+    }
+    if (!force) chartEl.innerHTML = '<div class="ov-load"><i class="ti ti-loader spin"></i> Počítám výkon watchlistu vs S&P 500…</div>';
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/portfolio-history?tickers=${encodeURIComponent(tk)}&days=${_pfpDays}`)).json();
+        if (!d.ok || !d.series || !d.series.length) {
+            stats.innerHTML = '';
+            chartEl.innerHTML = '<div class="ov-empty">Nedostatek historických dat pro tuto watchlist.</div>';
+            return;
+        }
+        const yours = d.final_change_pct ?? 0;
+        const spy = d.baseline_change_pct ?? 0;
+        const alpha = d.alpha_pct ?? 0;
+        const cls = v => v > 0 ? 'up' : (v < 0 ? 'down' : '');
+        const sign = v => (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+        const heroCls = alpha >= 0 ? 'hero' : '';
+        stats.innerHTML = `
+            <div class="pfp-stat ${heroCls}">
+                <div class="l">Alfa vs. S&P 500</div>
+                <div class="v ${alpha >= 0 ? 'up' : 'down'}">${sign(alpha)}</div>
+            </div>
+            <div class="pfp-stat">
+                <div class="l">Tvá watchlist</div>
+                <div class="v ${cls(yours)}">${sign(yours)}</div>
+            </div>
+            <div class="pfp-stat">
+                <div class="l">S&P 500 (SPY)</div>
+                <div class="v ${cls(spy)}">${sign(spy)}</div>
+            </div>
+            <div class="pfp-stat">
+                <div class="l">Období</div>
+                <div class="v" style="font-size:15px;">${_pfpDays} dní · ${d.tickers_used} tickerů</div>
+            </div>`;
+
+        // Zničit předchozí graf
+        if (_pfpChart) { try { _pfpChart.destroy(); } catch(e){} _pfpChart = null; }
+        chartEl.innerHTML = '';
+
+        const opts = {
+            chart: { type: 'area', height: 280, background: 'transparent', toolbar: { show: false },
+                     animations: { enabled: false }, foreColor: '#8a8f99' },
+            series: [
+                { name: 'Tvá watchlist', data: d.series },
+                { name: 'S&P 500', data: d.baseline },
+            ],
+            xaxis: { categories: d.labels, tickAmount: 6, labels: { style: { fontFamily: 'Outfit', fontSize: '11px' } } },
+            yaxis: { labels: { formatter: v => v.toFixed(0), style: { fontFamily: 'Outfit', fontSize: '11px' } } },
+            stroke: { curve: 'smooth', width: [3, 2] },
+            colors: [alpha >= 0 ? '#00E676' : '#FF3D00', '#4fa3ff'],
+            fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 100] } },
+            grid: { borderColor: '#1e2028', strokeDashArray: 3 },
+            legend: { fontFamily: 'Outfit', fontSize: '12px', markers: { radius: 3 } },
+            tooltip: {
+                theme: 'dark',
+                shared: true,
+                y: { formatter: v => v.toFixed(2) + ' (base 100)' },
+            },
+            dataLabels: { enabled: false },
+        };
+        _pfpChart = new ApexCharts(chartEl, opts);
+        _pfpChart.render();
+    } catch(e) {
+        stats.innerHTML = '';
+        chartEl.innerHTML = '<div class="ov-empty">Historii výkonu se nepodařilo načíst.</div>';
     }
 }
 

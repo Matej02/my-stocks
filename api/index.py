@@ -3191,6 +3191,117 @@ def _parse_rss_time(pub):
     return None
 
 
+# ---------------------------------------------------------------------------
+# PORTFOLIO PERFORMANCE – equal-weighted index z tvé watchlist vs SPY baseline
+# ---------------------------------------------------------------------------
+@app.route("/api/portfolio-history")
+def api_portfolio_history():
+    """Vrátí denní kumulativní výkon watchlist (equal-weighted) vs SPY.
+    Base = 100 v den [today - N]. Data pro rychlé vykreslení line chartu."""
+    tickers = [t.strip().upper() for t in (request.args.get("tickers") or "").split(",") if t.strip()][:30]
+    days = max(7, min(365, int(request.args.get("days", "90") or 90)))
+    if not tickers:
+        return jsonify({"ok": True, "series": [], "baseline": [], "labels": []})
+    ck = f"pfh:{','.join(sorted(tickers))}:{days}"
+    cached = kv_get_json(ck)
+    if cached and (time.time() - cached.get("ts", 0) < 3600):
+        return jsonify({"ok": True, "cached": True, **cached})
+
+    # Rozhoduju období: pro 30 dní stačí 1mo, pro 90 3mo, pro 1 rok 1y
+    if days <= 45:
+        rng = "3mo"
+    elif days <= 200:
+        rng = "6mo"
+    else:
+        rng = "1y"
+
+    # Sesbírej denní close pro každý ticker (unifikované na 'YYYY-MM-DD')
+    per_ticker = {}
+    for t in tickers:
+        try:
+            d = yahoo_chart(t, rng, "1d")
+            ts_list = d.get("timestamp") or []
+            closes = ((d.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+            gmt = (d.get("meta") or {}).get("gmtoffset", 0) or 0
+            series = {}
+            for i, ts in enumerate(ts_list):
+                c = closes[i] if i < len(closes) else None
+                if c is None: continue
+                dt = datetime.fromtimestamp(ts + gmt, tz=timezone.utc).strftime("%Y-%m-%d")
+                series[dt] = c
+            per_ticker[t] = series
+        except Exception:
+            continue
+
+    # SPY baseline
+    spy_series = {}
+    try:
+        d = yahoo_chart("SPY", rng, "1d")
+        ts_list = d.get("timestamp") or []
+        closes = ((d.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+        gmt = (d.get("meta") or {}).get("gmtoffset", 0) or 0
+        for i, ts in enumerate(ts_list):
+            c = closes[i] if i < len(closes) else None
+            if c is None: continue
+            dt = datetime.fromtimestamp(ts + gmt, tz=timezone.utc).strftime("%Y-%m-%d")
+            spy_series[dt] = c
+    except Exception:
+        pass
+
+    # Průnik dat: brát jen ty dny, kdy máme cenu pro SPY i alespoň polovinu tickerů
+    all_dates = sorted(spy_series.keys())[-days:]
+    if not all_dates:
+        return jsonify({"ok": True, "series": [], "baseline": [], "labels": []})
+
+    # Základní ceny (první dostupný datum) pro každý ticker
+    firsts = {t: None for t in tickers}
+    for t in tickers:
+        s = per_ticker.get(t) or {}
+        for dt in all_dates:
+            v = s.get(dt)
+            if v is not None:
+                firsts[t] = v
+                break
+
+    spy_first = None
+    for dt in all_dates:
+        if spy_series.get(dt) is not None:
+            spy_first = spy_series[dt]; break
+
+    labels, series, baseline = [], [], []
+    for dt in all_dates:
+        # Equal-weighted: průměr (cena_dnes / cena_prvního_dne * 100) přes tickery
+        vals = []
+        for t in tickers:
+            f = firsts.get(t)
+            cur = (per_ticker.get(t) or {}).get(dt)
+            if f and cur:
+                vals.append(cur / f * 100.0)
+        if not vals or spy_first is None or spy_series.get(dt) is None:
+            continue
+        labels.append(dt)
+        series.append(round(sum(vals) / len(vals), 2))
+        baseline.append(round(spy_series[dt] / spy_first * 100.0, 2))
+
+    out = {
+        "ts": int(time.time()),
+        "labels": labels,
+        "series": series,
+        "baseline": baseline,
+        "days": days,
+        "tickers_used": len([t for t in tickers if firsts[t] is not None]),
+    }
+    if series and baseline:
+        out["final_change_pct"] = round(series[-1] - 100, 2)
+        out["baseline_change_pct"] = round(baseline[-1] - 100, 2)
+        out["alpha_pct"] = round(out["final_change_pct"] - out["baseline_change_pct"], 2)
+    try:
+        kv_set_json(ck, out)
+    except Exception:
+        pass
+    return jsonify({"ok": True, "cached": False, **out})
+
+
 @app.route("/api/news-feed")
 def api_news_feed():
     """Sjednocený feed: Yahoo (per-ticker) + RSS zdroje. Filtr podle tickeru,
