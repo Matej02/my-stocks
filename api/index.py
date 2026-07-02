@@ -3753,10 +3753,362 @@ _SITEMAP_TICKERS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# BLOG – edukační obsah pro SEO + budování důvěry
+# Články jako plain-text data uvnitř modulu. Žádná DB nutná.
+# ---------------------------------------------------------------------------
+_BLOG_POSTS = [
+    {
+        "slug": "co-je-stop-loss",
+        "title": "Co je stop-loss a proč ho vždycky používat",
+        "excerpt": "Ochranný prodejní příkaz, který ti může zachránit portfolio. Vysvětlujeme, jak ho nastavit, na kolika procentech, a proč bez něj obchodovat nedávej smysl.",
+        "keywords": "stop-loss, ochrana kapitálu, risk management, investování",
+        "date": "2026-06-20",
+        "body": """
+Stop-loss je jednoduchá věc: řekneš „prodej mi to, když cena klesne na X". A brokera to udělá automaticky, i když zrovna spíš.
+
+Bez stop-lossu obchodovat NEDÁVÁ smysl. Tady je proč:
+
+**1. Emoce jsou horší nepřítel než trh.** Když ti akcie padá o 20 %, řekneš si „počkám, ono to poroste". Pak padá o 40 %, 60 %. Necháš to. Stop-loss udělá to, co bys měl udělat ty, ale nedokážeš.
+
+**2. Statistika je krutá.** Když ztratíš 50 %, musíš získat 100 %, abys byl na nule. Když ztratíš 20 %, stačí +25 %. Rozdíl je obrovský.
+
+**3. Malé ztráty jsou přijatelné, velké tě zabijí.** Profi obchodník má win-rate 55–65 %. Ne 90 %. Rozdíl mezi ním a začátečníkem: **ztráty drží malé**.
+
+**Kolik nastavit?**
+- Volatilní akcie (NVDA, TSLA): 8–12 %
+- Stabilní blue-chip (JNJ, KO): 4–6 %
+- V MY ADVANTAGE počítáme stop-loss individuálně podle volatility (ATR)
+
+**Position sizing** je s tím párový nástroj. Když máš kapitál 100 000 Kč, obchod s 5% stop-lossem a riskuješ max 2 % kapitálu, koupíš tolik akcií, abys při stop-lossu ztratil přesně 2 000 Kč. Ne víc.
+
+Zkus si to spočítat v naší kalkulačce **„Kolik koupit?"** — je zdarma v tool baru.
+""",
+    },
+    {
+        "slug": "jak-cist-pe-ratio",
+        "title": "Jak číst P/E ratio — a kdy tě oklame",
+        "excerpt": "P/E je nejznámější ukazatel valuace. Ale sám o sobě ti neřekne skoro nic. Naučíme tě, kdy je nízké P/E past a kdy vysoké P/E dává smysl.",
+        "keywords": "P/E ratio, valuace, ocenění, fundamenty",
+        "date": "2026-06-22",
+        "body": """
+P/E = cena akcie ÷ zisk na akcii (EPS). Říká, kolik let firma poroste, abys dostal zpátky svou investici (pokud zisk zůstane stejný).
+
+**Jednoduchý pohled:**
+- P/E 10 = akcie je „levná"
+- P/E 30 = akcie je „drahá"
+
+**Realita:**
+- P/E 10 může znamenat firmu v úpadku (trh čeká pokles zisků)
+- P/E 30 může být fér cena pro firmu, která roste 25 % ročně
+
+**Kdy je nízké P/E past?**
+- Cyklické firmy na vrcholu cyklu (banky, aerolinky, těžaři): P/E vypadá nízké, ale zisky jsou dočasné.
+- Firmy před bankrotem — trh cenu srazí, ale zisk zatím ještě je z předchozích let.
+- Účetní triky — jednorázový příjem nadhodnotil zisk.
+
+**Kdy je vysoké P/E fér?**
+- Rychle rostoucí SaaS firma (30 %+ růstu tržeb) → P/E 40 může být levné.
+- Kvalitní franchisa (Costco, Visa) → trh platí prémium za spolehlivost.
+
+**Lepší ukazatel: PEG** — P/E dělené růstem zisků. PEG < 1 = obvykle podhodnocené vůči růstu.
+
+**Náš přístup v MY ADVANTAGE:**
+- P/E je jen 1 ze 4 subskóre ve valuačním pilíři (20 % váha)
+- Vždycky se díváme na kontext: sektor, růst tržeb, ROE
+- Nikdy nekupujeme jen „levné" P/E — musí být v uptrendu a s kvalitními fundamenty
+""",
+    },
+    {
+        "slug": "6-piliru-analyzy",
+        "title": "6 pilířů naší analýzy — jak počítáme verdikt",
+        "excerpt": "Naše doporučení Koupit/Držet/Prodat není odhad. Je to matematický průměr 6 nezávislých datových pilířů. Ukazujeme, co v každém je.",
+        "keywords": "MA Skóre, verdikt, backtest, datová analýza",
+        "date": "2026-06-25",
+        "body": """
+Každá akcie v MY ADVANTAGE dostane skóre 0–100 a verdikt (Koupit ≥ 70, Držet 50–69, Prodat < 50). Skóre se počítá deterministicky ze 6 pilířů:
+
+**1. Technika (váha 30 %)**
+Nákup poklesu v dlouhodobém uptrendu. Klíčové indikátory: SMA 50/200 relace, RSI, volatilita, momentum. Backtestem ověřeno — ~65 % TOP signálů skončí v plusu.
+
+**2. Valuace (váha 20 %)**
+P/E, P/B, P/S vůči sektoru a historii. Levná akcie s růstem = ideál.
+
+**3. Růst a ziskovost (váha 25 %)**
+Roste firma? Marže? ROE > 15 %? Cash-flow pozitivní?
+
+**4. Analytici (váha 22 %)**
+Konsenzus 30+ investičních bank. Cílová cena. Nedávné upgrades/downgrades.
+
+**5. Nálada & instituce (váha 13 %)**
+Sentiment titulků, insider transakce (Form 4), revize analytiků.
+
+**6. SEC podání (váha 10 %)**
+Oficiální americká data: čerstvost 10-Q, insider nákupy, materiální 8-K události.
+
+**Jak se váhy přepočítávají:**
+Když některý pilíř nemá data (např. neamerická akcie nemá SEC), zbývající pilíře se proporčně převáží. Suma vždy = 100 %.
+
+**Jistota (confidence)**
+- Pokrytí daty (0.4× váha)
+- Shoda pilířů (0.35× — jsou všechny za "Koupit"?)
+- Odstup od 50 (0.25×)
+
+Před blížícími se earnings snižujeme jistotu o 18 % — je to událost s vysokou volatilitou.
+
+**Co NEDĚLÁ verdikt:**
+- Není to garance zisku
+- Není to timing pro daytrading (horizont ~2 týdny)
+- Není to nahrazení tvého vlastního úsudku
+""",
+    },
+    {
+        "slug": "co-je-short-interest",
+        "title": "Co je short interest a jak z něj poznat short squeeze",
+        "excerpt": "Když víc než 20 % akcií drží short prodejci, může vypuknout squeeze — cena vystřelí. Vysvětlujeme mechaniku a jak to použít.",
+        "keywords": "short interest, short squeeze, GME, retail investing",
+        "date": "2026-06-27",
+        "body": """
+**Short pozice** = spekulace na pokles. Prodejce si akcii půjčí od makléře, hned ji prodá, a doufá, že ji později koupí levněji. Rozdíl si nechá.
+
+**Short interest** = kolik % free-floatu (volně obchodovaných akcií) je právě „shortnutých".
+
+**Kdy to začíná být zajímavé:**
+- Short interest > 20 %: napjatá situace
+- > 30 %: potenciál na short squeeze
+- > 50 %: extrémní (viz GameStop 2021)
+
+**Short squeeze:**
+Když cena stoupá, shortaři musí nakoupit zpět, aby zavřeli pozici. Nákup zvedne cenu ještě víc. Panika. Cena vyletí desetkrát nahoru za pár dní.
+
+**Short ratio (days to cover)**
+Kolik dní by trvalo pokrýt všechny shorty při průměrném objemu obchodů. Vysoké číslo = potenciál na squeeze.
+
+**Kdy short interest naopak varuje:**
+- Wall Street chytří lidé vsadili proti — často mají důvod.
+- Pokud firma nemá katalyzátor (novinky, výsledky), cena zůstane pod tlakem.
+
+**Náš přístup:**
+V detailu akcie ukazujeme oba údaje. Nezapočítáváme je přímo do verdiktu (je to spíš kontrariánsky signál), ale je to informace na kontext.
+""",
+    },
+    {
+        "slug": "jak-cist-sec-filings",
+        "title": "SEC filings pro začátečníky — 10-K, 10-Q, 8-K, Form 4",
+        "excerpt": "Oficiální podání americké komise pro cenné papíry ti řeknou vše, co CEO říct musí. Naučíme se je číst.",
+        "keywords": "SEC EDGAR, 10-K, insider trading, Form 4",
+        "date": "2026-06-29",
+        "body": """
+SEC (Securities and Exchange Commission) je americký regulátor cenných papírů. Každá veřejně obchodovaná firma v USA musí do SEC podávat oficiální dokumenty. Všechny jsou **zdarma dostupné** na sec.gov.
+
+**10-K — Výroční zpráva**
+Kompletní roční audit. Detailní fundamenty, rizika, konkurence, management. Nejdůležitější dokument roku. Vyplácí se přečíst sekce „Risk Factors".
+
+**10-Q — Kvartální zpráva**
+Neauditovaná čísla za kvartál. Rychlý pohled na tržby, marže, cash-flow. Přichází ~45 dní po konci kvartálu.
+
+**8-K — Materiální událost**
+Firma musí do 4 pracovních dnů oznámit, když se stane něco významného: akvizice, odchod CFO, žaloba, změna auditora, ztráta velkého kontraktu.
+
+**Form 4 — Insider transakce**
+Když člen vedení nebo významný akcionář nakupuje/prodává akcie firmy. Signifikantní signál: nákupy = důvěra, prodeje = varování (ne vždy, mohou být z osobních důvodů).
+
+**SC 13D / 13G — Institucionální podíly**
+Když někdo koupí > 5 % akcií firmy. 13D = aktivní (chce ovlivnit), 13G = pasivní.
+
+**DEF 14A — Pozvánka na valnou hromadu**
+Detail odměn CEO, plánované akvizice, návrhy na hlasování.
+
+**Náš přístup v MY ADVANTAGE:**
+- SEC data tvoří 6. pilíř verdiktu (10 % váha)
+- V detailu akcie máš záložku „SEC podání" s posledními 15 filings
+- Barevné odlišení podle důležitosti
+- Klik = originál na sec.gov
+
+Reálná hodnota: prodejci na Wall Street mají celé týmy, které SEC filings čtou hodinu po podání. Ty teď máš to samé.
+""",
+    },
+]
+
+_BLOG_INDEX = {p["slug"]: p for p in _BLOG_POSTS}
+
+
+def _render_blog_shell(inner_html, title, description, canonical, extra_head=""):
+    return f"""<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{_html_escape(title)}</title>
+<meta name="description" content="{_html_escape(description)}">
+<link rel="canonical" href="{canonical}">
+<meta property="og:type" content="article">
+<meta property="og:title" content="{_html_escape(title)}">
+<meta property="og:description" content="{_html_escape(description)}">
+<meta property="og:image" content="{APP_URL}/logo/icon-512.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#FF7A00">
+<link rel="icon" href="/logo/icon-32.png">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=Space+Grotesk:wght@400;600;700;800&display=swap" rel="stylesheet">
+{extra_head}
+<style>
+:root {{ --bg:#050507; --elev:#0e1015; --border:#1e2028; --accent:#FF7A00; --text:#f0f0f0; --text2:#8a8f99; }}
+* {{ box-sizing:border-box; }}
+body {{ margin:0; background:var(--bg); color:var(--text); font-family:'Outfit',sans-serif; line-height:1.7; }}
+.wrap {{ max-width:760px; margin:0 auto; padding:24px 20px 60px; }}
+.brand {{ display:flex; align-items:center; gap:10px; font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:20px; letter-spacing:.5px; margin-bottom:26px; text-decoration:none; color:var(--text); }}
+.brand .b {{ width:32px; height:32px; background:var(--accent); border-radius:9px; }}
+.brand span {{ color:var(--accent); }}
+h1 {{ font-family:'Space Grotesk',sans-serif; font-size:38px; font-weight:800; margin:24px 0 8px; letter-spacing:-.5px; line-height:1.15; }}
+h2 {{ font-family:'Space Grotesk',sans-serif; font-size:24px; margin:32px 0 10px; }}
+h3 {{ font-family:'Space Grotesk',sans-serif; font-size:18px; margin:22px 0 8px; }}
+p, li {{ color:#c9ccd3; font-size:16px; }}
+p {{ margin:12px 0; }}
+b {{ color:var(--text); }}
+.meta {{ color:var(--text2); font-size:13px; margin-bottom:22px; }}
+.card {{ display:block; background:var(--elev); border:1px solid var(--border); border-radius:14px; padding:20px 22px; margin-bottom:12px; text-decoration:none; color:var(--text); transition:border-color .18s;}}
+.card:hover {{ border-color:var(--accent); }}
+.card h3 {{ margin:0 0 6px; color:var(--text); }}
+.card p {{ margin:0; color:var(--text2); font-size:14px; }}
+.card .date {{ font-size:11px; color:var(--accent); letter-spacing:.5px; font-weight:700; text-transform:uppercase; margin-bottom:8px; }}
+.cta {{ margin:36px 0 12px; text-align:center; }}
+.cta a {{ display:inline-flex; align-items:center; gap:8px; background:var(--accent); color:#1a0e00; padding:14px 28px; font-family:'Space Grotesk',sans-serif; font-weight:700; text-decoration:none; border-radius:14px; font-size:16px; }}
+.foot {{ text-align:center; color:var(--text2); font-size:12px; margin-top:44px; padding-top:20px; border-top:1px solid var(--border); }}
+.back {{ color:var(--text2); font-size:13px; text-decoration:none; }}
+.back:hover {{ color:var(--accent); }}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="brand" href="/"><div class="b"></div>MY <span>ADVANTAGE</span></a>
+{inner_html}
+<div class="cta">
+  <a href="/">🚀 Vyzkoušej MY ADVANTAGE</a>
+</div>
+<div class="foot">
+  MY ADVANTAGE je nástroj pro vzdělávací a informační účely. Neposkytuje investiční poradenství.
+</div>
+</div>
+</body>
+</html>"""
+
+
+def _md_to_html(md):
+    """Velmi jednoduchý převodník: **bold**, řádkové paragrafy, seznamy."""
+    lines = md.strip().split("\n")
+    out = []
+    para = []
+    for ln in lines:
+        s = ln.rstrip()
+        if not s:
+            if para:
+                out.append("<p>" + " ".join(para) + "</p>")
+                para = []
+            continue
+        # Nadpis: řádek začíná **X** a končí **
+        if s.startswith("**") and s.endswith("**") and s.count("**") == 2:
+            if para:
+                out.append("<p>" + " ".join(para) + "</p>"); para = []
+            out.append("<h3>" + s.strip("*") + "</h3>")
+            continue
+        # Bod seznamu
+        if s.startswith("- "):
+            if para:
+                out.append("<p>" + " ".join(para) + "</p>"); para = []
+            item = s[2:]
+            item = item.replace("**", "§§")
+            # inline bold
+            while "§§" in item:
+                item = item.replace("§§", "<b>", 1).replace("§§", "</b>", 1)
+            out.append("<li>" + item + "</li>")
+            continue
+        # inline bold + p
+        s2 = s.replace("**", "§§")
+        while "§§" in s2:
+            s2 = s2.replace("§§", "<b>", 1).replace("§§", "</b>", 1)
+        para.append(s2)
+    if para:
+        out.append("<p>" + " ".join(para) + "</p>")
+    # obal seznamy
+    joined = "\n".join(out)
+    # jednoduše: <li>… ihned za sebou zabalit do <ul>
+    import re as _re
+    joined = _re.sub(r"(<li>[\s\S]*?</li>)(\s*<li>[\s\S]*?</li>)*",
+                     lambda m: "<ul>" + m.group(0) + "</ul>", joined)
+    return joined
+
+
+@app.route("/blog")
+def blog_index():
+    inner = ["<h1>Blog — jak přemýšlet o investování</h1>",
+             "<p class='meta'>Praktické tipy, jak číst čísla, chránit kapitál a nedělat začátečnické chyby.</p>"]
+    for p in _BLOG_POSTS:
+        inner.append(
+            f"<a class='card' href='/blog/{p['slug']}'>"
+            f"<div class='date'>{p['date']}</div>"
+            f"<h3>{_html_escape(p['title'])}</h3>"
+            f"<p>{_html_escape(p['excerpt'])}</p>"
+            f"</a>"
+        )
+    html = _render_blog_shell(
+        "\n".join(inner),
+        title="Blog — investování bez příkras | MY ADVANTAGE",
+        description="Edukační články o technické analýze, valuaci, stop-lossu, SEC filings a dalších investičních tématech.",
+        canonical=f"{APP_URL}/blog",
+    )
+    resp = make_response(html)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Cache-Control"] = "public, max-age=1800"
+    return resp
+
+
+@app.route("/blog/<path:slug>")
+def blog_post(slug):
+    slug = (slug or "").strip("/").lower()
+    p = _BLOG_INDEX.get(slug)
+    if not p:
+        return _render_blog_shell(
+            "<h1>Článek nenalezen</h1><p><a class='back' href='/blog'>← zpět na blog</a></p>",
+            "Článek nenalezen | MY ADVANTAGE",
+            "Hledaný článek na blogu MY ADVANTAGE neexistuje.",
+            f"{APP_URL}/blog",
+        ), 404
+    jsonld = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": p["title"],
+        "description": p["excerpt"],
+        "datePublished": p["date"],
+        "dateModified": p["date"],
+        "author": {"@type": "Organization", "name": "MY ADVANTAGE"},
+        "publisher": {"@type": "Organization", "name": "MY ADVANTAGE",
+                      "logo": {"@type": "ImageObject", "url": f"{APP_URL}/logo/icon-512.png"}},
+        "keywords": p.get("keywords", ""),
+    }, ensure_ascii=False)
+    inner = [
+        f"<a class='back' href='/blog'>← zpět na blog</a>",
+        f"<h1>{_html_escape(p['title'])}</h1>",
+        f"<div class='meta'>{p['date']} · MY ADVANTAGE</div>",
+        _md_to_html(p["body"]),
+    ]
+    html = _render_blog_shell(
+        "\n".join(inner),
+        title=f"{p['title']} | MY ADVANTAGE Blog",
+        description=p["excerpt"],
+        canonical=f"{APP_URL}/blog/{slug}",
+        extra_head=f'<script type="application/ld+json">{jsonld}</script>',
+    )
+    resp = make_response(html)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
 @app.route("/sitemap.xml")
 def sitemap():
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    urls = [f"{APP_URL}/", f"{APP_URL}/#about"]
+    urls = [f"{APP_URL}/", f"{APP_URL}/#about", f"{APP_URL}/blog"]
+    urls += [f"{APP_URL}/blog/{p['slug']}" for p in _BLOG_POSTS]
     urls += [f"{APP_URL}/stock/{t}" for t in _SITEMAP_TICKERS]
     xml = ['<?xml version="1.0" encoding="UTF-8"?>',
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
