@@ -2065,6 +2065,57 @@ def _days_to_earnings(facts):
         return None
 
 
+def _sec_pillar_score(ticker):
+    """SEC pilíř: skóre 0-100 z insider transakcí (Form 4) + materiálních událostí (8-K).
+    Vrací (score, note) nebo None, když nejsou data (neamerická akcie apod.).
+    Logika:
+      - Bázlínová hodnota 55 (mírně nad 50, protože samotná registrace v SEC = kvalita)
+      - Insider nákupy v posledních 90 dnech: +6 bodů za kus, max +25
+      - Kupičce (3+) 8-K v krátké době: -8 (turbulence)
+      - Poslední 10-Q v posledních 45 dnech: +5 (čerstvá čísla)
+      - Chybí 10-Q déle než 120 dnů: -8 (zpožděné výsledky)
+    """
+    if not ticker:
+        return None
+    try:
+        items = _sec_recent_filings(ticker, limit=30)
+    except Exception:
+        return None
+    if not items:
+        return None
+    from datetime import date as _date
+    today = datetime.now(timezone.utc).date()
+    def _age(d):
+        try: return (today - _date.fromisoformat(d)).days
+        except Exception: return 9999
+    ins_90 = [i for i in items if i["kind"] == "insider" and _age(i["date"]) <= 90]
+    mat_90 = [i for i in items if i["kind"] == "material" and _age(i["date"]) <= 90]
+    latest_10q = next((i for i in items if i["form"] == "10-Q"), None)
+
+    score = 55.0
+    parts = []
+    if ins_90:
+        bonus = min(25, len(ins_90) * 6)
+        score += bonus
+        parts.append(f"insider {len(ins_90)}× (90d)")
+    if len(mat_90) >= 3:
+        score -= 8
+        parts.append(f"8-K {len(mat_90)}× (turbulence)")
+    elif mat_90:
+        parts.append(f"8-K {len(mat_90)}×")
+    if latest_10q:
+        q_age = _age(latest_10q["date"])
+        if q_age <= 45:
+            score += 5
+            parts.append("čerstvé 10-Q")
+        elif q_age >= 120:
+            score -= 8
+            parts.append(f"10-Q staré {q_age} dnů")
+    score = max(15, min(90, int(round(score))))
+    note = " · ".join(parts) if parts else "žádné významné podání za 90 dnů"
+    return (score, note)
+
+
 def compute_verdict_model(facts):
     """DETERMINISTICKÝ pravidlový verdikt z tvrdých dat – ne odhad AI.
     Skóre 0-100 ze čtyř pilířů (technika, valuace, růst & ziskovost, analytici);
@@ -2170,6 +2221,13 @@ def compute_verdict_model(facts):
         sentiment_score = int(round(sum(sub_scores) / len(sub_scores)))
         pillars.append({"key": "sentiment", "label": "Nálada & instituce", "weight": 0.13,
                         "score": sentiment_score, "note": " · ".join(sub_notes)})
+
+    # 6) SEC PODÁNÍ – oficiální americká data (Form 4 insider, 8-K materiální události).
+    #    Nejsilnější first-hand signál, ale jen pro US akcie. Neamerické tituly ho nemají.
+    sec_res = _sec_pillar_score(facts.get("ticker"))
+    if sec_res:
+        pillars.append({"key": "sec", "label": "Podání SEC", "weight": 0.10,
+                        "score": sec_res[0], "note": sec_res[1]})
 
     # Sníží váhy ostatních pilířů proporčně, aby suma byla pořád ~1
     # (já volil 0.30/0.20/0.25/0.22/0.13 = 1.10; přepočet níže)
