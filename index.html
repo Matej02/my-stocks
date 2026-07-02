@@ -3820,6 +3820,18 @@ async function initGate() {
     await initAccount();
     if (refreshGate()) startMain();
     handlePaidReturn();
+    handleTickerParam();
+}
+
+// Otevři konkrétní akcii, když je v URL ?ticker=NVDA (z SEO stránky /stock/NVDA)
+function handleTickerParam() {
+    try {
+        const params = new URLSearchParams(location.search);
+        const t = (params.get('ticker') || '').toUpperCase();
+        if (!t || !/^[A-Z0-9.^=-]{1,10}$/.test(t)) return;
+        history.replaceState(null, '', location.pathname);
+        setTimeout(() => { if (typeof loadStockDetail === 'function') loadStockDetail(t); }, 400);
+    } catch(e) {}
 }
 
 // Návrat z platby (Stripe success_url ?paid=1) – obnovit plán a poděkovat

@@ -10,7 +10,7 @@ Indikátory (RSI, SMA, MACD, volatilita, momentum) a Signal Score 0-100
 se počítají v čistém Pythonu a jsou nezávislé na AI.
 """
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
 import requests
 import math
@@ -3404,6 +3404,238 @@ def ai_chat():
     if not answer:
         return jsonify({"ok": False, "error": "Nepodařilo se, zkus to znovu."}), 502
     return jsonify({"ok": True, "answer": answer})
+
+
+# ---------------------------------------------------------------------------
+# SEO STRÁNKY PER TICKER – veřejná landing page pro každou akcii
+# Google ji indexuje → organický traffic hledající "NVDA analýza" apod.
+# ---------------------------------------------------------------------------
+APP_URL = os.environ.get("APP_URL", "https://my-stocks-kappa.vercel.app").rstrip("/")
+
+
+def _html_escape(s):
+    if s is None: return ""
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def _render_seo_stock(ticker):
+    """Vrátí SEO-optimizovanou HTML stránku pro daný ticker."""
+    ticker = (ticker or "").upper()
+    if not ticker or not all(c.isalnum() or c in "-.^=" for c in ticker):
+        return "<h1>Ticker není platný</h1>", 400
+    # Data (fault-tolerant)
+    name = ticker
+    price = None
+    prev = None
+    chg_pct = 0
+    currency = "USD"
+    sector = ""
+    industry = ""
+    try:
+        d = yahoo_chart(ticker, "1d", "1d")
+        meta = d.get("meta", {}) or {}
+        name = meta.get("shortName") or meta.get("longName") or ticker
+        price = meta.get("regularMarketPrice")
+        prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
+        chg_pct = ((price - prev) / prev * 100.0) if (price and prev) else 0
+        currency = meta.get("currency", "USD")
+    except Exception:
+        pass
+    fk = os.environ.get("FINNHUB_KEY")
+    pe = mcap = None
+    if fk:
+        try:
+            prof = requests.get("https://finnhub.io/api/v1/stock/profile2",
+                                params={"symbol": ticker, "token": fk}, timeout=4).json() or {}
+            m = (requests.get("https://finnhub.io/api/v1/stock/metric",
+                              params={"symbol": ticker, "metric": "all", "token": fk}, timeout=4).json() or {}).get("metric", {}) or {}
+            industry = prof.get("finnhubIndustry", "")
+            pe = m.get("peTTM")
+            mcap = prof.get("marketCapitalization")
+            if not name or name == ticker:
+                name = prof.get("name") or name
+        except Exception:
+            pass
+
+    chg_col = "#00E676" if chg_pct >= 0 else "#FF3D00"
+    chg_sign = "+" if chg_pct >= 0 else ""
+    price_str = f"{price:.2f}" if isinstance(price, (int, float)) else "—"
+    pe_str = f"{pe:.1f}" if isinstance(pe, (int, float)) else "—"
+    if isinstance(mcap, (int, float)) and mcap:
+        mcap_str = (f"{mcap/1000:.1f} B $" if mcap >= 1000 else f"{int(mcap)} M $")
+    else:
+        mcap_str = "—"
+
+    title = f"{ticker} — {name} | Analýza akcie | MY ADVANTAGE"
+    description = (
+        f"Aktuální analýza akcie {name} ({ticker}): cena {price_str} {currency}, "
+        f"P/E {pe_str}, tržní kap. {mcap_str}. Ověřený nákupní signál, hloubková analýza, "
+        f"stop-loss plán. Verdikt ze 6 datových pilířů."
+    )
+    canonical = f"{APP_URL}/stock/{ticker}"
+    og_image = f"{APP_URL}/logo/icon-512.png"
+
+    # JSON-LD structured data pro Google
+    jsonld = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": f"Analýza akcie {name} ({ticker})",
+        "description": description,
+        "author": {"@type": "Organization", "name": "MY ADVANTAGE"},
+        "publisher": {"@type": "Organization", "name": "MY ADVANTAGE",
+                      "logo": {"@type": "ImageObject", "url": og_image}},
+        "dateModified": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+    }, ensure_ascii=False)
+
+    html = f"""<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{_html_escape(title)}</title>
+<meta name="description" content="{_html_escape(description)}">
+<link rel="canonical" href="{canonical}">
+<meta property="og:type" content="article">
+<meta property="og:title" content="{_html_escape(title)}">
+<meta property="og:description" content="{_html_escape(description)}">
+<meta property="og:url" content="{canonical}">
+<meta property="og:image" content="{og_image}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#FF7A00">
+<link rel="icon" href="/logo/icon-32.png">
+<script type="application/ld+json">{jsonld}</script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=Space+Grotesk:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {{ --bg:#050507; --elev:#0e1015; --border:#1e2028; --border-a:#FF7A00; --accent:#FF7A00; --text:#f0f0f0; --text2:#8a8f99; --up:#00E676; --down:#FF3D00; }}
+* {{ box-sizing:border-box; }}
+body {{ margin:0; background:var(--bg); color:var(--text); font-family:'Outfit',sans-serif; line-height:1.55; }}
+.wrap {{ max-width:960px; margin:0 auto; padding:24px 20px 60px; }}
+.brand {{ display:flex; align-items:center; gap:10px; font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:22px; letter-spacing:.5px; margin-bottom:26px; }}
+.brand .b {{ width:36px; height:36px; background:var(--accent); border-radius:11px; }}
+.brand span {{ color:var(--accent); }}
+h1 {{ font-family:'Space Grotesk',sans-serif; font-size:44px; font-weight:800; margin:0 0 4px; letter-spacing:-.5px; }}
+h1 small {{ display:block; font-size:16px; font-weight:500; color:var(--text2); margin-top:8px; }}
+.hero {{ background:var(--elev); border:1px solid var(--border); border-radius:22px; padding:28px 32px; margin-bottom:22px; }}
+.px {{ display:flex; align-items:baseline; gap:18px; margin-top:16px; flex-wrap:wrap; }}
+.px .p {{ font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:38px; }}
+.px .c {{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:18px; padding:5px 14px; border-radius:12px; background:{'rgba(0,230,118,0.14)' if chg_pct >= 0 else 'rgba(255,61,0,0.14)'}; color:{chg_col}; }}
+.grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-top:20px; }}
+.cell {{ background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:12px 14px; }}
+.cell .l {{ font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.6px; font-weight:600; }}
+.cell .v {{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:18px; margin-top:3px; }}
+.cta {{ margin-top:24px; text-align:center; }}
+.cta a {{ display:inline-flex; align-items:center; gap:8px; background:var(--accent); color:#1a0e00; padding:14px 28px; font-family:'Space Grotesk',sans-serif; font-weight:700; text-decoration:none; border-radius:14px; font-size:16px; transition:transform .15s, box-shadow .2s; }}
+.cta a:hover {{ transform:translateY(-2px); box-shadow:0 12px 28px rgba(255,122,0,0.35); }}
+h2 {{ font-family:'Space Grotesk',sans-serif; font-size:24px; margin:38px 0 14px; }}
+p {{ color:#c9ccd3; }}
+.pill-row {{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 4px; }}
+.pill {{ background:var(--elev); border:1px solid var(--border); border-radius:999px; padding:8px 14px; font-size:13px; color:var(--text2); }}
+.pillar {{ background:var(--elev); border:1px solid var(--border); border-radius:14px; padding:16px 18px; margin-bottom:10px; }}
+.pillar b {{ color:var(--accent); }}
+.foot {{ text-align:center; color:var(--text2); font-size:12px; margin-top:44px; padding-top:20px; border-top:1px solid var(--border); }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><div class="b"></div>MY <span>ADVANTAGE</span></div>
+
+  <div class="hero">
+    <h1>{_html_escape(ticker)} <small>{_html_escape(name)}</small></h1>
+    <div class="px">
+      <div class="p">{price_str} <span style="font-size:16px;color:var(--text2);font-weight:600;">{_html_escape(currency)}</span></div>
+      <div class="c">{chg_sign}{chg_pct:.2f}%</div>
+    </div>
+    <div class="grid">
+      <div class="cell"><div class="l">P/E</div><div class="v">{pe_str}</div></div>
+      <div class="cell"><div class="l">Tržní kap.</div><div class="v">{mcap_str}</div></div>
+      <div class="cell"><div class="l">Sektor</div><div class="v" style="font-size:14px">{_html_escape(industry or '—')}</div></div>
+    </div>
+    <div class="cta">
+      <a href="/?ticker={_html_escape(ticker)}">🚀 Otevřít plnou analýzu v aplikaci</a>
+    </div>
+  </div>
+
+  <h2>Naše analýza akcie {_html_escape(name)}</h2>
+  <p>MY ADVANTAGE vydává verdikt <b>Koupit / Držet / Prodat</b> ze 6 datových pilířů. Nakupujeme <em>slevu v uptrendu</em> — nechytáme padající nůž. U každého obchodu počítáme stop-loss.</p>
+
+  <div class="pill-row">
+    <span class="pill">✅ Ověřeno backtestem 5 let</span>
+    <span class="pill">🎯 ~65 % trefnost TOP signálu</span>
+    <span class="pill">📊 6 datových pilířů</span>
+    <span class="pill">🛡️ Stop-loss u každého obchodu</span>
+  </div>
+
+  <h2>Ze kterých pilířů skládáme verdikt</h2>
+  <div class="pillar"><b>1. Technika (30 %)</b> — nákup poklesu v dlouhodobém uptrendu, žádné chytání padajícího nože.</div>
+  <div class="pillar"><b>2. Valuace (20 %)</b> — jestli je akcie levná nebo drahá vůči svým ziskům (P/E, P/B).</div>
+  <div class="pillar"><b>3. Růst & ziskovost (25 %)</b> — roste firma, má marže, reálně vydělává?</div>
+  <div class="pillar"><b>4. Analytici (22 %)</b> — konsenzus Wall Street a prostor k cílové ceně.</div>
+  <div class="pillar"><b>5. Nálada &amp; instituce (13 %)</b> — sentiment titulků, insider transakce, revize analytiků.</div>
+  <div class="pillar"><b>6. SEC podání (10 %)</b> — oficiální americká data: Form 4 (insider), 10-Q, 8-K.</div>
+
+  <h2>Chceš vidět aktuální verdikt pro {_html_escape(ticker)}?</h2>
+  <p>Otevři plnou hloubkovou analýzu s cenou vstupu, cílem, stop-lossem, scénáři a kompletním rozborem.</p>
+  <div class="cta">
+    <a href="/?ticker={_html_escape(ticker)}">Otevřít analýzu {_html_escape(ticker)} →</a>
+  </div>
+
+  <div class="foot">
+    MY ADVANTAGE je nástroj pro vzdělávací a informační účely. Neposkytuje investiční poradenství.
+    Historická výkonnost nezaručuje budoucí výsledky.
+  </div>
+</div>
+</body>
+</html>"""
+    return html, 200
+
+
+@app.route("/stock/<path:ticker>")
+def seo_stock(ticker):
+    html, status = _render_seo_stock(ticker)
+    resp = make_response(html, status)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Cache-Control"] = "public, max-age=600, s-maxage=3600"
+    return resp
+
+
+# Vybraný seznam populárních tickerů pro sitemap
+_SITEMAP_TICKERS = [
+    "AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","BRK.B","JPM","V",
+    "MA","JNJ","XOM","WMT","PG","LLY","AVGO","HD","MRK","KO","PEP","BAC",
+    "ABBV","CVX","CRM","AMD","INTC","NFLX","ADBE","DIS","PYPL","T","VZ",
+    "QCOM","IBM","GS","MS","BA","CAT","GE","NKE","MCD","SBUX","COST","UNH",
+    "PFE","CSCO","ORCL","BABA","SHOP","SQ","PLTR","COIN","RIVN","LCID",
+    "SPY","QQQ","VOO","VTI","VTV","IWM","EFA","EEM",
+]
+
+
+@app.route("/sitemap.xml")
+def sitemap():
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    urls = [f"{APP_URL}/", f"{APP_URL}/#about"]
+    urls += [f"{APP_URL}/stock/{t}" for t in _SITEMAP_TICKERS]
+    xml = ['<?xml version="1.0" encoding="UTF-8"?>',
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for u in urls:
+        xml.append(f"  <url><loc>{u}</loc><lastmod>{today}</lastmod><changefreq>daily</changefreq></url>")
+    xml.append("</urlset>")
+    resp = make_response("\n".join(xml))
+    resp.headers["Content-Type"] = "application/xml; charset=utf-8"
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
+@app.route("/robots.txt")
+def robots():
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /api/\n"
+        f"Sitemap: {APP_URL}/sitemap.xml\n"
+    )
+    resp = make_response(body)
+    resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+    return resp
 
 
 @app.route("/api/stock/<path:ticker>")

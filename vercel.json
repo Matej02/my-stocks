@@ -9,6 +9,9 @@
     { "src": "/api/(.*)", "dest": "/api/index.py" },
     { "src": "/manifest.webmanifest", "dest": "/manifest.webmanifest", "headers": { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=86400" } },
     { "src": "/logo/(.*)", "dest": "/logo/$1", "headers": { "Cache-Control": "public, max-age=2592000" } },
+    { "src": "/stock/(.*)", "dest": "/api/index.py" },
+    { "src": "/sitemap.xml", "dest": "/api/index.py" },
+    { "src": "/robots.txt", "dest": "/api/index.py" },
     { "src": "/(.*)", "dest": "/index.html", "headers": {
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "SAMEORIGIN",
