@@ -750,11 +750,48 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .sz-out .warn {color:var(--down); font-size:12px; margin-top:8px;}
 
 /* ============ SROVNÁVAČ AKCIÍ ============ */
-.cmp-sub {color:var(--text2); font-size:13px; margin:-4px 0 12px; line-height:1.4;}
-.cmp-inputs {display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
-.cmp-input {background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:11px; color:var(--text); padding:11px 13px; font-family:var(--fb); font-size:14px; text-transform:uppercase; letter-spacing:.5px;}
-.cmp-input:focus {outline:none; border-color:var(--accent);}
-@media (max-width:680px) {.cmp-inputs {grid-template-columns:1fr;}}
+.cmp-box {max-width:920px; width:100%;}
+.cmp-topbar {display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+.cmp-close {background:transparent; border:none; color:var(--text2); font-size:20px; cursor:pointer; padding:4px 8px; border-radius:8px;}
+.cmp-close:hover {background:rgba(255,255,255,0.05); color:var(--text);}
+.cmp-sub {color:var(--text2); font-size:13px; margin:0 0 18px; line-height:1.5;}
+
+.cmp-slots {display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px;}
+@media (max-width:680px) {.cmp-slots {grid-template-columns:1fr;}}
+
+.cmp-slot {background:var(--elev); border:1.5px dashed var(--border); border-radius:14px; padding:16px 14px; min-height:120px; display:flex; flex-direction:column; gap:8px; cursor:pointer; transition:border-color .18s, background .18s;}
+.cmp-slot:hover {border-color:var(--accent); background:rgba(255,122,0,0.05);}
+.cmp-slot.filled {border-style:solid; border-color:var(--border-accent); background:linear-gradient(160deg, var(--accent-soft), transparent 75%);}
+.cmp-slot .slot-lbl {font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.7px; font-weight:700;}
+.cmp-slot .slot-tk {font-family:var(--fh); font-weight:800; font-size:22px; letter-spacing:-.3px;}
+.cmp-slot .slot-nm {font-size:12.5px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.cmp-slot .slot-empty {display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; gap:6px;}
+.cmp-slot .slot-empty i {font-size:24px; color:var(--accent); opacity:.5;}
+.cmp-slot .slot-empty span {font-size:13px; color:var(--text2);}
+.cmp-slot .slot-x {position:absolute; top:8px; right:10px; background:rgba(0,0,0,0.35); border:none; color:var(--text2); width:22px; height:22px; border-radius:50%; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center;}
+.cmp-slot .slot-x:hover {color:var(--down); background:rgba(255,61,0,0.15);}
+.cmp-slot {position:relative;}
+
+.cmp-actions {display:flex; gap:10px; justify-content:flex-end; margin-bottom:10px;}
+.cmp-actions .btn-primary[disabled] {opacity:.5; cursor:not-allowed;}
+
+/* PICKER (jak vyhledávač v hlavičce) */
+.cmp-picker {position:absolute; inset:0; background:rgba(0,0,0,0.55); z-index:5; display:flex; align-items:flex-start; justify-content:center; padding:60px 20px 20px;}
+.cmp-picker-box {background:var(--elev); border:1px solid var(--border); border-radius:16px; width:100%; max-width:520px; max-height:85%; display:flex; flex-direction:column; overflow:hidden;}
+.cmp-picker-head {display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--border);}
+.cmp-picker-head b {font-family:var(--fh); font-size:14px; font-weight:700;}
+.cmp-search-row {display:flex; align-items:center; gap:10px; padding:12px 18px; border-bottom:1px solid var(--border);}
+.cmp-search-row i {color:var(--text2); font-size:18px;}
+.cmp-search-row input {flex:1; background:transparent; border:none; outline:none; color:var(--text); font-family:var(--fb); font-size:14px;}
+.cmp-picker-body {overflow-y:auto; max-height:52vh; padding:6px 0;}
+.cmp-picker-grp {padding:9px 18px 3px; font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; font-weight:700;}
+.cmp-picker-item {display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 18px; cursor:pointer; transition:background .12s;}
+.cmp-picker-item:hover {background:rgba(255,255,255,0.04);}
+.cmp-picker-item .l {display:flex; flex-direction:column; min-width:0;}
+.cmp-picker-item .l .t {font-family:var(--fh); font-weight:700; font-size:14px;}
+.cmp-picker-item .l .n {font-size:11.5px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.cmp-picker-item .type-badge {font-size:10px; padding:3px 8px; border-radius:7px; font-weight:700; letter-spacing:.4px;}
+.cmp-picker-empty {padding:24px; text-align:center; color:var(--text2); font-size:13px;}
 
 .cmp-table {display:grid; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
 .cmp-row {display:grid; background:var(--elev); padding:12px 14px; align-items:center; font-size:13px;}
@@ -1307,19 +1344,38 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 
   <!-- SROVNÁVAČ AKCIÍ MODAL -->
   <div class="pl-modal" id="compareModal">
-    <div class="pl-modal-box" style="max-width:880px;">
-      <h3><i class="ti ti-arrows-shuffle" style="color:var(--accent)"></i> Srovnat akcie</h3>
-      <div class="cmp-sub">Zadej 2 nebo 3 tickery a srovnej je vedle sebe. Vyhrávající hodnoty zvýrazníme zeleně.</div>
-      <div class="cmp-inputs" id="cmp-inputs">
-        <input type="text" class="cmp-input" placeholder="např. AAPL" maxlength="10" autocomplete="off">
-        <input type="text" class="cmp-input" placeholder="např. MSFT" maxlength="10" autocomplete="off">
-        <input type="text" class="cmp-input" placeholder="(volitelné) GOOGL" maxlength="10" autocomplete="off">
+    <div class="pl-modal-box cmp-box">
+      <div class="cmp-topbar">
+        <h3 style="margin:0;"><i class="ti ti-arrows-shuffle" style="color:var(--accent)"></i> Srovnat akcie vedle sebe</h3>
+        <button class="cmp-close" onclick="closeCompare()"><i class="ti ti-x"></i></button>
       </div>
-      <div class="pl-modal-btns" style="margin-top:14px;">
-        <button class="btn-ghost" onclick="closeCompare()">Zavřít</button>
-        <button class="btn-primary" onclick="runCompare()"><i class="ti ti-arrows-shuffle"></i> Porovnat</button>
+      <div class="cmp-sub">Vyber až 3 akcie a porovnej cenu, P/E, marže, MA skóre a další. Vyhrávající hodnoty jsou zeleně, nejhorší červeně.</div>
+
+      <div class="cmp-slots" id="cmp-slots">
+        <!-- 3 sloty se vyrenderují JS -->
       </div>
+
+      <div class="cmp-actions">
+        <button class="btn-primary" id="cmp-run-btn" onclick="runCompare()" disabled><i class="ti ti-arrows-shuffle"></i> Porovnat</button>
+        <button class="btn-ghost" onclick="clearCompareSlots()">Vymazat</button>
+      </div>
+
       <div id="cmp-result" style="margin-top:18px;"></div>
+    </div>
+
+    <!-- PICKER (výběr akcie) -->
+    <div class="cmp-picker" id="cmp-picker" style="display:none;" onclick="if(event.target===this)closeCmpPicker()">
+      <div class="cmp-picker-box">
+        <div class="cmp-picker-head">
+          <b>Vybrat akcii do slotu <span id="cmp-picker-slot">1</span></b>
+          <button class="cmp-close" onclick="closeCmpPicker()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="cmp-search-row">
+          <i class="ti ti-search"></i>
+          <input type="text" id="cmp-picker-search" placeholder="Vyhledat ticker nebo firmu…" autocomplete="off" oninput="onCmpPickerInput()">
+        </div>
+        <div class="cmp-picker-body" id="cmp-picker-body"></div>
+      </div>
     </div>
   </div>
 
@@ -2130,6 +2186,9 @@ document.addEventListener("DOMContentLoaded", () => {
             e.preventDefault(); searchInput.focus();
         }
         if(e.key === 'Escape') {
+            const pk = document.getElementById('cmp-picker');
+            if(pk && pk.style.display === 'flex') { closeCmpPicker(); return; }
+            if(document.getElementById('compareModal').classList.contains('open')) { closeCompare(); return; }
             if(document.getElementById('alertModal').classList.contains('open')) { closeAlertModal(); return; }
             if(document.getElementById('profileModal').classList.contains('open')) { closeProfile(); return; }
             if(document.getElementById('detail-view').style.display === 'block') closeDetail();
@@ -2939,20 +2998,155 @@ function runSizer() {
 }
 
 // ====================== SROVNÁVAČ AKCIÍ ======================
+let _cmpSlots = [null, null, null];  // { ticker, name }
+let _cmpPickerSlotIdx = 0;
+let _cmpPickerTimer = null;
+let _cmpNameCache = {};  // ticker -> pretty name
+
 function openCompare(prefill) {
-    const inputs = document.querySelectorAll('#cmp-inputs .cmp-input');
-    if (prefill && prefill.length) {
-        inputs.forEach((el, i) => { el.value = prefill[i] || ''; });
+    _cmpSlots = [null, null, null];
+    if (Array.isArray(prefill)) {
+        prefill.slice(0, 3).forEach((t, i) => {
+            if (t) _cmpSlots[i] = { ticker: String(t).toUpperCase(), name: '' };
+        });
     } else {
-        // Prefill první 2-3 z watchlistu
-        const wl = (myStocks || []).slice(0, 3);
-        inputs.forEach((el, i) => { if (!el.value) el.value = wl[i] || ''; });
+        // Předvyplň prvními 2 z watchlistu (ne 3 – aby uživatel viděl, že si může přidat)
+        const wl = (myStocks || []).slice(0, 2);
+        wl.forEach((t, i) => { _cmpSlots[i] = { ticker: t.toUpperCase(), name: '' }; });
     }
+    renderCompareSlots();
     document.getElementById('cmp-result').innerHTML = '';
     document.getElementById('compareModal').classList.add('open');
 }
 function closeCompare() {
+    closeCmpPicker();
     document.getElementById('compareModal').classList.remove('open');
+}
+function clearCompareSlots() {
+    _cmpSlots = [null, null, null];
+    renderCompareSlots();
+    document.getElementById('cmp-result').innerHTML = '';
+}
+
+function renderCompareSlots() {
+    const box = document.getElementById('cmp-slots');
+    if (!box) return;
+    box.innerHTML = _cmpSlots.map((s, i) => {
+        if (!s) {
+            return `<div class="cmp-slot" onclick="openCmpPicker(${i})">
+                <div class="slot-lbl">Akcie ${i + 1}</div>
+                <div class="slot-empty">
+                    <i class="ti ti-plus"></i>
+                    <span>Klikni a vyber</span>
+                </div>
+            </div>`;
+        }
+        const nm = s.name || _cmpNameCache[s.ticker] || niceName(s.ticker, s.ticker);
+        return `<div class="cmp-slot filled" onclick="openCmpPicker(${i})">
+            <button class="slot-x" onclick="event.stopPropagation();clearCmpSlot(${i})"><i class="ti ti-x"></i></button>
+            <div class="slot-lbl">Akcie ${i + 1}</div>
+            <div class="slot-tk">${escapeHtml(s.ticker)}</div>
+            <div class="slot-nm">${escapeHtml(nm)}</div>
+        </div>`;
+    }).join('');
+    const filledCount = _cmpSlots.filter(Boolean).length;
+    const btn = document.getElementById('cmp-run-btn');
+    if (btn) btn.disabled = filledCount < 2;
+}
+
+function clearCmpSlot(i) {
+    _cmpSlots[i] = null;
+    renderCompareSlots();
+}
+
+function openCmpPicker(slotIdx) {
+    _cmpPickerSlotIdx = slotIdx;
+    document.getElementById('cmp-picker-slot').textContent = slotIdx + 1;
+    document.getElementById('cmp-picker-search').value = '';
+    renderCmpPickerDefault();
+    document.getElementById('cmp-picker').style.display = 'flex';
+    setTimeout(() => document.getElementById('cmp-picker-search').focus(), 60);
+}
+function closeCmpPicker() {
+    document.getElementById('cmp-picker').style.display = 'none';
+}
+
+function renderCmpPickerDefault() {
+    const body = document.getElementById('cmp-picker-body');
+    const wlData = lastWatchlistData || [];
+    const already = new Set(_cmpSlots.filter(Boolean).map(s => s.ticker));
+    const wl = wlData.filter(x => !already.has(x.ticker));
+    let html = '';
+    if (wl.length) {
+        html += '<div class="cmp-picker-grp">Ze tvého portfolia</div>';
+        html += wl.map(x => cmpPickerItemHTML({
+            ticker: x.ticker, name: niceName(x.ticker, x.name), type: 'EQUITY'
+        })).join('');
+    }
+    html += '<div class="cmp-picker-grp">Populární</div>';
+    const popular = [
+        { ticker:'AAPL', name:'Apple', type:'EQUITY' },
+        { ticker:'MSFT', name:'Microsoft', type:'EQUITY' },
+        { ticker:'NVDA', name:'NVIDIA', type:'EQUITY' },
+        { ticker:'GOOGL', name:'Alphabet', type:'EQUITY' },
+        { ticker:'AMZN', name:'Amazon', type:'EQUITY' },
+        { ticker:'TSLA', name:'Tesla', type:'EQUITY' },
+        { ticker:'META', name:'Meta', type:'EQUITY' },
+        { ticker:'SPY', name:'S&P 500 ETF', type:'ETF' },
+    ].filter(x => !already.has(x.ticker));
+    html += popular.map(cmpPickerItemHTML).join('');
+    body.innerHTML = html;
+}
+
+function cmpPickerItemHTML(item) {
+    const t = item.type || 'EQUITY';
+    const col = SEARCH_TYPE_COL[t] || 'var(--text2)';
+    const badge = `<span class="type-badge" style="background:${col}22;color:${col};">${SEARCH_TYPE_CZ[t] || 'Akcie'}</span>`;
+    return `<div class="cmp-picker-item" onclick="pickCmpTicker('${item.ticker}', '${(item.name||'').replace(/'/g, "\\'")}')">
+        <div class="l">
+            <span class="t">${escapeHtml(item.ticker)}</span>
+            <span class="n">${escapeHtml(item.name || item.ticker)}</span>
+        </div>
+        ${badge}
+    </div>`;
+}
+
+function pickCmpTicker(ticker, name) {
+    _cmpSlots[_cmpPickerSlotIdx] = { ticker: ticker.toUpperCase(), name: name || '' };
+    _cmpNameCache[ticker.toUpperCase()] = name || '';
+    closeCmpPicker();
+    renderCompareSlots();
+}
+
+function onCmpPickerInput() {
+    const q = document.getElementById('cmp-picker-search').value.trim();
+    clearTimeout(_cmpPickerTimer);
+    if (!q) { renderCmpPickerDefault(); return; }
+    _cmpPickerTimer = setTimeout(() => cmpPickerSearch(q), 200);
+}
+
+async function cmpPickerSearch(q) {
+    const body = document.getElementById('cmp-picker-body');
+    body.innerHTML = '<div class="cmp-picker-empty"><i class="ti ti-loader spin"></i> Hledám…</div>';
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/search?q=${encodeURIComponent(q)}`)).json();
+        const items = (d && d.results) || [];
+        if (!items.length) {
+            body.innerHTML = '<div class="cmp-picker-empty">Nic nenalezeno.</div>';
+            return;
+        }
+        const already = new Set(_cmpSlots.filter(Boolean).map(s => s.ticker));
+        const filtered = items.filter(x => !already.has(x.ticker));
+        if (!filtered.length) {
+            body.innerHTML = '<div class="cmp-picker-empty">Všechny výsledky už máš vybrané.</div>';
+            return;
+        }
+        body.innerHTML = filtered.map(x => cmpPickerItemHTML({
+            ticker: x.ticker, name: niceName(x.ticker, x.name), type: x.type || 'EQUITY'
+        })).join('');
+    } catch (e) {
+        body.innerHTML = '<div class="cmp-picker-empty" style="color:var(--down)">Chyba vyhledávání.</div>';
+    }
 }
 
 const _CMP_METRICS = [
@@ -2990,23 +3184,27 @@ function _cmpRank(values, dir) {
 }
 
 async function runCompare() {
-    const inputs = [...document.querySelectorAll('#cmp-inputs .cmp-input')];
-    const tickers = inputs.map(el => el.value.trim().toUpperCase()).filter(Boolean);
+    const tickers = _cmpSlots.filter(Boolean).map(s => s.ticker);
     const out = document.getElementById('cmp-result');
     if (tickers.length < 2) {
-        out.innerHTML = '<div class="ov-empty" style="color:var(--down)">Zadej alespoň 2 tickery.</div>';
+        out.innerHTML = '<div class="ov-empty" style="color:var(--down)">Vyber alespoň 2 akcie.</div>';
         return;
     }
     out.innerHTML = '<div class="ov-load"><i class="ti ti-loader spin"></i> Načítám data pro porovnání…</div>';
     try {
         const d = await (await fetch(`${BACKEND_URL}/api/compare?tickers=${tickers.join(',')}`)).json();
         const rows = (d && d.results) || [];
+        const missing = tickers.filter(t => !rows.some(r => r.ticker === t));
         if (rows.length < 2) {
-            out.innerHTML = '<div class="ov-empty" style="color:var(--down)">Některý ticker se nepodařilo načíst. Zkontroluj symbol.</div>';
+            out.innerHTML = `<div class="ov-empty" style="color:var(--down)">Podařilo se načíst jen ${rows.length} z ${tickers.length} akcií. ${missing.length ? 'Chybí: ' + missing.join(', ') : ''}</div>`;
             return;
         }
+        // Ulož pěkné jméno do cache pro budoucí zobrazení
+        rows.forEach(r => { if (r.ticker && r.name) _cmpNameCache[r.ticker] = niceName(r.ticker, r.name); });
         const n = rows.length;
-        const cols = `60px repeat(${n}, 1fr)`;
+        const cols = `120px repeat(${n}, 1fr)`;
+        const missingBanner = missing.length ? `<div style="background:var(--amber-soft); color:var(--amber); padding:10px 14px; border-radius:10px; margin-bottom:12px; font-size:13px;"><i class="ti ti-info-circle"></i> Nepodařilo se načíst: <b>${missing.join(', ')}</b>. Zkontroluj správnost tickeru.</div>` : '';
+        out.innerHTML = missingBanner;
         // Hlavička
         let html = `<div class="cmp-table">`;
         html += `<div class="cmp-row head" style="grid-template-columns:${cols}"><div class="lbl">Ukazatel</div>` + rows.map(r => `
@@ -3029,7 +3227,7 @@ async function runCompare() {
             html += `</div>`;
         });
         html += `</div>`;
-        out.innerHTML = html;
+        out.innerHTML += html;  // připojit k missing banneru
     } catch (e) {
         out.innerHTML = '<div class="ov-empty" style="color:var(--down)">Srovnání se nepodařilo načíst.</div>';
     }
