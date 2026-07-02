@@ -638,6 +638,24 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-opp-row .r .s {font-family:var(--fh); font-weight:700; color:var(--up);}
 .ov-opp-row .r .h {font-size:11px; color:var(--text2);}
 
+/* ============ UDÁLOSTI U TVÝCH AKCIÍ ============ */
+.ov-alerts {display:flex; flex-direction:column; gap:6px;}
+.ov-alert {display:grid; grid-template-columns:auto 68px 1fr auto; gap:12px; align-items:center; padding:10px 14px; background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:11px; cursor:pointer; transition:border-color .2s;}
+.ov-alert:hover {border-color:var(--border-accent);}
+.ov-alert.good {border-left:3px solid var(--up);}
+.ov-alert.warn {border-left:3px solid var(--amber);}
+.ov-alert.info {border-left:3px solid #4fa3ff;}
+.ov-alert.bad {border-left:3px solid var(--down);}
+.ov-alert i.big {font-size:20px; color:var(--text2);}
+.ov-alert.good i.big {color:var(--up);}
+.ov-alert.warn i.big {color:var(--amber);}
+.ov-alert.info i.big {color:#4fa3ff;}
+.ov-alert .tk {font-family:var(--fh); font-weight:700; font-size:14px;}
+.ov-alert .tt {display:flex; flex-direction:column; min-width:0;}
+.ov-alert .tt .n {font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.ov-alert .tt .h {font-size:11.5px; color:var(--text2);}
+.ov-alert .dt {font-family:var(--fh); font-size:11.5px; color:var(--text2); font-weight:600; white-space:nowrap;}
+
 /* ============ EARNINGS SURPRISE + INSTITUCIONÁLNÍ DRŽITELÉ ============ */
 .es-box, .hd-box {background:var(--elev); border:1px solid var(--border); border-radius:16px; padding:18px 20px; margin-top:20px;}
 .es-head {display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;}
@@ -1569,6 +1587,14 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           </div>
         </div>
 
+        <!-- UDÁLOSTI U TVÝCH AKCIÍ -->
+        <div class="ov-col-12">
+          <div class="ov-card">
+            <h3><i class="ti ti-bell"></i> Události u tvých akcií <span style="font-size:11px; color:var(--text2); font-weight:400; letter-spacing:0; text-transform:none;">— posledních 10 dnů</span></h3>
+            <div class="ov-alerts" id="ov-alerts"><div class="ov-load"><i class="ti ti-loader spin"></i> Kontroluji SEC + analytické revize…</div></div>
+          </div>
+        </div>
+
         <!-- SEKTOROVÁ HEATMAPA -->
         <div class="ov-col-12">
           <div class="ov-card">
@@ -2457,6 +2483,7 @@ async function loadOverview(force) {
         fetchOverviewNews(),
         fetchOverviewOpps(),
         fetchOverviewSectors(),
+        fetchOverviewAlerts(),
     ];
     renderOverviewPortfolio();
     renderOverviewEvents();
@@ -2645,6 +2672,31 @@ async function fetchOverviewOpps() {
             </div>`).join('')}</div>`;
     } catch(e) {
         box.innerHTML = '<div class="ov-empty">Skener teď není dostupný.</div>';
+    }
+}
+
+async function fetchOverviewAlerts() {
+    const box = document.getElementById('ov-alerts');
+    if (!box) return;
+    const tk = (myStocks || []).join(',');
+    if (!tk) { box.innerHTML = '<div class="ov-empty">Přidej si akcii do sledování a začneme hlídat její události.</div>'; return; }
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/alerts/events?tickers=${encodeURIComponent(tk)}&days=10`)).json();
+        const items = (d && d.events) || [];
+        if (!items.length) { box.innerHTML = '<div class="ov-empty">Za poslední 10 dnů žádné významné události. Klid je taky info.</div>'; return; }
+        box.innerHTML = items.slice(0, 8).map(ev => {
+            const dt = ev.date ? new Date(ev.date + 'T12:00:00Z') : null;
+            const dtxt = dt ? dt.toLocaleDateString('cs-CZ', {day:'2-digit', month:'2-digit'}) : '';
+            const click = ev.url ? `window.open('${ev.url.replace(/'/g,"\\'")}', '_blank', 'noopener')` : `loadStockDetail('${ev.ticker}')`;
+            return `<div class="ov-alert ${ev.severity || 'info'}" onclick="${click}">
+                <i class="ti ${ev.icon} big"></i>
+                <div class="tk">${escapeHtml(ev.ticker)}</div>
+                <div class="tt"><span class="n">${escapeHtml(ev.title)}</span><span class="h">${escapeHtml(ev.hint || '')}</span></div>
+                <div class="dt">${dtxt}</div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        box.innerHTML = '<div class="ov-empty">Události teď nelze načíst.</div>';
     }
 }
 

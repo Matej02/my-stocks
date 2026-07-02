@@ -3285,6 +3285,120 @@ def api_top_holders(ticker):
     return jsonify({"ok": True, "cached": False, **out})
 
 
+# ---------------------------------------------------------------------------
+# ALERTS/EVENTS – souhrn klíčových událostí u tickerů (retenční feature)
+# ---------------------------------------------------------------------------
+def _events_for_ticker(ticker, since_days=10):
+    """Pro daný ticker vrátí významné události za posledních N dní.
+    Bereme: 8-K (materiální události), Form 4 (insider), 10-Q (nové výsledky),
+    analytické revize (Finnhub upgrade grade) a nadcházející earnings."""
+    from datetime import date as _date
+    today = datetime.now(timezone.utc).date()
+    cutoff_iso = (today - timedelta(days=since_days)).strftime("%Y-%m-%d")
+    events = []
+
+    # 1) SEC filings (8-K, Form 4, 10-Q)
+    try:
+        secs = _sec_recent_filings(ticker, limit=25)
+        for it in secs:
+            if not it.get("date") or it["date"] < cutoff_iso:
+                continue
+            if it["form"] == "8-K":
+                events.append({"ticker": ticker, "date": it["date"], "kind": "material",
+                               "icon": "ti-alert-triangle", "severity": "warn",
+                               "title": "Materiální událost (8-K)",
+                               "hint": "Akvizice, změna vedení, právní spor nebo jiné oznámení.",
+                               "url": it.get("url", "")})
+            elif it["form"] == "4":
+                events.append({"ticker": ticker, "date": it["date"], "kind": "insider",
+                               "icon": "ti-user-check", "severity": "good",
+                               "title": "Insider transakce (Form 4)",
+                               "hint": "Člen vedení nakoupil nebo prodal akcie.",
+                               "url": it.get("url", "")})
+            elif it["form"] == "10-Q":
+                events.append({"ticker": ticker, "date": it["date"], "kind": "quarterly",
+                               "icon": "ti-report", "severity": "info",
+                               "title": "Kvartální výsledky (10-Q)",
+                               "hint": "Čerstvá čísla za poslední kvartál.",
+                               "url": it.get("url", "")})
+    except Exception:
+        pass
+
+    # 2) Analytické revize (Finnhub upgrade/downgrade)
+    fk = os.environ.get("FINNHUB_KEY")
+    if fk:
+        try:
+            from_s = (today - timedelta(days=since_days)).strftime("%Y-%m-%d")
+            to_s = today.strftime("%Y-%m-%d")
+            r = requests.get("https://finnhub.io/api/v1/stock/upgrade-downgrade",
+                             params={"symbol": ticker, "from": from_s, "to": to_s, "token": fk},
+                             timeout=5).json() or []
+            for u in (r or [])[:5]:
+                gt = u.get("gradeTime")
+                d = ""
+                if isinstance(gt, (int, float)) and gt:
+                    d = datetime.fromtimestamp(gt, tz=timezone.utc).strftime("%Y-%m-%d")
+                if not d or d < cutoff_iso:
+                    continue
+                from_g = u.get("fromGrade") or "?"
+                to_g = u.get("toGrade") or "?"
+                comp = u.get("company") or "Analytik"
+                action = (u.get("action") or "").lower()
+                # up/main/down klasifikace
+                is_up = "up" in action or (from_g and to_g and to_g.lower() > from_g.lower())
+                events.append({"ticker": ticker, "date": d, "kind": "analyst",
+                               "icon": "ti-users-group",
+                               "severity": "good" if is_up else "warn",
+                               "title": f"{comp}: {from_g} → {to_g}",
+                               "hint": "Změna doporučení analytiků.",
+                               "url": ""})
+        except Exception:
+            pass
+
+        # 3) Blížící se earnings (do 7 dnů)
+        try:
+            to_s2 = (today + timedelta(days=14)).strftime("%Y-%m-%d")
+            cal = requests.get("https://finnhub.io/api/v1/calendar/earnings",
+                               params={"from": today.strftime("%Y-%m-%d"), "to": to_s2,
+                                       "symbol": ticker, "token": fk}, timeout=5).json() or {}
+            for e in (cal.get("earningsCalendar") or [])[:1]:
+                d = e.get("date")
+                if not d:
+                    continue
+                events.append({"ticker": ticker, "date": d, "kind": "earnings_upcoming",
+                               "icon": "ti-calendar-event", "severity": "info",
+                               "title": "Blížící se earnings",
+                               "hint": "Výsledky hospodaření se blíží — očekávej volatilitu.",
+                               "url": ""})
+        except Exception:
+            pass
+
+    return events
+
+
+@app.route("/api/alerts/events")
+def api_alerts_events():
+    """Vrátí souhrn klíčových událostí pro seznam tickerů. Cache 2h."""
+    tickers_param = (request.args.get("tickers") or "").upper()
+    since_days = max(1, min(30, int(request.args.get("days", "10") or 10)))
+    tickers = [t.strip() for t in tickers_param.split(",") if t.strip()][:20]
+    if not tickers:
+        return jsonify({"ok": True, "events": []})
+    ck = f"alerts:{','.join(tickers)}:{since_days}"
+    cached = kv_get_json(ck)
+    if cached and (time.time() - cached.get("ts", 0) < 7200):
+        return jsonify({"ok": True, "cached": True, **cached})
+    events = []
+    for t in tickers:
+        events += _events_for_ticker(t, since_days=since_days)
+    events.sort(key=lambda x: x.get("date") or "", reverse=True)
+    out = {"ts": int(time.time()), "events": events[:15],
+           "updated": datetime.now(timezone.utc).strftime("%H:%M UTC")}
+    try: kv_set_json(ck, out)
+    except Exception: pass
+    return jsonify({"ok": True, "cached": False, **out})
+
+
 @app.route("/api/sec/<path:ticker>")
 def api_sec(ticker):
     ticker = ticker.upper()
