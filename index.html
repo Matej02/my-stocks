@@ -638,6 +638,25 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-opp-row .r .s {font-family:var(--fh); font-weight:700; color:var(--up);}
 .ov-opp-row .r .h {font-size:11px; color:var(--text2);}
 
+/* ============ REFERRAL PROGRAM ============ */
+.ref-box {margin:14px 0 6px; background:linear-gradient(160deg, var(--accent-soft), transparent 75%); border:1px solid var(--border-accent); border-radius:16px; padding:18px 20px;}
+.ref-head {display:flex; gap:12px; align-items:flex-start; margin-bottom:14px;}
+.ref-head i {font-size:24px; flex-shrink:0; margin-top:2px;}
+.ref-head b {display:block; font-size:14px; margin-bottom:3px;}
+.ref-sub {font-size:12px; color:var(--text2); line-height:1.5;}
+.ref-code-row {display:flex; align-items:center; gap:14px; padding:12px 14px; background:rgba(255,255,255,0.03); border-radius:11px; margin-bottom:10px;}
+.ref-lbl {font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.7px; font-weight:700;}
+.ref-code {font-family:var(--fh); font-weight:800; font-size:20px; color:var(--accent); letter-spacing:1px;}
+.ref-share {display:flex; gap:8px; margin-bottom:12px;}
+.ref-share input {flex:1; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:11px; color:var(--text); padding:11px 13px; font-family:var(--fb); font-size:13px;}
+.ref-share button {white-space:nowrap;}
+.ref-stats {display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;}
+.ref-stat {background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:11px; padding:10px 12px; text-align:center;}
+.ref-stat.hero {background:var(--up-glow); border-color:rgba(0,230,118,0.35);}
+.ref-stat .l {font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.6px;}
+.ref-stat .v {font-family:var(--fh); font-weight:800; font-size:20px; margin-top:2px;}
+.ref-stat.hero .v {color:var(--up);}
+
 /* ============ PORTFOLIO PERFORMANCE ============ */
 .pfp-range {display:flex; gap:4px; background:rgba(255,255,255,0.04); border:1px solid var(--border); padding:3px; border-radius:10px;}
 .pfp-r {background:transparent; border:none; color:var(--text2); padding:6px 12px; border-radius:8px; cursor:pointer; font-family:var(--fb); font-size:11.5px; font-weight:700; letter-spacing:.4px;}
@@ -1446,6 +1465,12 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           <input type="text" id="auth-invite" placeholder="máš-li kód od kamaráda" autocomplete="off"
                  onkeydown="if(event.key==='Enter') submitAuth()">
         </div>
+        <div class="pl-field" id="auth-ref-field" style="display:none;">
+          <label>Referral kód <span style="text-transform:none; letter-spacing:0; color:var(--text2)">(máš-li ho od kamaráda — oba dostanete 30 dní bonusu)</span></label>
+          <input type="text" id="auth-ref" placeholder="např. MATEJ-K7X9" autocomplete="off"
+                 style="text-transform:uppercase; letter-spacing:1px;"
+                 onkeydown="if(event.key==='Enter') submitAuth()">
+        </div>
         <div class="lock-error" id="auth-error"></div>
         <button class="btn-primary" style="width:100%; justify-content:center;" id="auth-submit" onclick="submitAuth()">
           <i class="ti ti-login-2"></i> <span id="auth-submit-label">Přihlásit se</span>
@@ -1504,6 +1529,30 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           <span class="level-lbl"><i class="ti ti-calendar-week"></i> Sobotní shrnutí týdne:</span>
           <label class="switch"><input type="checkbox" id="notif-weekly" onchange="saveNotif()"><span class="slider"></span></label>
           <span style="font-size:12px; color:var(--text2);">výkon watchlistu, klíčové události, top signály — každou sobotu ráno</span>
+        </div>
+
+        <!-- REFERRAL PROGRAM -->
+        <div class="ref-box" id="ref-box" style="display:none;">
+          <div class="ref-head">
+            <i class="ti ti-gift" style="color:var(--accent)"></i>
+            <div>
+              <b>Přiveď kamaráda — oba dostanete 30 dní bonusu</b>
+              <div class="ref-sub">Jakmile kamarád aktivuje placený plán, tvoje předplatné se prodlouží o měsíc a jeho také. Kolik přátel = tolik měsíců zdarma.</div>
+            </div>
+          </div>
+          <div class="ref-code-row">
+            <span class="ref-lbl">Tvůj kód</span>
+            <span class="ref-code" id="ref-code-val">—</span>
+          </div>
+          <div class="ref-share">
+            <input type="text" id="ref-share-url" readonly onclick="this.select()" value="">
+            <button class="btn-primary" onclick="copyRefLink()"><i class="ti ti-copy"></i> Zkopírovat odkaz</button>
+          </div>
+          <div class="ref-stats">
+            <div class="ref-stat"><div class="l">Přivedeno</div><div class="v" id="ref-invited">0</div></div>
+            <div class="ref-stat"><div class="l">Zaplatili</div><div class="v" id="ref-paid">0</div></div>
+            <div class="ref-stat hero"><div class="l">Tvůj bonus</div><div class="v" id="ref-bonus">0 dní</div></div>
+          </div>
         </div>
 
         <p class="auth-hint" style="text-align:left;margin:4px 0 10px;"><a class="profile-cloud-link" onclick="openAbout()">O nás — co nabízíme</a></p>
@@ -3447,6 +3496,12 @@ function renderProfileView() {
         const wEl = document.getElementById('notif-weekly');
         if (wEl) wEl.checked = !!(myNotif && myNotif.weekly);
     }
+    // Referral panel — jen pro přihlášené
+    const refBox = document.getElementById('ref-box');
+    if (refBox) {
+        refBox.style.display = authToken ? 'block' : 'none';
+        if (authToken) loadReferral();
+    }
     if (authToken) {
         acct.style.display = 'flex';
         localNote.style.display = 'none';
@@ -3504,6 +3559,8 @@ function setAuthTab(tab) {
     document.getElementById('tab-register').classList.toggle('active', tab === 'register');
     document.getElementById('auth-submit-label').textContent = tab === 'login' ? 'Přihlásit se' : 'Vytvořit účet';
     document.getElementById('auth-invite-field').style.display = tab === 'register' ? 'flex' : 'none';
+    const refField = document.getElementById('auth-ref-field');
+    if (refField) refField.style.display = tab === 'register' ? 'flex' : 'none';
     document.getElementById('auth-forgot').style.display = tab === 'login' ? 'block' : 'none';
     document.getElementById('auth-hint').textContent = tab === 'login'
         ? 'Ještě nemáš účet? Klikni na „Registrovat“.'
@@ -3521,10 +3578,15 @@ async function submitAuth() {
 
     const endpoint = authTab === 'login' ? 'login' : 'register';
     const invite = document.getElementById('auth-invite').value.trim();
+    let refCode = ((document.getElementById('auth-ref') || {}).value || '').trim().toUpperCase();
+    if (!refCode) {
+        try { refCode = (sessionStorage.getItem('mystocks_pending_ref') || '').toUpperCase(); } catch(e) {}
+    }
     btn.disabled = true;
     try {
         const payload = { email: u, password: p };
         if (endpoint === 'register' && invite) payload.invite = invite;
+        if (endpoint === 'register' && refCode) payload.ref_code = refCode;
         const r = await fetch(`${BACKEND_URL}/api/${endpoint}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -3690,6 +3752,37 @@ function riskFilterPass(o) {
         return true;
     }
     return true;
+}
+
+// ===== Referral program =====
+async function loadReferral() {
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/referral`, { headers: authHeaders() });
+        const d = await r.json();
+        if (!d.ok) return;
+        const codeEl = document.getElementById('ref-code-val');
+        const urlEl = document.getElementById('ref-share-url');
+        const inv = document.getElementById('ref-invited');
+        const paid = document.getElementById('ref-paid');
+        const bonus = document.getElementById('ref-bonus');
+        if (codeEl) codeEl.textContent = d.code || '—';
+        if (urlEl) urlEl.value = d.share_url || '';
+        if (inv) inv.textContent = d.invited_count ?? 0;
+        if (paid) paid.textContent = d.paid_count ?? 0;
+        if (bonus) bonus.textContent = (d.bonus_days_pending ?? 0) + ' dní';
+    } catch(e) {}
+}
+
+async function copyRefLink() {
+    const el = document.getElementById('ref-share-url');
+    if (!el || !el.value) return;
+    try {
+        await navigator.clipboard.writeText(el.value);
+        showToast('Odkaz zkopírován — nasdílej kamarádovi!', 'up', 'ti-copy');
+    } catch(e) {
+        el.select(); document.execCommand('copy');
+        showToast('Odkaz zkopírován', 'up', 'ti-copy');
+    }
 }
 
 // ===== Notifikace (ranní / týdenní shrnutí e-mailem) =====
@@ -4215,6 +4308,7 @@ async function initGate() {
     if (refreshGate()) startMain();
     handlePaidReturn();
     handleTickerParam();
+    handleRefParam();
 }
 
 // Otevři konkrétní akcii, když je v URL ?ticker=NVDA (z SEO stránky /stock/NVDA)
@@ -4225,6 +4319,26 @@ function handleTickerParam() {
         if (!t || !/^[A-Z0-9.^=-]{1,10}$/.test(t)) return;
         history.replaceState(null, '', location.pathname);
         setTimeout(() => { if (typeof loadStockDetail === 'function') loadStockDetail(t); }, 400);
+    } catch(e) {}
+}
+
+// Referral link ?ref=CODE — otevři registraci a předvyplň kód
+function handleRefParam() {
+    try {
+        const params = new URLSearchParams(location.search);
+        const code = (params.get('ref') || '').toUpperCase().slice(0, 24);
+        if (!code || !/^[A-Z0-9-]{4,24}$/.test(code)) return;
+        // Ulož si to i pro pozdější použití (kdyby uživatel zavřel modal)
+        try { sessionStorage.setItem('mystocks_pending_ref', code); } catch(e) {}
+        // Otevři registraci předvyplněnou kódem — jen když uživatel není přihlášen
+        if (!authToken) {
+            openProfile();
+            setAuthTab('register');
+            const el = document.getElementById('auth-ref');
+            if (el) el.value = code;
+            showToast(`Referral kód ${code} načten. Zaregistruj se a oba dostanete +30 dní.`, 'up', 'ti-gift');
+        }
+        history.replaceState(null, '', location.pathname);
     } catch(e) {}
 }
 

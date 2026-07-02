@@ -812,6 +812,7 @@ def register():
     if len(password) < 6:
         return jsonify({"ok": False, "error": "Heslo musí mít aspoň 6 znaků."}), 400
     invite = (body.get("invite") or "").strip().lower()
+    ref_code = (body.get("ref_code") or "").strip().upper()
     try:
         if kv_get_json(f"user:{email}"):
             return jsonify({"ok": False, "error": "Účet s tímto e-mailem už existuje."}), 409
@@ -819,6 +820,22 @@ def register():
         now = int(time.time())
         # Bez kódu = žádný přístup, dokud si nezvolí placený plán
         rec = {"salt": None, "hash": None, "created": now, "plan": "none", "email": email}
+
+        # Referral kód: pokud existuje a odkazuje na jiného uživatele, tag referrera
+        if ref_code:
+            referrer_email = _resolve_ref_code(ref_code)
+            if referrer_email and referrer_email != email:
+                rec["referred_by"] = referrer_email
+                # Přidej referee do seznamu invited u referrera (idempotentně)
+                try:
+                    ref_rec = kv_get_json(f"user:{referrer_email}") or {}
+                    invited = ref_rec.get("ref_invited") or []
+                    if email not in invited:
+                        invited.append(email)
+                        ref_rec["ref_invited"] = invited
+                        kv_set_json(f"user:{referrer_email}", ref_rec)
+                except Exception:
+                    pass
 
         if invite:
             inv = kv_get_json(f"invite:{invite}")
@@ -960,6 +977,7 @@ def _set_user_plan(email, plan, sub_id=None, cust_id=None):
     rec = kv_get_json(f"user:{email}")
     if not rec:
         return
+    prev_paid = rec.get("plan") in ("start", "pro", "elite")
     rec["plan"] = plan
     rec["plan_until"] = None  # předplatné běží, dokud ho Stripe neukončí
     if sub_id:
@@ -967,6 +985,101 @@ def _set_user_plan(email, plan, sub_id=None, cust_id=None):
     if cust_id:
         rec["stripe_customer"] = cust_id
     kv_set_json(f"user:{email}", rec)
+    # Referral bonus: první přechod na placený plán aktivuje +30 dní pro referrera i referee
+    if plan in ("start", "pro", "elite") and not prev_paid:
+        try:
+            _activate_referral_bonus(email, rec)
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# REFERRAL PROGRAM – „Přiveď kamaráda"
+# ---------------------------------------------------------------------------
+def _gen_ref_code(email):
+    """Deterministický, přesto neuhodnutelný kód. Prefix z e-mailu + hash zbytek."""
+    import hashlib
+    prefix = "".join(c for c in (email or "").split("@")[0].upper() if c.isalnum())[:6] or "USER"
+    h = hashlib.sha256((email + "::ref::" + os.environ.get("SECRET_KEY", "")).encode()).hexdigest()
+    suffix = h[:4].upper()
+    return f"{prefix}-{suffix}"
+
+
+def _ensure_ref_code(email, rec):
+    """Zajistí, že uživatel má ref_code + obrácený index."""
+    if not rec.get("ref_code"):
+        code = _gen_ref_code(email)
+        rec["ref_code"] = code
+        kv_set_json(f"user:{email}", rec)
+        try:
+            kv_set_json(f"refcode:{code}", {"owner": email})
+        except Exception:
+            pass
+    return rec["ref_code"]
+
+
+def _resolve_ref_code(code):
+    """Kód → email vlastníka (nebo None)."""
+    if not code:
+        return None
+    code = code.strip().upper()
+    try:
+        rec = kv_get_json(f"refcode:{code}") or {}
+        return rec.get("owner")
+    except Exception:
+        return None
+
+
+def _referral_stats(email):
+    """Vrátí statistiky pro dashboard: invited, paid, bonus_days."""
+    try:
+        rec = kv_get_json(f"user:{email}") or {}
+        invited = rec.get("ref_invited") or []  # list emailů
+        paid = rec.get("ref_paid") or []        # list emailů, kteří převedli
+        bonus = int(rec.get("ref_bonus_days") or 0)
+        return {
+            "code": rec.get("ref_code"),
+            "invited_count": len(invited),
+            "paid_count": len(paid),
+            "bonus_days_pending": bonus,
+        }
+    except Exception:
+        return {}
+
+
+def _activate_referral_bonus(referee_email, referee_rec):
+    """Přechod referee na placený plán → +30 dní pro referrera i referee."""
+    referrer_email = referee_rec.get("referred_by")
+    if not referrer_email:
+        return
+    ref_rec = kv_get_json(f"user:{referrer_email}")
+    if not ref_rec:
+        return
+    # Zvýš referrera
+    ref_rec["ref_bonus_days"] = int(ref_rec.get("ref_bonus_days") or 0) + 30
+    paid_list = ref_rec.get("ref_paid") or []
+    if referee_email not in paid_list:
+        paid_list.append(referee_email)
+    ref_rec["ref_paid"] = paid_list
+    kv_set_json(f"user:{referrer_email}", ref_rec)
+    # Zvýš referee
+    referee_rec["ref_bonus_days"] = int(referee_rec.get("ref_bonus_days") or 0) + 30
+    kv_set_json(f"user:{referee_email}", referee_rec)
+
+
+@app.route("/api/referral")
+def api_referral():
+    """Vrátí referral kód + statistiky pro přihlášeného uživatele."""
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    rec = kv_get_json(f"user:{user}") or {}
+    if not rec:
+        return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
+    _ensure_ref_code(user, rec)
+    stats = _referral_stats(user)
+    stats["share_url"] = f"{APP_URL}/?ref={stats.get('code','')}"
+    return jsonify({"ok": True, **stats})
 
 
 @app.route("/api/billing/config")
