@@ -2220,8 +2220,15 @@ function switchTab(name) {
             loadTrackRecord();
         }
     }
-    // Scroll-to-top odstraněn: při přepnutí tabu (jiná výška obsahu) „poskakoval"
-    // a házel uživatele nahoru/dolů. K tabům je uživatel beztak nahoře.
+    // Scroll: skoč na začátek tab-baru (ne úplně nahoru), ať uživatel po přepnutí
+    // vždycky vidí taby + nový obsah. Instantně, bez smooth animace — jinak vypadá
+    // jako "poskakování" když se mění výška obsahu.
+    requestAnimationFrame(() => {
+        const tabs = document.querySelector('.dash-tabs');
+        if (!tabs) return;
+        const y = tabs.getBoundingClientRect().top + window.scrollY - 20;
+        if (window.scrollY > y) window.scrollTo(0, Math.max(0, y));
+    });
 }
 
 // ====================== ÚČET & CLOUD SYNCHRONIZACE ======================
