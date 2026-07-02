@@ -2860,6 +2860,253 @@ def api_compare():
     return jsonify({"ok": True, "cached": False, **out})
 
 
+# ---------------------------------------------------------------------------
+# SEC EDGAR – oficiální americké finanční regulátorská data (zdarma)
+# Poskytuje: 10-K (roční), 10-Q (kvartální), 8-K (materiální události),
+# Form 4 (insider transakce). SEC vyžaduje User-Agent s kontaktem.
+# ---------------------------------------------------------------------------
+SEC_UA = os.environ.get("SEC_UA") or "MY ADVANTAGE contact@myadvantage.cz"
+SEC_HEADERS = {"User-Agent": SEC_UA, "Accept": "application/json"}
+
+# Popisky forem v češtině + kritičnost pro obchodní rozhodnutí
+_SEC_FORMS = {
+    "10-K":  ("Výroční zpráva",          "annual",   "Auditovaná roční data. Základ pro fundamenty."),
+    "10-Q":  ("Kvartální zpráva",        "quarterly","Nejnovější tržby, marže, cash-flow."),
+    "8-K":   ("Materiální událost",      "material", "Akvizice, změna CFO, ztráta kontraktu, právní spor."),
+    "4":     ("Insider transakce",       "insider",  "Nákup/prodej člověka z vedení firmy."),
+    "3":     ("Nový insider",            "insider",  "Nový člen vedení / >10% akcionář."),
+    "SC 13G":("Institucionální podíl",   "insider",  "Fond koupil >5% akcií (pasivně)."),
+    "SC 13D":("Institucionální podíl",   "insider",  "Fond koupil >5% akcií (aktivně, může tlačit na změny)."),
+    "DEF 14A":("Pozvánka na valnou hromadu","material","Odměny CEO, dividendy, akvizice."),
+    "S-1":   ("Registrace nových akcií",  "material","Nová emise = ředění stávajících akcionářů."),
+}
+
+
+def _sec_lookup_cik(ticker):
+    """Přeloží ticker → CIK (Central Index Key). Kešováno permanentně."""
+    ticker = (ticker or "").upper()
+    if not ticker:
+        return None
+    ck = f"sec:cik:{ticker}"
+    cached = kv_get_json(ck)
+    if cached and cached.get("cik"):
+        return cached["cik"]
+    try:
+        r = requests.get("https://www.sec.gov/files/company_tickers.json",
+                         headers=SEC_HEADERS, timeout=8)
+        data = r.json() or {}
+        for _, row in data.items():
+            if (row.get("ticker") or "").upper() == ticker:
+                cik = str(row.get("cik_str") or "").zfill(10)
+                try: kv_set_json(ck, {"cik": cik, "name": row.get("title")})
+                except Exception: pass
+                return cik
+    except Exception:
+        return None
+    return None
+
+
+def _sec_recent_filings(ticker, limit=15):
+    """Vrátí posledních N podání pro daný ticker přes SEC submissions API."""
+    cik = _sec_lookup_cik(ticker)
+    if not cik:
+        return []
+    ck = f"sec:sub:{cik}"
+    cached = kv_get_json(ck)
+    if cached and (time.time() - cached.get("ts", 0) < 4 * 3600):
+        return cached.get("items", [])[:limit]
+    try:
+        r = requests.get(f"https://data.sec.gov/submissions/CIK{cik}.json",
+                         headers=SEC_HEADERS, timeout=8)
+        d = r.json() or {}
+        recent = (d.get("filings") or {}).get("recent") or {}
+        forms = recent.get("form") or []
+        dates = recent.get("filingDate") or []
+        accs  = recent.get("accessionNumber") or []
+        prims = recent.get("primaryDocument") or []
+        descs = recent.get("primaryDocDescription") or []
+        items = []
+        for i, form in enumerate(forms[:80]):
+            if form not in _SEC_FORMS:
+                continue
+            acc_raw = accs[i] if i < len(accs) else ""
+            acc = acc_raw.replace("-", "") if acc_raw else ""
+            primary = prims[i] if i < len(prims) else ""
+            url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc}/{primary}" if acc and primary else ""
+            info = _SEC_FORMS[form]
+            items.append({
+                "form": form,
+                "form_cz": info[0],
+                "kind": info[1],
+                "hint": info[2],
+                "date": dates[i] if i < len(dates) else "",
+                "description": (descs[i] or "") if i < len(descs) else "",
+                "url": url,
+            })
+        try: kv_set_json(ck, {"ts": int(time.time()), "items": items})
+        except Exception: pass
+        return items[:limit]
+    except Exception:
+        return []
+
+
+# ---------------------------------------------------------------------------
+# EXTERNÍ RSS – Patria (CZ) + Motley Fool (EN) jako doplňkové novinkové zdroje
+# ---------------------------------------------------------------------------
+_RSS_SOURCES = {
+    "patria": {
+        "label": "Patria",
+        "flag": "🇨🇿",
+        "url": "https://www.patria.cz/rss/zpravodajstvi.xml",
+        "fallback": "https://www.patria.cz/rss/rss.xml",
+    },
+    "fool": {
+        "label": "Motley Fool",
+        "flag": "🇺🇸",
+        "url": "https://www.fool.com/a/feeds/rss/main.aspx",
+        "fallback": "https://www.fool.com/feeds/index.aspx",
+    },
+}
+
+
+def _parse_rss(xml_text):
+    """Minimalistický RSS/Atom parser – vrací list { title, link, pub_date, summary }."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(xml_text)
+    except Exception:
+        return []
+    items = []
+    ns_atom = "{http://www.w3.org/2005/Atom}"
+    # RSS 2.0
+    for it in root.iter("item"):
+        t = (it.findtext("title") or "").strip()
+        l = (it.findtext("link") or "").strip()
+        p = (it.findtext("pubDate") or "").strip()
+        d = (it.findtext("description") or "").strip()
+        if t:
+            items.append({"title": t, "link": l, "pub_date": p, "summary": d[:400]})
+    # Atom fallback
+    if not items:
+        for it in root.iter(ns_atom + "entry"):
+            t = (it.findtext(ns_atom + "title") or "").strip()
+            l_el = it.find(ns_atom + "link")
+            l = (l_el.get("href") if l_el is not None else "").strip()
+            p = (it.findtext(ns_atom + "updated") or it.findtext(ns_atom + "published") or "").strip()
+            d = (it.findtext(ns_atom + "summary") or "").strip()
+            if t:
+                items.append({"title": t, "link": l, "pub_date": p, "summary": d[:400]})
+    return items[:40]
+
+
+def _fetch_rss(src_key):
+    """Načte RSS z definovaného zdroje. Kešováno 30 min."""
+    src = _RSS_SOURCES.get(src_key)
+    if not src:
+        return []
+    ck = f"rss:{src_key}"
+    cached = kv_get_json(ck)
+    if cached and (time.time() - cached.get("ts", 0) < 1800):
+        return cached.get("items", [])
+    items = []
+    for u in [src["url"], src["fallback"]]:
+        try:
+            r = requests.get(u, headers=HEADERS, timeout=8)
+            items = _parse_rss(r.text)
+            if items:
+                break
+        except Exception:
+            continue
+    for it in items:
+        it["source"] = src["label"]
+        it["flag"] = src["flag"]
+    try:
+        kv_set_json(ck, {"ts": int(time.time()), "items": items})
+    except Exception:
+        pass
+    return items
+
+
+def _ticker_synonyms(ticker):
+    """Ke tickeru vrátí seznam řetězců, které v CZ/EN textu vypadají jako zmínka firmy."""
+    ticker = (ticker or "").upper()
+    synonyms = {ticker}
+    # Krátký název – když ho známe z KV/backendu
+    static_map = {
+        "NVDA":  ["nvidia"],
+        "AAPL":  ["apple"],
+        "MSFT":  ["microsoft"],
+        "GOOGL": ["alphabet", "google"], "GOOG": ["alphabet", "google"],
+        "META":  ["meta", "facebook"],
+        "AMZN":  ["amazon"],
+        "TSLA":  ["tesla"],
+        "AMD":   ["amd", "advanced micro"],
+        "INTC":  ["intel"],
+        "MA":    ["mastercard"],
+        "V":     ["visa"],
+        "JPM":   ["jpmorgan", "jp morgan"],
+        "BAC":   ["bank of america"],
+        "XOM":   ["exxon"],
+        "CVX":   ["chevron"],
+        "JNJ":   ["johnson & johnson", "johnson and johnson"],
+        "PG":    ["procter & gamble", "procter and gamble"],
+        "KO":    ["coca-cola", "coca cola"],
+        "PEP":   ["pepsi"],
+        "DIS":   ["disney"],
+        "NFLX":  ["netflix"],
+        "CEZ":   ["čez", "cez"], "CEZ.PR": ["čez"], "BAAERO": ["aero vodochody"],
+        "KOMB.PR": ["komerční banka", "komercni banka"],
+        "AVAST.PR": ["avast"],
+    }
+    for s in static_map.get(ticker, []):
+        synonyms.add(s.lower())
+    return list(synonyms)
+
+
+@app.route("/api/rss")
+def api_rss():
+    """Vrací seznam novinek z externích zdrojů. src=patria|fool|all, ticker= filtr."""
+    src = request.args.get("src", "all")
+    ticker = (request.args.get("ticker") or "").upper()
+    keys = [src] if src in _RSS_SOURCES else list(_RSS_SOURCES.keys())
+    items = []
+    for k in keys:
+        items += _fetch_rss(k)
+    if ticker:
+        syn = _ticker_synonyms(ticker)
+        def _match(it):
+            hay = (it["title"] + " " + it.get("summary", "")).lower()
+            return any(s in hay for s in syn)
+        items = [it for it in items if _match(it)]
+    # Nejnovější první
+    items.sort(key=lambda x: x.get("pub_date") or "", reverse=True)
+    return jsonify({"ok": True, "count": len(items), "items": items[:20],
+                    "updated": datetime.now(timezone.utc).strftime("%H:%M UTC")})
+
+
+@app.route("/api/sec/<path:ticker>")
+def api_sec(ticker):
+    ticker = ticker.upper()
+    items = _sec_recent_filings(ticker, limit=15)
+    # Agregát: kolik insider nákupů/prodejů v posledních 90 dnech,
+    # kolik 8-K, kdy poslední 10-Q (kvartál).
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(days=90)).strftime("%Y-%m-%d")
+    ins90 = [i for i in items if i["kind"] == "insider" and i["date"] >= cutoff]
+    mat90 = [i for i in items if i["kind"] == "material" and i["date"] >= cutoff]
+    latest_10q = next((i for i in items if i["form"] == "10-Q"), None)
+    latest_10k = next((i for i in items if i["form"] == "10-K"), None)
+    summary = {
+        "insider_90d": len(ins90),
+        "material_90d": len(mat90),
+        "latest_10q_date": latest_10q["date"] if latest_10q else None,
+        "latest_10k_date": latest_10k["date"] if latest_10k else None,
+    }
+    return jsonify({"ok": True, "ticker": ticker, "items": items,
+                    "summary": summary,
+                    "updated": now.strftime("%H:%M UTC")})
+
+
 @app.route("/api/signals")
 def get_signals():
     """Živé nákupní signály podle BACKTESTEM OVĚŘENÉHO modelu. Kešováno 1×/den."""
