@@ -1500,6 +1500,12 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           <span style="font-size:12px; color:var(--text2);">pohyby + tipy + hodnocení každé ráno</span>
         </div>
 
+        <div class="level-row" id="notif-week-row" style="display:none;">
+          <span class="level-lbl"><i class="ti ti-calendar-week"></i> Sobotní shrnutí týdne:</span>
+          <label class="switch"><input type="checkbox" id="notif-weekly" onchange="saveNotif()"><span class="slider"></span></label>
+          <span style="font-size:12px; color:var(--text2);">výkon watchlistu, klíčové události, top signály — každou sobotu ráno</span>
+        </div>
+
         <p class="auth-hint" style="text-align:left;margin:4px 0 10px;"><a class="profile-cloud-link" onclick="openAbout()">O nás — co nabízíme</a></p>
 
         <div class="auth-tabs" id="pf-subtabs" style="display:none;">
@@ -3426,6 +3432,12 @@ function renderProfileView() {
         nrow.style.display = (authToken && hasAccess) ? 'flex' : 'none';
         document.getElementById('notif-morning').checked = !!(myNotif && myNotif.morning);
     }
+    const nwrow = document.getElementById('notif-week-row');
+    if (nwrow) {
+        nwrow.style.display = (authToken && hasAccess) ? 'flex' : 'none';
+        const wEl = document.getElementById('notif-weekly');
+        if (wEl) wEl.checked = !!(myNotif && myNotif.weekly);
+    }
     if (authToken) {
         acct.style.display = 'flex';
         localNote.style.display = 'none';
@@ -3671,15 +3683,17 @@ function riskFilterPass(o) {
     return true;
 }
 
-// ===== Notifikace (ranní souhrn e-mailem) =====
+// ===== Notifikace (ranní / týdenní shrnutí e-mailem) =====
 async function saveNotif() {
-    const on = document.getElementById('notif-morning').checked;
-    myNotif = { morning: on };
+    const morning = !!document.getElementById('notif-morning').checked;
+    const weeklyEl = document.getElementById('notif-weekly');
+    const weekly = !!(weeklyEl && weeklyEl.checked);
+    myNotif = { morning, weekly };
     try {
         await fetch(`${BACKEND_URL}/api/notifications`, {
-            method: 'POST', headers: authHeaders(), body: JSON.stringify({ morning: on })
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ morning, weekly })
         });
-        showToast(on ? 'Ranní souhrn zapnut' : 'Ranní souhrn vypnut', 'up', 'ti-mail');
+        showToast('Nastavení notifikací uloženo', 'up', 'ti-mail');
     } catch (e) { showToast('Nepodařilo se uložit', 'down', 'ti-x'); }
 }
 

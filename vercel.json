@@ -25,6 +25,7 @@
   ],
   "crons": [
     { "path": "/api/cron/morning", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/backtest", "schedule": "0 7 * * 1" }
+    { "path": "/api/cron/backtest", "schedule": "0 7 * * 1" },
+    { "path": "/api/cron/weekly-digest", "schedule": "0 7 * * 6" }
   ]
 }

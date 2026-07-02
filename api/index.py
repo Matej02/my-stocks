@@ -1076,9 +1076,12 @@ def notifications():
             return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
         if request.method == "POST":
             body = request.get_json(silent=True) or {}
-            rec["notif"] = {"morning": bool(body.get("morning"))}
+            rec["notif"] = {
+                "morning": bool(body.get("morning")),
+                "weekly": bool(body.get("weekly")),
+            }
             kv_set_json(f"user:{user}", rec)
-        return jsonify({"ok": True, "notif": rec.get("notif", {"morning": False})})
+        return jsonify({"ok": True, "notif": rec.get("notif", {"morning": False, "weekly": False})})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
@@ -4541,6 +4544,162 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
                         watch_html + sig_html + opp_html +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>Notifikace vypneš v appce v profilu. "
                         "Není to investiční doporučení.</p>")
+
+
+def build_weekly_digest_html(email, top_signals=None, top_opps=None):
+    """Sobotní shrnutí týdne pro uživatele."""
+    pf = kv_get_json(f"portfolio:{email}") or {}
+    watch = (pf.get("watchlist") or [])[:15]
+
+    # Výkon watchlistu za posledních 7 dní (equal-weighted vs SPY)
+    perf_html = ""
+    if watch:
+        try:
+            best_t, best_c, worst_t, worst_c = None, None, None, None
+            gains, losses = 0, 0
+            rows = []
+            for t in watch[:12]:
+                try:
+                    d = yahoo_chart(t, "5d", "1d")
+                    closes = [c for c in (((d.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []) if c is not None]
+                    if len(closes) < 2:
+                        continue
+                    first_wk = closes[0]
+                    last = closes[-1]
+                    chg = (last - first_wk) / first_wk * 100.0 if first_wk else 0
+                    if chg > 0: gains += 1
+                    if chg < 0: losses += 1
+                    if best_c is None or chg > best_c: best_t, best_c = t, chg
+                    if worst_c is None or chg < worst_c: worst_t, worst_c = t, chg
+                    col = "#00C853" if chg >= 0 else "#FF3D00"
+                    rows.append((chg, f"<tr><td style='padding:5px 0'><b>{t}</b></td>"
+                                       f"<td style='padding:5px 0;text-align:right;color:{col}'>{'+' if chg>=0 else ''}{chg:.2f}%</td></tr>"))
+                except Exception:
+                    continue
+            rows.sort(key=lambda x: -x[0])
+            table = "".join(r[1] for r in rows[:10])
+            summary = (f"<div style='background:#12141c;border:1px solid #23262f;border-radius:12px;"
+                       f"padding:14px 16px;margin-bottom:14px'>"
+                       f"<div style='color:#8a8f99;font-size:12px;letter-spacing:.5px;text-transform:uppercase'>Týdenní bilance</div>"
+                       f"<div style='margin-top:6px'>"
+                       f"<b style='color:#00C853'>{gains}↑</b> &nbsp; <b style='color:#FF3D00'>{losses}↓</b>"
+                       f"</div></div>")
+            hilo = ""
+            if best_t and best_c and best_c > 0:
+                hilo += f"<div style='margin:8px 0'>🏆 Nejlepší: <b>{best_t}</b> <span style='color:#00C853'>+{best_c:.2f}%</span></div>"
+            if worst_t and worst_c and worst_c < 0:
+                hilo += f"<div style='margin:8px 0'>📉 Nejhorší: <b>{worst_t}</b> <span style='color:#FF3D00'>{worst_c:.2f}%</span></div>"
+            perf_html = ("<h3 style='font-size:16px;margin:18px 0 10px'>📊 Jak si vedla tvá watchlist</h3>" +
+                         summary + hilo +
+                         ("<table style='width:100%;border-collapse:collapse;font-size:14px;margin-top:10px'>" + table + "</table>" if table else ""))
+        except Exception:
+            perf_html = ""
+
+    # Top signály týdne
+    sig_html = ""
+    if top_signals:
+        sitems = "".join(
+            f"<div style='padding:10px 0;border-top:1px solid #23262f'>"
+            f"<b style='color:#00C853'>Koupit</b> &nbsp;<b>{s.get('ticker')}</b> "
+            f"<span style='color:#9ba1b0'>{s.get('name','')}</span><br>"
+            f"<span style='color:#9ba1b0;font-size:12px'>MA skóre {s.get('score')} · "
+            f"cíl +{s.get('reward_pct')}% / stop −{s.get('risk_pct')}% · ~2 týdny</span></div>"
+            for s in top_signals[:4])
+        sig_html = "<h3 style='font-size:16px;margin:22px 0 10px'>🎯 Nejlepší signály týdne</h3>" + sitems
+
+    # Klíčové události u sledovaných akcií (last 7 days)
+    events_html = ""
+    try:
+        allev = []
+        for t in watch[:15]:
+            allev += _events_for_ticker(t, since_days=7)
+        allev.sort(key=lambda x: x.get("date") or "", reverse=True)
+        if allev[:6]:
+            items = ""
+            for ev in allev[:6]:
+                col = {"good": "#00C853", "warn": "#FFC400", "info": "#4fa3ff"}.get(ev.get("severity"), "#8a8f99")
+                items += (f"<div style='padding:8px 0;border-top:1px solid #23262f'>"
+                          f"<b>{ev.get('ticker')}</b> · <span style='color:{col}'>{ev.get('title','')}</span><br>"
+                          f"<span style='color:#9ba1b0;font-size:12px'>{ev.get('date','')} · {ev.get('hint','')}</span></div>")
+            events_html = "<h3 style='font-size:16px;margin:22px 0 10px'>🔔 Klíčové události u tvých akcií</h3>" + items
+    except Exception:
+        events_html = ""
+
+    # Příležitosti
+    opp_html = ""
+    if top_opps:
+        items = "".join(
+            f"<div style='padding:8px 0;border-top:1px solid #23262f'><b style='color:#00C853'>+{up:.0f}%</b> "
+            f"&nbsp;<b>{sym}</b> <span style='color:#9ba1b0'>{name}</span></div>"
+            for (sc, sym, name, up, cur, pr) in top_opps)
+        opp_html = "<h3 style='font-size:16px;margin:22px 0 10px'>🚀 Příležitosti k prozkoumání</h3>" + items
+
+    intro = ("<p style='line-height:1.6'>Hezký víkend! Tady je tvé <b>shrnutí týdne</b> " +
+             "— jak si vedla tvá watchlist, nejlepší signály z modelu a klíčové události.</p>")
+
+    cta = (f"<div style='text-align:center;margin:28px 0 12px'>"
+           f"<a href='{APP_URL}/' style='display:inline-block;background:#FF7A00;color:#1a0e00;"
+           f"padding:12px 26px;font-weight:700;text-decoration:none;border-radius:12px'>"
+           f"🚀 Otevřít MY ADVANTAGE</a></div>")
+
+    return _email_shell("Týdenní shrnutí 📊",
+                        intro + perf_html + sig_html + events_html + opp_html + cta +
+                        "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>"
+                        "Sobotní digest posíláme, pokud jsi ho zapnul v profilu. "
+                        "Vypneš ho tam samým přepínačem. Není to investiční doporučení.</p>")
+
+
+@app.route("/api/cron/weekly-digest")
+def cron_weekly_digest():
+    """Sobotní ranní digest za uplynulý týden. Vercel Cron – secret required."""
+    secret = os.environ.get("CRON_SECRET")
+    auth = request.headers.get("Authorization", "")
+    if not secret or (auth != f"Bearer {secret}" and request.args.get("secret") != secret):
+        return jsonify({"ok": False, "error": "Neautorizováno."}), 401
+    if not (cloud_enabled() and email_enabled()):
+        return jsonify({"ok": False, "error": "Chybí úložiště nebo e-mail."}), 503
+    sent = 0
+    try:
+        top_opps = _top_opps_for_summary(3)
+        sig = kv_get_json(f"signals:{_today()}") or {}
+        if not sig:
+            try:
+                sig = _scan_signals()
+                kv_set_json(f"signals:{_today()}", sig)
+            except Exception:
+                sig = {}
+        top_signals = (sig or {}).get("results") or []
+        for email in kv_smembers("users")[:200]:
+            rec = kv_get_json(f"user:{email}") or {}
+            if not (rec.get("notif") or {}).get("weekly"):
+                continue
+            try:
+                send_email(email, "📊 Týdenní shrnutí – MY ADVANTAGE",
+                           build_weekly_digest_html(email, top_signals, top_opps))
+                sent += 1
+            except Exception:
+                continue
+        return jsonify({"ok": True, "sent": sent})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/weekly-test", methods=["POST"])
+def admin_weekly_test():
+    admin = _auth_admin()
+    if not admin:
+        return jsonify({"ok": False, "error": "Nepřihlášen jako admin."}), 401
+    if not email_enabled():
+        return jsonify({"ok": False, "error": "Emaily nejsou nastavené."}), 503
+    try:
+        top_opps = _top_opps_for_summary(3)
+        sig = kv_get_json(f"signals:{_today()}") or {}
+        top_signals = (sig or {}).get("results") or []
+        ok = send_email(admin, "📊 Týdenní shrnutí – MY ADVANTAGE (TEST)",
+                        build_weekly_digest_html(admin, top_signals, top_opps))
+        return jsonify({"ok": ok, "sent_to": admin, "error": _LAST_EMAIL_ERROR["msg"]})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/cron/backtest")
