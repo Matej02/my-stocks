@@ -2248,9 +2248,18 @@ const POPULAR_MARKETS = [
     { ticker: 'GC=F', type: 'FUTURE' }, { ticker: 'SI=F', type: 'FUTURE' }, { ticker: 'CL=F', type: 'FUTURE' }, { ticker: 'HG=F', type: 'FUTURE' },
     { h: 'Krypto' },
     { ticker: 'BTC-USD', type: 'CRYPTOCURRENCY' }, { ticker: 'ETH-USD', type: 'CRYPTOCURRENCY' },
-    { h: 'Populární akcie' },
+    { h: 'Populární akcie (USA)' },
     { ticker: 'AAPL', type: 'EQUITY', name: 'Apple' }, { ticker: 'NVDA', type: 'EQUITY', name: 'NVIDIA' }, { ticker: 'MSFT', type: 'EQUITY', name: 'Microsoft' },
     { ticker: 'TSLA', type: 'EQUITY', name: 'Tesla' }, { ticker: 'AMZN', type: 'EQUITY', name: 'Amazon' }, { ticker: 'GOOGL', type: 'EQUITY', name: 'Alphabet' },
+    { h: 'České akcie 🇨🇿 (BCPP)' },
+    { ticker: 'CEZ.PR', type: 'EQUITY', name: 'ČEZ' }, { ticker: 'KOMB.PR', type: 'EQUITY', name: 'Komerční banka' },
+    { ticker: 'MONET.PR', type: 'EQUITY', name: 'Moneta Money Bank' }, { ticker: 'PHILIP.PR', type: 'EQUITY', name: 'Philip Morris ČR' },
+    { ticker: 'KOFOL.PR', type: 'EQUITY', name: 'Kofola' }, { ticker: 'COLT.PR', type: 'EQUITY', name: 'Colt CZ Group' },
+    { h: 'Evropské akcie 🇪🇺' },
+    { ticker: 'SAP.DE', type: 'EQUITY', name: 'SAP' }, { ticker: 'ASML.AS', type: 'EQUITY', name: 'ASML' },
+    { ticker: 'ULVR.L', type: 'EQUITY', name: 'Unilever' }, { ticker: 'MBG.DE', type: 'EQUITY', name: 'Mercedes-Benz' },
+    { h: 'Měnové páry' },
+    { ticker: 'EURCZK=X', type: 'CURRENCY' }, { ticker: 'USDCZK=X', type: 'CURRENCY' }, { ticker: 'EURUSD=X', type: 'CURRENCY' },
 ];
 function showPopularMarkets() {
     const dropdown = document.getElementById('searchDropdown');
@@ -4411,7 +4420,23 @@ const NAME_MAP = {
     'CL=F': 'Ropa (WTI)', 'BZ=F': 'Ropa (Brent)', 'NG=F': 'Zemní plyn',
     'ZC=F': 'Kukuřice', 'ZW=F': 'Pšenice', 'ZS=F': 'Sója',
     'BTC-USD': 'Bitcoin', 'ETH-USD': 'Ethereum',
-    '^GSPC': 'S&P 500', '^IXIC': 'Nasdaq', '^DJI': 'Dow Jones', '^GDAXI': 'DAX'
+    '^GSPC': 'S&P 500', '^IXIC': 'Nasdaq', '^DJI': 'Dow Jones', '^GDAXI': 'DAX',
+    // České akcie na BCPP (Yahoo suffix .PR)
+    'CEZ.PR': 'ČEZ', 'KOMB.PR': 'Komerční banka', 'MONET.PR': 'Moneta Money Bank',
+    'PHILIP.PR': 'Philip Morris ČR', 'ERSTE.PR': 'Erste Group Bank',
+    'KOFOL.PR': 'Kofola ČeskoSlovensko', 'COLT.PR': 'Colt CZ Group',
+    'CETV.PR': 'Central European Media (CETV)', 'FORT.PR': 'Fortuna Entertainment',
+    'PRIM.PR': 'Primoco UAV', 'PILULKA.PR': 'Pilulka.cz',
+    'GEVO.PR': 'Gevorkyan',
+    // Německé (Xetra, Yahoo suffix .DE)
+    'SAP.DE': 'SAP', 'SIE.DE': 'Siemens', 'ALV.DE': 'Allianz', 'DTE.DE': 'Deutsche Telekom',
+    'BMW.DE': 'BMW', 'MBG.DE': 'Mercedes-Benz', 'VOW3.DE': 'Volkswagen',
+    // Londýn (.L)
+    'ULVR.L': 'Unilever', 'HSBA.L': 'HSBC', 'BP.L': 'BP', 'SHEL.L': 'Shell',
+    // Amsterdam
+    'ASML.AS': 'ASML', 'HEIA.AS': 'Heineken',
+    // Měnové páry
+    'EURCZK=X': 'EUR/CZK', 'USDCZK=X': 'USD/CZK', 'EURUSD=X': 'EUR/USD', 'GBPUSD=X': 'GBP/USD',
 };
 function niceName(ticker, name) {
     if (NAME_MAP[ticker]) return NAME_MAP[ticker];

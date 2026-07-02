@@ -3148,8 +3148,19 @@ def _ticker_synonyms(ticker):
         "PEP":   ["pepsi"],
         "DIS":   ["disney"],
         "NFLX":  ["netflix"],
-        "CEZ":   ["čez", "cez"], "CEZ.PR": ["čez"], "BAAERO": ["aero vodochody"],
-        "KOMB.PR": ["komerční banka", "komercni banka"],
+        "CEZ.PR":   ["čez", "cez"],
+        "KOMB.PR":  ["komerční banka", "komercni banka", "komerčka"],
+        "MONET.PR": ["moneta", "moneta money bank"],
+        "PHILIP.PR":["philip morris", "philip morris čr"],
+        "ERSTE.PR": ["erste", "erste group"],
+        "KOFOL.PR": ["kofola"],
+        "COLT.PR":  ["colt cz", "colt cz group", "csg"],
+        "CETV.PR":  ["cetv", "central european media"],
+        "FORT.PR":  ["fortuna"],
+        "PRIM.PR":  ["primoco", "primoco uav"],
+        "GEVO.PR":  ["gevorkyan"],
+        "PILULKA.PR":["pilulka", "pilulka.cz"],
+        "BAAERO":   ["aero vodochody"],
         "AVAST.PR": ["avast"],
     }
     for s in static_map.get(ticker, []):
@@ -3963,12 +3974,19 @@ def seo_stock(ticker):
 
 # Vybraný seznam populárních tickerů pro sitemap
 _SITEMAP_TICKERS = [
+    # US Blue-chip
     "AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","BRK.B","JPM","V",
     "MA","JNJ","XOM","WMT","PG","LLY","AVGO","HD","MRK","KO","PEP","BAC",
     "ABBV","CVX","CRM","AMD","INTC","NFLX","ADBE","DIS","PYPL","T","VZ",
     "QCOM","IBM","GS","MS","BA","CAT","GE","NKE","MCD","SBUX","COST","UNH",
     "PFE","CSCO","ORCL","BABA","SHOP","SQ","PLTR","COIN","RIVN","LCID",
+    # ETF
     "SPY","QQQ","VOO","VTI","VTV","IWM","EFA","EEM",
+    # CZ akcie (BCPP) – silně pro CZ SEO
+    "CEZ.PR","KOMB.PR","MONET.PR","PHILIP.PR","ERSTE.PR","KOFOL.PR",
+    "COLT.PR","CETV.PR","FORT.PR","PRIM.PR","GEVO.PR",
+    # Evropské big names
+    "SAP.DE","SIE.DE","ALV.DE","MBG.DE","ASML.AS","ULVR.L","BP.L","SHEL.L",
 ]
 
 
