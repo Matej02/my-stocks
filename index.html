@@ -2076,7 +2076,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           <div class="news-box" id="news-box">
             <div id="news-list"><div style="color:var(--text2); font-size:13px;"><i class="ti ti-loader spin"></i> Načítám zprávy...</div></div>
           </div>
-          <div class="news-fine">Sjednocený feed z <b>9 zdrojů</b>: Yahoo, Patria, Kurzy.cz, Motley Fool, CNBC, Seeking Alpha, MarketWatch, Reuters a oficiální SEC podání. Klik na titulek otevře originál u zdroje. Aktualizace ~30 min.</div>
+          <div class="news-fine">Sjednocený feed z <b>10 zdrojů</b>: Yahoo, Kurzy.cz (akcie ČR i svět), Roklen24, E15, iDnes Ekonomika, Motley Fool, CNBC, Seeking Alpha, MarketWatch a oficiální SEC podání. Klik na titulek otevře originál u zdroje. Aktualizace ~30 min.</div>
         </div>
 
         <!-- AI CHAT -->
@@ -5628,8 +5628,8 @@ async function loadNewsFromSource(src) {
                     <div class="news-meta"><i class="ti ti-building-broadcast-tower"></i> ${escapeHtml(n.publisher || 'Zdroj')}${when ? ' • ' + when : ''}</div>
                 </a>`;
             }).join('');
-        } else if (src === 'patria' || src === 'kurzy' || src === 'fool' || src === 'cnbc' || src === 'seekingalpha' || src === 'marketwatch' || src === 'reuters') {
-            const srcLabel = ({patria:'Patria', kurzy:'Kurzy.cz', fool:'Motley Fool', cnbc:'CNBC', seekingalpha:'Seeking Alpha', marketwatch:'MarketWatch', reuters:'Reuters'})[src];
+        } else if (['kurzy','kurzy_svet','roklen','e15','idnes','fool','cnbc','seekingalpha','marketwatch'].includes(src)) {
+            const srcLabel = ({kurzy:'Kurzy.cz — akcie ČR', kurzy_svet:'Kurzy.cz — akcie svět', roklen:'Roklen24', e15:'E15', idnes:'iDnes Ekonomika', fool:'Motley Fool', cnbc:'CNBC', seekingalpha:'Seeking Alpha', marketwatch:'MarketWatch'})[src];
             const d = await (await fetch(`${BACKEND_URL}/api/rss?src=${src}&ticker=${encodeURIComponent(ticker)}`)).json();
             let items = (d && d.items) || [];
             let filtered = items.length;

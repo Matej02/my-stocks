@@ -3181,17 +3181,36 @@ def _sec_recent_filings(ticker, limit=15):
 # EXTERNÍ RSS – Patria (CZ) + Motley Fool (EN) jako doplňkové novinkové zdroje
 # ---------------------------------------------------------------------------
 _RSS_SOURCES = {
-    "patria": {
-        "label": "Patria",
-        "flag": "🇨🇿",
-        "url": "https://www.patria.cz/rss/zpravodajstvi.xml",
-        "fallback": "https://www.patria.cz/rss/rss.xml",
-    },
+    # Ověřeno curl smoke-testem 3.7.2026: každý zdroj reálně vrací <item> položky.
     "kurzy": {
-        "label": "Kurzy.cz",
+        "label": "Kurzy.cz — akcie ČR",
         "flag": "🇨🇿",
-        "url": "https://www.kurzy.cz/rss/aktuality.xml",
-        "fallback": "https://www.kurzy.cz/rss/",
+        "url": "https://www.kurzy.cz/zpravy/util/forext.dat?type=rss&col=wzAkcieCR",
+        "fallback": "https://www.kurzy.cz/zpravy/util/forext.dat?type=rss&col=wzAkcieSvet",
+    },
+    "kurzy_svet": {
+        "label": "Kurzy.cz — akcie svět",
+        "flag": "🇨🇿",
+        "url": "https://www.kurzy.cz/zpravy/util/forext.dat?type=rss&col=wzAkcieSvet",
+        "fallback": "https://www.kurzy.cz/zpravy/util/forext.dat?type=rss&col=wzMakro",
+    },
+    "roklen": {
+        "label": "Roklen24",
+        "flag": "🇨🇿",
+        "url": "https://roklen24.cz/feed/",
+        "fallback": "https://roklen24.cz/feed/",
+    },
+    "e15": {
+        "label": "E15",
+        "flag": "🇨🇿",
+        "url": "https://www.e15.cz/rss",
+        "fallback": "https://www.e15.cz/rss",
+    },
+    "idnes": {
+        "label": "iDnes Ekonomika",
+        "flag": "🇨🇿",
+        "url": "https://servis.idnes.cz/rss.aspx?c=ekonomikah",
+        "fallback": "https://servis.idnes.cz/rss.aspx?c=ekonomikah",
     },
     "fool": {
         "label": "Motley Fool",
@@ -3217,20 +3236,18 @@ _RSS_SOURCES = {
         "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
         "fallback": "http://feeds.marketwatch.com/marketwatch/topstories/",
     },
-    "reuters": {
-        "label": "Reuters Business",
-        "flag": "🌐",
-        "url": "https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best",
-        "fallback": "https://www.reutersagency.com/feed/?best-topics=business-finance",
-    },
 }
 
 
-def _parse_rss(xml_text):
-    """Minimalistický RSS/Atom parser – vrací list { title, link, pub_date, summary }."""
+def _parse_rss(xml_data):
+    """Minimalistický RSS/Atom parser – vrací list { title, link, pub_date, summary }.
+    Vstup MUSÍ být bytes: feedy s deklarací encoding (např. windows-1250 u Kurzy.cz)
+    ET.fromstring odmítá jako str ('Unicode strings with encoding declaration…')."""
     import xml.etree.ElementTree as ET
+    if isinstance(xml_data, str):
+        xml_data = xml_data.encode("utf-8", errors="replace")
     try:
-        root = ET.fromstring(xml_text)
+        root = ET.fromstring(xml_data)
     except Exception:
         return []
     items = []
@@ -3263,13 +3280,15 @@ def _fetch_rss(src_key):
         return []
     ck = f"rss:{src_key}"
     cached = kv_get_json(ck)
-    if cached and (time.time() - cached.get("ts", 0) < 1800):
+    # Prázdný výsledek necachujeme (a nedůvěřujeme mu) – po opravě URL zdroje
+    # by jinak stará prázdná cache blokovala funkční feed až 30 minut.
+    if cached and cached.get("items") and (time.time() - cached.get("ts", 0) < 1800):
         return cached.get("items", [])
     items = []
     for u in [src["url"], src["fallback"]]:
         try:
             r = requests.get(u, headers=HEADERS, timeout=8)
-            items = _parse_rss(r.text)
+            items = _parse_rss(r.content)
             if items:
                 break
         except Exception:
@@ -3277,6 +3296,8 @@ def _fetch_rss(src_key):
     for it in items:
         it["source"] = src["label"]
         it["flag"] = src["flag"]
+    if not items:
+        return []
     try:
         kv_set_json(ck, {"ts": int(time.time()), "items": items})
     except Exception:
