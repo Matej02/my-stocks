@@ -295,13 +295,21 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .lp-sec {margin-top:62px;}
 .lp-tag {font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--accent); font-weight:600; text-align:center; margin-bottom:10px;}
 .lp-h2 {font-family:var(--fh); font-weight:700; font-size:clamp(23px,4vw,32px); text-align:center; letter-spacing:-.5px; margin-bottom:30px; color:var(--text);}
-.lp-grid4 {display:grid; grid-template-columns:repeat(4,1fr); gap:14px;}
+.lp-grid4 {display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+@media (max-width:920px) {.lp-grid4 {grid-template-columns:repeat(2,1fr);}}
+@media (max-width:520px) {.lp-grid4 {grid-template-columns:1fr;}}
 .lp-card {background:var(--elev); border:1px solid var(--border); border-radius:16px; padding:20px;}
 .lp-card .ic {width:42px; height:42px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:21px; margin-bottom:14px;}
 .lp-card h3 {font-family:var(--fh); font-size:15px; font-weight:600; margin-bottom:6px; color:var(--text);}
 .lp-card p {font-size:12.5px; color:var(--text2); line-height:1.55;}
 .lp-card .w {font-size:11px; color:var(--text3); margin-top:12px; font-weight:600; letter-spacing:.3px;}
 .lp-fine {text-align:center; color:var(--text3); font-size:12.5px; margin:22px auto 0; max-width:620px; line-height:1.6;}
+.lp-footer {margin-top:48px; padding:26px 0 12px; border-top:1px solid var(--border); text-align:center;}
+.lp-footer-links {display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:10px; font-size:13.5px; margin-bottom:14px;}
+.lp-footer-links a {color:var(--text2); text-decoration:none; cursor:pointer; transition:color .15s;}
+.lp-footer-links a:hover {color:var(--accent);}
+.lp-footer-links span {color:var(--border-accent); font-size:10px;}
+.lp-footer-legal {color:var(--text3); font-size:11.5px; line-height:1.65; max-width:640px; margin:0 auto;}
 .lp-plans {display:grid; grid-template-columns:repeat(3,1fr); gap:16px; align-items:start;}
 .lp-plan {background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:26px 22px; text-align:center; position:relative;}
 .lp-plan.feat {border-color:var(--border-accent);}
@@ -637,6 +645,33 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-opp-row .r {display:flex; flex-direction:column; align-items:flex-end;}
 .ov-opp-row .r .s {font-family:var(--fh); font-weight:700; color:var(--up);}
 .ov-opp-row .r .h {font-size:11px; color:var(--text2);}
+
+/* ============ PATIČKA (footer) ============ */
+.app-footer {margin:40px 0 20px; padding:32px 0 24px; border-top:1px solid var(--border); color:var(--text2);}
+.app-footer-cols {display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; gap:36px; margin-bottom:26px;}
+@media (max-width:820px) {.app-footer-cols {grid-template-columns:repeat(2,1fr); gap:24px;}}
+@media (max-width:520px) {.app-footer-cols {grid-template-columns:1fr;}}
+.app-footer-col h5 {font-family:var(--fh); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--text); margin:0 0 12px;}
+.app-footer-col p {font-size:13px; line-height:1.55; margin:8px 0 0; max-width:280px;}
+.app-footer-col a {display:block; color:var(--text2); font-size:13.5px; text-decoration:none; padding:5px 0; cursor:pointer; transition:color .15s;}
+.app-footer-col a:hover {color:var(--accent);}
+.af-brand {display:flex; align-items:center; gap:10px; font-family:var(--fh); font-weight:700; font-size:16px; color:var(--text);}
+.af-brand b {color:var(--accent);}
+.app-footer-legal {font-size:12px; color:var(--text2); line-height:1.6; padding-top:18px; border-top:1px solid var(--border); text-align:left;}
+.app-footer-legal a {color:var(--accent); text-decoration:none;}
+.app-footer-legal a:hover {text-decoration:underline;}
+
+/* Legal modal */
+.legal-body {max-height:65vh; overflow-y:auto; padding-right:8px; font-size:14px; line-height:1.65; color:var(--text);}
+.legal-body h3 {font-family:var(--fh); font-size:16px; margin:20px 0 8px; color:var(--text);}
+.legal-body h4 {font-family:var(--fh); font-size:14px; margin:14px 0 6px; color:var(--text);}
+.legal-body p {color:var(--text2); margin:8px 0;}
+.legal-body ul {padding-left:20px; color:var(--text2);}
+.legal-body li {margin:4px 0;}
+.legal-body b {color:var(--text);}
+.legal-tabs {display:flex; gap:4px; margin-bottom:16px; background:rgba(255,255,255,0.03); border:1px solid var(--border); padding:4px; border-radius:11px;}
+.legal-tabs button {flex:1; background:transparent; border:none; color:var(--text2); padding:9px 14px; border-radius:8px; cursor:pointer; font-family:var(--fb); font-size:12.5px; font-weight:600;}
+.legal-tabs button.active {background:var(--accent-soft); color:var(--accent);}
 
 /* ============ REFERRAL PROGRAM ============ */
 .ref-box {margin:14px 0 6px; background:linear-gradient(160deg, var(--accent-soft), transparent 75%); border:1px solid var(--border-accent); border-radius:16px; padding:18px 20px;}
@@ -1140,12 +1175,14 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 
     <div class="lp-sec">
       <div class="lp-tag">Jak to funguje</div>
-      <h2 class="lp-h2">Jeden verdikt ze čtyř tvrdých pilířů</h2>
+      <h2 class="lp-h2">Jeden verdikt ze šesti nezávislých pilířů</h2>
       <div class="lp-grid4">
         <div class="lp-card"><div class="ic" style="background:var(--accent-soft);color:var(--accent)"><i class="ti ti-chart-line"></i></div><h3>Technika</h3><p>Nákup poklesu v dlouhodobém uptrendu — ne chytání padajícího nože.</p><div class="w">váha 30 %</div></div>
         <div class="lp-card"><div class="ic" style="background:var(--up-glow);color:var(--up)"><i class="ti ti-businessplan"></i></div><h3>Valuace</h3><p>Je akcie levná, nebo drahá vůči svým ziskům?</p><div class="w">váha 20 %</div></div>
         <div class="lp-card"><div class="ic" style="background:rgba(79,163,255,0.14);color:#4fa3ff"><i class="ti ti-trending-up"></i></div><h3>Růst &amp; ziskovost</h3><p>Roste firma, má marže a reálně vydělává?</p><div class="w">váha 25 %</div></div>
-        <div class="lp-card"><div class="ic" style="background:var(--amber-soft);color:var(--amber)"><i class="ti ti-users-group"></i></div><h3>Analytici</h3><p>Konsenzus Wall Street a prostor k cílové ceně.</p><div class="w">váha 25 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:var(--amber-soft);color:var(--amber)"><i class="ti ti-users-group"></i></div><h3>Analytici</h3><p>Konsenzus Wall Street a prostor k cílové ceně.</p><div class="w">váha 22 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:rgba(171,71,188,0.14);color:#c58af9"><i class="ti ti-mood-smile"></i></div><h3>Nálada &amp; instituce</h3><p>Sentiment titulků, insider transakce, revize doporučení.</p><div class="w">váha 13 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:rgba(0,230,118,0.10);color:var(--up)"><i class="ti ti-file-certificate"></i></div><h3>Oficiální podání SEC</h3><p>10-K/10-Q, materiální 8-K a insider Form 4 — data z první ruky.</p><div class="w">váha 10 %</div></div>
       </div>
     </div>
 
@@ -1171,7 +1208,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           <button onclick="openProfile('plans')">Začít se Start</button>
         </div>
         <div class="lp-plan feat">
-          <div class="lp-plan-tag">NEJOBLÍBENĚJŠÍ</div>
+          <div class="lp-plan-tag">Doporučeno</div>
           <div class="nm">Pro</div><div class="pr">10 €<span> / měs</span></div>
           <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Skener příležitostí</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Exit signály „co prodat"</li></ul>
           <button onclick="openProfile('plans')">Vybrat Pro</button>
@@ -1203,6 +1240,26 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
       <button class="lp-bigcta" onclick="openProfile()"><i class="ti ti-rocket"></i> Vytvořit účet zdarma</button>
       <div class="lp-disc">MY ADVANTAGE je nástroj pro vzdělávací a informační účely. Neposkytuje investiční poradenství. Historická výkonnost nezaručuje budoucí výsledky.</div>
     </div>
+
+    <!-- Landing patička: právní odkazy -->
+    <div class="lp-footer">
+      <div class="lp-footer-links">
+        <a href="/blog">Blog</a>
+        <span>·</span>
+        <a onclick="openAbout()">O nás</a>
+        <span>·</span>
+        <a onclick="openLegal('terms')">Obchodní podmínky</a>
+        <span>·</span>
+        <a onclick="openLegal('privacy')">Ochrana údajů</a>
+        <span>·</span>
+        <a onclick="openLegal('disclaimer')">Investiční upozornění</a>
+        <span>·</span>
+        <a href="mailto:podpora@myadvantage.site">Podpora</a>
+      </div>
+      <div class="lp-footer-legal">
+        © 2026 MY ADVANTAGE · MY ADVANTAGE není licencovaný investiční poradce. Aplikace slouží pro informační a vzdělávací účely. Investování do akcií nese riziko ztráty vloženého kapitálu.
+      </div>
+    </div>
   </div>
 
   <!-- PŘIHLÁŠENÝ BEZ PŘEDPLATNÉHO -->
@@ -1223,7 +1280,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           <button onclick="openProfile('plans')">Předplatit Start</button>
         </div>
         <div class="lp-plan feat">
-          <div class="lp-plan-tag">NEJOBLÍBENĚJŠÍ</div>
+          <div class="lp-plan-tag">Doporučeno</div>
           <div class="nm">Pro</div><div class="pr">10 €<span> / měs</span></div>
           <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Skener příležitostí</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Exit signály „co prodat"</li></ul>
           <button onclick="openProfile('plans')">Předplatit Pro</button>
@@ -1262,7 +1319,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.06.24·s</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.07.03</div>
 
 <div class="container">
   
@@ -1414,6 +1471,20 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
         </div>
         <div class="cmp-picker-body" id="cmp-picker-body"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- PRÁVNÍ MODAL (ToS, Privacy, Disclaimer) -->
+  <div class="pl-modal" id="legalModal">
+    <div class="profile-box" style="max-width:720px;">
+      <button class="profile-close" onclick="closeLegal()"><i class="ti ti-x"></i></button>
+      <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 12px;display:flex;align-items:center;gap:10px;"><i class="ti ti-gavel" style="color:var(--accent)"></i> Právní informace</h2>
+      <div class="legal-tabs">
+        <button id="ltab-terms" class="active" onclick="setLegalTab('terms')">Obchodní podmínky</button>
+        <button id="ltab-privacy" onclick="setLegalTab('privacy')">Ochrana údajů</button>
+        <button id="ltab-disclaimer" onclick="setLegalTab('disclaimer')">Investiční upozornění</button>
+      </div>
+      <div class="legal-body" id="legal-body"></div>
     </div>
   </div>
 
@@ -1586,23 +1657,23 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
       <div class="method-body">
         <p class="method-intro">Jsme <b>investiční asistent</b> (ne broker). Pomáháme rozhodnout <b>kdy koupit a kdy prodat</b> na základě vlastního, ověřeného systému — ne dojmů ani náhodných tipů.</p>
 
-        <div class="method-step"><div class="ms-ico">🧠</div><div>
+        <div class="method-step"><div class="ms-ico"><i class="ti ti-brain" style="color:var(--accent)"></i></div><div>
           <h4>Náš přístup</h4>
-          <p>Pracujeme s <b>proprietárním vícefaktorovým modelem</b>: spojujeme <b>technické načasování</b>, <b>valuaci</b>, <b>růst a kvalitu firmy</b>, <b>konsenzus analytiků</b> a <b>tržní náladu</b> (sentiment titulků, insider obchody, revize doporučení) do jednoho přehledného čísla — <b>MA Skóre</b> — a míry jistoty. Stejná data dají vždy stejný výsledek; žádné náhodné dojmy.</p>
+          <p>Pracujeme s <b>proprietárním vícefaktorovým modelem</b>: spojujeme <b>technické načasování</b>, <b>valuaci</b>, <b>růst a kvalitu firmy</b>, <b>konsenzus analytiků</b>, <b>tržní náladu</b> (sentiment titulků, insider obchody, revize doporučení) a <b>oficiální SEC podání</b> (10-K/10-Q, materiální 8-K, Form 4) do jednoho přehledného čísla — <b>MA Skóre</b> — a míry jistoty. Stejná data dají vždy stejný výsledek; žádné náhodné dojmy.</p>
         </div></div>
 
-        <div class="method-step"><div class="ms-ico">🛡️</div><div>
+        <div class="method-step"><div class="ms-ico"><i class="ti ti-shield-check" style="color:var(--accent)"></i></div><div>
           <h4>Řízení rizika &amp; disciplína</h4>
           <p>Ke každému signálu jasný <b>vstup, stop-loss a cíl</b> a pevná <b>pravidla výstupu</b>. Cílem je <b>kladná očekávaná hodnota v čase</b> — utínat ztráty, nechat zisky běžet. Disciplína místo emocí.</p>
         </div></div>
 
-        <div class="method-step"><div class="ms-ico">📊</div><div>
+        <div class="method-step"><div class="ms-ico"><i class="ti ti-chart-histogram" style="color:var(--accent)"></i></div><div>
           <h4>Proč nám věřit — důkazy</h4>
           <div id="about-proof" style="font-size:13px;line-height:1.6;color:var(--text2)"></div>
           <p style="margin-top:8px"><a class="profile-cloud-link" onclick="closeAbout();openSim()">Kolik to může vydělat?</a></p>
         </div></div>
 
-        <div class="method-step"><div class="ms-ico">💎</div><div>
+        <div class="method-step"><div class="ms-ico"><i class="ti ti-diamond" style="color:var(--accent)"></i></div><div>
           <h4>Co nabízíme</h4>
           <p>Sledování a signály, skener <b>„co koupit teď"</b>, hloubková analýza s verdiktem a kompletním plánem obchodu, <b>„co prodat teď"</b> a veřejný track record. <a class="profile-cloud-link" onclick="closeAbout();openProfile('plans')">Zobrazit předplatné</a></p>
         </div></div>
@@ -1928,6 +1999,39 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
       <div id="watch-empty" class="port-empty" style="display:none;">Zatím nic nesleduješ. Najdi akcii a přidej ji tlačítkem „Sledovat" v detailu.</div>
     </div><!-- /section-portfolio -->
   </div>
+
+  <!-- PATIČKA — právní / trust signály -->
+  <footer class="app-footer">
+    <div class="app-footer-cols">
+      <div class="app-footer-col">
+        <div class="af-brand"><div class="applogo" style="width:32px;height:32px;"></div><span>MY <b>ADVANTAGE</b></span></div>
+        <p>Investiční asistent (ne broker). Podklady k rozhodování založené na datech, ne pocitech.</p>
+      </div>
+      <div class="app-footer-col">
+        <h5>Aplikace</h5>
+        <a onclick="switchTab('overview')">Přehled</a>
+        <a onclick="switchTab('opportunities')">Příležitosti</a>
+        <a onclick="switchTab('results')">Výsledky</a>
+        <a href="/blog">Blog</a>
+      </div>
+      <div class="app-footer-col">
+        <h5>Firma</h5>
+        <a onclick="openAbout()">O nás</a>
+        <a onclick="openProfile('plans')">Předplatné</a>
+        <a href="mailto:podpora@myadvantage.site">Podpora</a>
+      </div>
+      <div class="app-footer-col">
+        <h5>Právní informace</h5>
+        <a onclick="openLegal('terms')">Obchodní podmínky</a>
+        <a onclick="openLegal('privacy')">Ochrana osobních údajů</a>
+        <a onclick="openLegal('disclaimer')">Investiční upozornění</a>
+      </div>
+    </div>
+    <div class="app-footer-legal">
+      MY ADVANTAGE je nástroj pro <b>informační a vzdělávací</b> účely. <b>Neposkytuje investiční poradenství</b> ve smyslu zákona č.&nbsp;256/2004 Sb. Historická výkonnost nezaručuje budoucí výsledky. Každý obchod nese riziko ztráty kapitálu.
+      <br>© 2026 MY ADVANTAGE · <a href="mailto:podpora@myadvantage.site">podpora@myadvantage.site</a>
+    </div>
+  </footer>
 
   <div id="detail-view">
     <div class="detail-header">
@@ -2279,6 +2383,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if(e.key === 'Escape') {
             const pk = document.getElementById('cmp-picker');
             if(pk && pk.style.display === 'flex') { closeCmpPicker(); return; }
+            if(document.getElementById('legalModal').classList.contains('open')) { closeLegal(); return; }
             if(document.getElementById('compareModal').classList.contains('open')) { closeCompare(); return; }
             if(document.getElementById('alertModal').classList.contains('open')) { closeAlertModal(); return; }
             if(document.getElementById('profileModal').classList.contains('open')) { closeProfile(); return; }
@@ -3860,6 +3965,87 @@ async function markNotifSeen() {
     } catch(e) {}
 }
 
+// ===== Právní modal (ToS / Privacy / Disclaimer) =====
+const LEGAL_TEXTS = {
+    terms: `
+        <h3>Obchodní podmínky</h3>
+        <p><b>Poskytovatel:</b> MY ADVANTAGE, provozovatel webu <b>myadvantage.site</b>. Kontakt: <a href="mailto:podpora@myadvantage.site">podpora@myadvantage.site</a>.</p>
+        <h4>1. Předmět služby</h4>
+        <p>MY ADVANTAGE poskytuje online <b>informační a analytický nástroj</b> pro individuální investory. Služba zahrnuje sledování portfolia, tržní data, hloubkovou analýzu akcií, přehled událostí a novinek. <b>Nejsme licencovaný investiční poradce ani broker.</b></p>
+        <h4>2. Předplatné a platby</h4>
+        <p>Platby probíhají měsíčně přes Stripe. Předplatné se automaticky obnovuje, dokud ho zákazník nezruší v profilu. Zrušení je účinné k datu konce zaplaceného období.</p>
+        <h4>3. Vrácení peněz</h4>
+        <p><b>Platby jsou nevratné.</b> Uživatel má možnost vyzkoušet zdarma dostupné funkce před předplatným. Uzavřením předplatného výslovně souhlasí s tím, že plnění začíná ihned a nárok na odstoupení od smlouvy dle §&nbsp;1837 písm. l) občanského zákoníku zaniká.</p>
+        <h4>4. Odpovědnost</h4>
+        <p>Poskytovatel neručí za investiční rozhodnutí uživatele ani za výnos či ztrátu z nich vzniklou. Data z třetích stran (Yahoo Finance, SEC EDGAR, Finnhub a další) jsou přebírána v dobré víře; nelze zaručit jejich úplnou přesnost nebo dostupnost.</p>
+        <h4>5. Účet a bezpečnost</h4>
+        <p>Uživatel odpovídá za bezpečnost svého hesla. Poskytovatel může účet zrušit v případě porušení podmínek, zneužití nebo pokusu o obcházení plánu.</p>
+        <h4>6. Změny podmínek</h4>
+        <p>Poskytovatel může podmínky měnit; uživatel bude informován v aplikaci. Pokračováním v používání služby uživatel se změnou souhlasí.</p>
+        <p style="color:var(--text2); font-size:12px; margin-top:20px;">Verze podmínek: 2026-07-03</p>
+    `,
+    privacy: `
+        <h3>Ochrana osobních údajů</h3>
+        <p><b>Správce údajů:</b> MY ADVANTAGE, <a href="mailto:podpora@myadvantage.site">podpora@myadvantage.site</a>.</p>
+        <h4>Jaké údaje zpracováváme</h4>
+        <ul>
+            <li><b>E-mail a heslo</b> — pro přihlášení (heslo je uložené jen v podobě bezpečného hashe se solí, my ho nikdy nevidíme).</li>
+            <li><b>Watchlist a portfolio</b> — seznam sledovaných tickerů, poznámky, alerty, tagy skupin.</li>
+            <li><b>Předplatné</b> — plán, historie plateb (Stripe drží kartová data, my je nemáme).</li>
+            <li><b>Provozní údaje</b> — čas přihlášení, poslední aktivita, IP adresa v logu, User-Agent.</li>
+        </ul>
+        <h4>Právní základ</h4>
+        <p>Zpracováváme údaje na základě <b>plnění smlouvy</b> (poskytování služby) a <b>oprávněného zájmu</b> (bezpečnost, zlepšování služby). Marketingové e-maily posíláme jen s explicitním souhlasem (opt-in v profilu — ranní souhrn, sobotní digest).</p>
+        <h4>Předávání třetím stranám</h4>
+        <ul>
+            <li><b>Vercel</b> (hosting)</li>
+            <li><b>Upstash</b> (KV databáze — účty, portfolio, cache)</li>
+            <li><b>Stripe</b> (platby)</li>
+            <li><b>Brevo</b> (odchozí e-maily)</li>
+        </ul>
+        <p>Údaje nikdy neprodáváme třetím stranám k marketingu.</p>
+        <h4>Doba uchování</h4>
+        <p>Údaje uchováváme po dobu aktivního účtu. Při zrušení účtu jsou smazány do 30 dnů (kromě daňových dokladů, které jsou uchovávány dle zákona).</p>
+        <h4>Tvá práva</h4>
+        <p>Máš právo na přístup, opravu, výmaz, přenositelnost údajů a podání stížnosti u ÚOOÚ (uoou.gov.cz). Kontaktuj nás na <a href="mailto:podpora@myadvantage.site">podpora@myadvantage.site</a>.</p>
+        <p style="color:var(--text2); font-size:12px; margin-top:20px;">Verze: 2026-07-03</p>
+    `,
+    disclaimer: `
+        <h3>Investiční upozornění</h3>
+        <p><b>MY ADVANTAGE není licencovaný investiční poradce.</b> Aplikace slouží výhradně pro <b>informační a vzdělávací účely</b>. Neposkytujeme investiční doporučení ve smyslu zákona č.&nbsp;256/2004 Sb., o podnikání na kapitálovém trhu.</p>
+        <h4>Rizika investování</h4>
+        <ul>
+            <li>Investice do akcií nesou <b>riziko ztráty</b> vloženého kapitálu.</li>
+            <li><b>Historická výkonnost nezaručuje budoucí výsledky.</b> Backtest ~65 % trefnosti TOP signálu je poctivá historická statistika, ne příslib budoucích zisků.</li>
+            <li>Přibližně <b>~35 % obchodů podle našeho modelu končí v mínusu</b> — proto u každého signálu počítáme stop-loss.</li>
+            <li>Analýzy a signály jsou podklady k <b>tvému vlastnímu rozhodnutí</b>. Odpovědnost za obchodní rozhodnutí nese vždy uživatel.</li>
+        </ul>
+        <h4>Zdroje dat</h4>
+        <p>Používáme data z Yahoo Finance, SEC EDGAR, Finnhubu a veřejných RSS zdrojů. Data jsou přebírána v dobré víře; nemůžeme zaručit jejich úplnou přesnost, aktuálnost nebo dostupnost. Chyby v datech mohou vést k chybným závěrům modelu.</p>
+        <h4>Konflikt zájmů</h4>
+        <p>MY ADVANTAGE <b>není odměňován za doporučení konkrétních akcií</b>. Nemáme partnerství s brokerem, emitentem ani investiční společností. Zisk pochází výhradně z předplatného uživatelů.</p>
+        <h4>Před investováním</h4>
+        <p>Před jakoukoli investicí zvaž vlastní finanční situaci, cíle a toleranci rizika. V případě pochybností konzultuj s <b>licencovaným investičním poradcem</b>. Nikdy neinvestuj peníze, jejichž ztráta by tě dostala do finančních potíží.</p>
+        <p style="color:var(--text2); font-size:12px; margin-top:20px;">Verze: 2026-07-03</p>
+    `,
+};
+
+function openLegal(tab) {
+    setLegalTab(tab || 'terms');
+    document.getElementById('legalModal').classList.add('open');
+}
+function closeLegal() {
+    document.getElementById('legalModal').classList.remove('open');
+}
+function setLegalTab(tab) {
+    ['terms','privacy','disclaimer'].forEach(t => {
+        const btn = document.getElementById('ltab-' + t);
+        if (btn) btn.classList.toggle('active', t === tab);
+    });
+    const body = document.getElementById('legal-body');
+    if (body) { body.innerHTML = LEGAL_TEXTS[tab] || ''; body.scrollTop = 0; }
+}
+
 // ===== Referral program =====
 async function loadReferral() {
     try {
@@ -4040,12 +4226,12 @@ const PLANS = [
         ['Neomezené sledování', 1], ['Grafy, Signal Score & technický budík', 1], ['Aktuální zprávy', 1],
         ['Cenová upozornění + sync', 1], ['Příležitosti & analytici', 0], ['Hloubková analýza', 0] ] },
     { id: 'pro', name: 'Pro', price: '10 €', period: '/ měsíc', featured: true, feats: [
-        ['Vše ze Start', 1], ['🎯 Příležitosti s potenciálem', 1], ['Doporučení analytiků & cílové ceny', 1],
-        ['Fundamenty (P/E, kapitalizace)', 1], ['🧠 Hloubková analýza (5/den)', 1],
+        ['Vše ze Start', 1], ['Příležitosti s potenciálem', 1], ['Doporučení analytiků & cílové ceny', 1],
+        ['Fundamenty (P/E, kapitalizace)', 1], ['Hloubková analýza (5/den)', 1],
         ['Asistent, přehled & track record', 0] ] },
     { id: 'elite', name: 'Elite', price: '15 €', period: '/ měsíc', feats: [
-        ['Vše z Pro', 1], ['🧠 Hloubková analýza (30/den)', 1], ['💬 Asistent k akcii', 1],
-        ['Tržní briefing & „co prodat/přikoupit"', 1], ["Zdůvodnění u příležitostí", 1],
+        ['Vše z Pro', 1], ['Hloubková analýza (30/den)', 1], ['Asistent k akcii', 1],
+        ['Tržní briefing & „co prodat/přikoupit"', 1], ['Zdůvodnění u příležitostí', 1],
         ['Track record signálů', 1] ] },
 ];
 
