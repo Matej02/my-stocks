@@ -3508,8 +3508,11 @@ def api_news_feed():
     limit = max(5, min(40, int(request.args.get("limit", "25") or 25)))
     items = []
 
-    # 1) Yahoo News (jen když je ticker) – nejrelevantnější k dané akci
+    # 1) Yahoo News (jen když je ticker) – nejrelevantnější k dané akci.
+    # U pražských tickerů (.PR) je Yahoo search nespolehlivý (vrací generické
+    # tiskovky GlobeNewswire/PR Newswire) → prosej výsledky přes synonyma firmy.
     if ticker:
+        strict_syn = _ticker_synonyms(ticker) if ticker.endswith(".PR") else None
         try:
             r = requests.get(f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(ticker)}&quotesCount=0&newsCount=12",
                              headers=HEADERS, timeout=6)
@@ -3517,6 +3520,10 @@ def api_news_feed():
             for n in (data.get("news") or [])[:12]:
                 if not n.get("title"):
                     continue
+                if strict_syn is not None:
+                    hay = (n.get("title") or "").lower()
+                    if not any(s in hay for s in strict_syn):
+                        continue
                 items.append({
                     "title": n.get("title"),
                     "link": n.get("link") or "",
