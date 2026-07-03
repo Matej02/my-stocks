@@ -3001,6 +3001,7 @@ async function fetchOverviewPerf(force) {
 
         const opts = {
             chart: { type: 'area', height: 280, background: 'transparent', toolbar: { show: false },
+                     zoom: { enabled: false, allowMouseWheelZoom: false },
                      animations: { enabled: false }, foreColor: '#8a8f99' },
             series: [
                 { name: 'Tvá watchlist', data: d.series },
@@ -5175,7 +5176,7 @@ function renderVolumeChart(historyData) {
 
     const opts = {
         series: [{ name: 'Objem', data: volData }],
-        chart: { type: 'bar', height: 90, toolbar: {show:false}, animations:{enabled:false}, brush:{enabled:false} },
+        chart: { type: 'bar', height: 90, toolbar: {show:false}, zoom: {enabled: false, allowMouseWheelZoom: false}, animations:{enabled:false}, brush:{enabled:false} },
         plotOptions: { bar: { columnWidth: '80%' } },
         dataLabels: { enabled: false },
         xaxis: { type:'category', categories: historyData.map(d=>d.x), labels:{show:false}, axisBorder:{show:false}, axisTicks:{show:false}, tooltip:{enabled:false} },
