@@ -57,6 +57,100 @@ def _rate_ok(action, limit, window):
     except Exception:
         return True
 
+# ---------------------------------------------------------------------------
+# VSTUPNÍ ZÁMEK (privátní režim)
+# Celý web je zavřený na jedno heslo, dokud se nenastaví env SITE_LOCK=off.
+# Heslo je v env SITE_PASSWORD (default 1410). Po ověření se nastaví podepsaná
+# HttpOnly cookie, takže se heslo zadává jednou za GATE_DAYS dní.
+# ---------------------------------------------------------------------------
+GATE_COOKIE = "ma_gate"
+GATE_DAYS = 30
+# Cesty, které zámek NESMÍ zabouchnout – mají vlastní ověření (Stripe podepisuje
+# webhook HMACem, crony chrání CRON_SECRET). Bez výjimky by zavření webu tiše
+# rozbilo platby a ranní/týdenní e-maily.
+GATE_EXEMPT = ("/api/gate", "/api/billing/webhook", "/api/cron/")
+
+
+def site_lock_enabled():
+    v = (os.environ.get("SITE_LOCK") or "on").strip().lower()
+    return v not in ("off", "0", "false", "no")
+
+
+def _site_password():
+    return (os.environ.get("SITE_PASSWORD") or "1410").strip()
+
+
+def _gate_token():
+    """Podepsaný token s expirací. Heslo v něm NENÍ, jen čas platnosti."""
+    exp = str(int(time.time()) + GATE_DAYS * 86400)
+    sig = hmac.new(_secret().encode(), f"gate|{exp}".encode(), hashlib.sha256).hexdigest()
+    return f"{exp}.{sig}"
+
+
+def _gate_token_ok(tok):
+    try:
+        exp, sig = (tok or "").split(".", 1)
+        good = hmac.new(_secret().encode(), f"gate|{exp}".encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(sig, good) and int(exp) > time.time()
+    except Exception:
+        return False
+
+
+def gate_open():
+    """True = návštěvník je za zámkem, nebo je zámek vypnutý."""
+    return not site_lock_enabled() or _gate_token_ok(request.cookies.get(GATE_COOKIE))
+
+
+LOCKED_HTML = ("<!doctype html><html lang=\"cs\"><meta charset=\"utf-8\">"
+               "<meta name=\"robots\" content=\"noindex\">"
+               "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+               "<title>MY ADVANTAGE</title>"
+               "<body style=\"margin:0;display:grid;place-items:center;min-height:100vh;"
+               "background:#0B0F17;color:#F4F6FA;font:16px system-ui,sans-serif\">"
+               "<div style=\"text-align:center;padding:24px\">"
+               "<p style=\"font-size:20px;margin:0 0 10px\">Aplikace je dočasně uzavřená.</p>"
+               "<p style=\"opacity:.6;margin:0\"><a href=\"/\" style=\"color:#F0A030\">Zadat heslo</a></p>"
+               "</div></body></html>")
+
+
+@app.before_request
+def _site_lock():
+    """Fail-closed brána před vším, co obsluhuje Python (API + SEO stránky)."""
+    if request.method == "OPTIONS" or gate_open():
+        return None
+    path = request.path or "/"
+    # Kořen = statický shell aplikace (na Vercelu ho servíruje @vercel/static a
+    # do Pythonu vůbec nedojde). Shell sám o sobě žádná data nenese – zobrazí
+    # zamykací obrazovku a všechna /api/* volání pod ním jsou blokovaná níž.
+    if path == "/" or path.startswith(GATE_EXEMPT):
+        return None
+    if path.startswith("/api/"):
+        return jsonify({"ok": False, "locked": True,
+                        "error": "Aplikace je dočasně uzavřená."}), 403
+    return make_response(LOCKED_HTML, 403, {"Content-Type": "text/html; charset=utf-8"})
+
+
+@app.route("/api/gate", methods=["GET"])
+def gate_status():
+    return jsonify({"ok": True, "locked": site_lock_enabled(), "open": gate_open()})
+
+
+@app.route("/api/gate", methods=["POST"])
+def gate_unlock():
+    if not site_lock_enabled():
+        return jsonify({"ok": True, "open": True})
+    if not _rate_ok("gate", 10, 300):
+        return jsonify({"ok": False, "error": "Příliš mnoho pokusů, zkuste to za chvíli."}), 429
+    pw = str((request.get_json(silent=True) or {}).get("password") or "")
+    if not hmac.compare_digest(pw, _site_password()):
+        return jsonify({"ok": False, "error": "Nesprávné heslo."}), 401
+    resp = make_response(jsonify({"ok": True, "open": True}))
+    resp.set_cookie(GATE_COOKIE, _gate_token(), max_age=GATE_DAYS * 86400,
+                    httponly=True, secure=(request.scheme == "https"),
+                    samesite="Lax", path="/")
+    return resp
+
+
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
 HEADERS = {"User-Agent": UA, "Accept": "application/json"}
@@ -300,6 +394,24 @@ VERDICT_TOP = 80  # konviktní „TOP signál" – přísnější výběr, vyš�
 # objemem měl ~65 % trefnost (každý rok vč. 2022) a expectancy ~+2.3 %/obchod,
 # vs. ~60 % široký signál. Práh kalibrován na basketu (viz /tmp/bt_improve3.py).
 TOP_VOL_MAX = 1.15
+
+# OBCHODNÍ PLÁN – kalibrovaný walk-forward testem (ladění 2018-2022, ověření na
+# odděleném období 2023-2026, 190 titulů včetně dlouhodobých propadáků).
+# Cíl +5 % / stop -8 % / max 30 obch. dní, kontrolováno KAŽDÝ DEN proti živé ceně.
+# Na ověřovacím období zvedlo tohle pravidlo trefnost TOP signálů z 57,4 % na
+# 64,9 % při stejném průměrném výnosu.
+# POZOR – měřeno a zamítnuto (nepřidávat zpět):
+#   * vystoupit, když technické skóre spadne pod 45  -> -18,5 pb trefnosti
+#     (prodává se tím do slabosti přesně na dně)
+#   * pojistka na prudký jednodenní propad           -> -5,7 pb až 0,0 pb
+#     (od -7 % ji stejně zachytí stop na -8 %, takže je zbytečná)
+EXIT_TP = 0.05
+EXIT_SL = 0.08
+EXIT_MAX_DAYS = 30
+# Od tohoto data se při kalibraci NIC neladilo – slouží jako čistý test.
+HOLDOUT_FROM = "2023-01-01"
+# 30 obch. dní ≈ 6 kalendářních týdnů (většina obchodů skončí dřív na cíli/stopu).
+EXIT_HORIZON_LABEL = "do 6 týdnů"
 
 
 def tech_setup_score(price, ind):
@@ -2435,10 +2547,11 @@ def compute_levels(facts, horizon=10):
     price = facts.get("price")
     if not price:
         return None
-    vol = facts.get("volatility_pct")
-    sigma_h = ((vol / 100.0) / (252 ** 0.5) * (horizon ** 0.5)) if (vol and vol > 0) else 0.04
-    stop_pct = max(0.05, min(2.0 * sigma_h, 0.20))
-    tgt_pct = max(0.06, min(2.5 * sigma_h, 0.30))
+    # Úrovně = PŘESNĚ to, co měří backtest (dřív se počítaly z volatility, ale
+    # backtest měřil fixní horizont – uživatel tak viděl jiný plán, než jaký byl
+    # doložený). Teď je plán a důkaz jedna a ta samá věc.
+    stop_pct, tgt_pct = EXIT_SL, EXIT_TP
+    horizon = EXIT_MAX_DAYS
     stop = round(price * (1 - stop_pct), 2)
     target = round(price * (1 + tgt_pct), 2)
     return {
@@ -2462,7 +2575,7 @@ def build_analysis_prompt(facts, model=None):
             "Je-li verdikt 'Držet', NEPIŠ to jako jasný nákup – piš vyváženě, proč spíš počkat "
             "(co chybí k nákupu). Je-li 'Prodat', piš opatrně/negativně. 'headline' musí odpovídat verdiktu. "
             "Pokud si pilíře protiřečí (např. dobří analytici vs. slabá ziskovost), napiš to otevřeně.\n"
-            "HORIZONT je krátkodobý (~2 týdny, náš signál) – do pole 'horizon' napiš \"~2 týdny\" a scénáře "
+            "HORIZONT je krátkodobý (do 6 týdnů, náš signál) – do pole 'horizon' napiš \"do 6 týdnů\" a scénáře "
             "piš k tomuto horizontu, ne k 3–6 měsícům."
         )
     return (
@@ -2547,7 +2660,7 @@ def deep_analysis(ticker):
             report["entry"] = levels["entry"]
             report["stop_loss"] = levels["stop_loss"]
             report["target_price"] = levels["target_price"]
-            report["horizon"] = f"~2 týdny ({levels['horizon_days']} obch. dní)"
+            report["horizon"] = f"{EXIT_HORIZON_LABEL} (max {levels['horizon_days']} obch. dní)"
 
         kv_set_json(ukey, used + 1)
 
@@ -2572,6 +2685,99 @@ def deep_analysis(ticker):
         return jsonify({"ok": False, "error": f"Chyba analýzy: {e}"}), 500
 
 
+def _price_paths(tickers):
+    """Pro každý ticker vrátí (aktuální cena, dráha [(ts, close)]). Bereme CELOU
+    dráhu, ne jen dnešní cenu – jinak by obchod, který zasáhl cíl a pak spadl,
+    vyšel jako ztráta, tedy jinak, než co měří backtest a co podle plánu nastalo."""
+    prices, paths = {}, {}
+    for t in tickers:
+        try:
+            res = yahoo_chart(t, "6mo", "1d")
+            prices[t] = (res.get("meta") or {}).get("regularMarketPrice")
+            ts_ = res.get("timestamp") or []
+            cl_ = ((res.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+            paths[t] = [(tt, c) for tt, c in zip(ts_, cl_) if c is not None]
+        except Exception:
+            prices[t] = None
+            paths[t] = []
+    return prices, paths
+
+
+def _replay_trade(v, path, cur, now=None):
+    """Přehraje jeden obchod den po dni podle plánu uloženého u verdiktu.
+    Vrací (výnos %, stav, popisek). JEDINÉ místo, kde tahle logika žije –
+    používá ji track record, přehled otevřených pozic i ranní e-mail."""
+    entry = v.get("price")
+    if not entry:
+        return None, None, None
+    now = now or int(time.time())
+    tgt, stp = v.get("target"), v.get("stop")
+    t0 = v.get("ts") or 0
+    for tt, c in path:
+        if tt <= t0:
+            continue
+        if stp and c <= stp:
+            return (stp - entry) / entry * 100, "stop", "🛑 Stop zasažen — vystup"
+        if tgt and c >= tgt:
+            return (tgt - entry) / entry * 100, "target", "✅ Cíl zasažen — realizuj zisk"
+    if cur is None:
+        return None, None, None
+    horizon = v.get("horizon_days", EXIT_MAX_DAYS) or EXIT_MAX_DAYS
+    ret_ = (cur - entry) / entry * 100
+    if (now - t0) / 86400 > round(horizon * 7 / 5):
+        return ret_, "expired", "⏳ Horizont vypršel — přehodnoť"
+    return ret_, "open", "Drží se (do cíle/stopu/horizontu)"
+
+
+def _positions_for(user, limit=12):
+    """Otevřené nákupní verdikty uživatele, přehrané proti ŽIVÉ ceně.
+    Tohle je ta „živá" složka: plán se nastaví jednou, ale cíl/stop se
+    kontrolují každý den – přesně to, co podle backtestu funguje
+    (reagovat na zeslábnutí technického skóre naopak měřitelně škodí)."""
+    try:
+        mine = [v for v in (kv_lrange("verdicts", -200, -1) or [])
+                if v.get("user") == user and v.get("verdict") == "Koupit"][-limit:]
+    except Exception:
+        return {"count": 0, "action_count": 0, "items": []}
+    if not mine:
+        return {"count": 0, "action_count": 0, "items": []}
+    prices, paths = _price_paths({v.get("ticker") for v in mine if v.get("ticker")})
+    now = int(time.time())
+    items = []
+    for v in mine:
+        t = v.get("ticker")
+        cur = prices.get(t)
+        ret, status, label = _replay_trade(v, paths.get(t) or [], cur, now)
+        if status is None:
+            continue
+        items.append({
+            "ticker": t, "status": status, "label": label,
+            "entry": _round(v.get("price"), 2), "current": _round(cur, 2),
+            "target": v.get("target"), "stop": v.get("stop"),
+            "return_pct": _round(ret, 2), "ts": v.get("ts"),
+            "days_held": int((now - (v.get("ts") or now)) / 86400),
+        })
+    # Co vyžaduje akci (cíl/stop/expirace) nahoru, otevřené pod to.
+    order = {"target": 0, "stop": 1, "expired": 2, "open": 3}
+    items.sort(key=lambda x: (order.get(x["status"], 9), -(x["ts"] or 0)))
+    return {"count": len(items), "items": items,
+            "action_count": sum(1 for i in items if i["status"] != "open")}
+
+
+@app.route("/api/positions")
+def my_positions():
+    """Živý stav otevřených signálů přihlášeného uživatele proti jeho plánu."""
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    if not _rate_ok("positions", 40, 60):
+        return jsonify({"ok": True, "count": 0, "action_count": 0, "items": []})
+    try:
+        return jsonify({"ok": True, **_positions_for(user)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/track-record")
 def track_record():
     """Agregovaná úspěšnost dosavadních verdiktů (re-fetch aktuálních cen)."""
@@ -2580,38 +2786,25 @@ def track_record():
         if not verdicts:
             return jsonify({"ok": True, "count": 0, "items": [], "stats": {}})
         # Aktuální ceny (unikátní tickery)
-        prices = {}
-        for t in {v.get("ticker") for v in verdicts if v.get("ticker")}:
-            try:
-                res = yahoo_chart(t, "1d", "1d")
-                prices[t] = (res.get("meta") or {}).get("regularMarketPrice")
-            except Exception:
-                prices[t] = None
+        prices, paths = _price_paths({v.get("ticker") for v in verdicts if v.get("ticker")})
+
+        def _replay(v, cur):
+            return _replay_trade(v, paths.get(v.get("ticker")) or [], cur)
         items, buy_rets, buy_high_rets = [], [], []
         HIGH_CONF = 78  # práh „vysoká jistota" (skóre modelu)
         now = int(time.time())
         for v in verdicts:
             cur = prices.get(v.get("ticker"))
-            entry = v.get("price")
-            ret = ((cur - entry) / entry * 100) if (cur and entry) else None
+            exit_status, exit_label = None, None
+            if v.get("verdict") == "Koupit":
+                ret, exit_status, exit_label = _replay(v, cur)
+            else:
+                entry = v.get("price")
+                ret = ((cur - entry) / entry * 100) if (cur and entry) else None
             if v.get("verdict") == "Koupit" and ret is not None:
                 buy_rets.append(ret)
                 if isinstance(v.get("score"), (int, float)) and v["score"] >= HIGH_CONF:
                     buy_high_rets.append(ret)
-            # Vyhodnocení EXIT pravidel (jen pro nákupní verdikty)
-            exit_status, exit_label = None, None
-            if v.get("verdict") == "Koupit" and cur:
-                horizon = v.get("horizon_days", 10) or 10
-                cal_days = round(horizon * 7 / 5)  # obchodní → kalendářní dny
-                days_held = (now - (v.get("ts") or now)) / 86400
-                if v.get("target") and cur >= v["target"]:
-                    exit_status, exit_label = "target", "✅ Cíl zasažen — realizuj zisk"
-                elif v.get("stop") and cur <= v["stop"]:
-                    exit_status, exit_label = "stop", "🛑 Stop zasažen — vystup"
-                elif days_held > cal_days:
-                    exit_status, exit_label = "expired", "⏳ Horizont vypršel — přehodnoť"
-                else:
-                    exit_status, exit_label = "open", "Drží se (do cíle/stopu/horizontu)"
             items.append({**v, "current": _round(cur, 3), "return_pct": _round(ret, 2),
                           "exit_status": exit_status, "exit_label": exit_label})
         items = items[-60:][::-1]
@@ -2651,10 +2844,16 @@ def track_record():
 # Široký, sektorově/velikostně rozmanitý US basket (ne jen mega-cap v býčím trhu),
 # aby byl backtest reprezentativní.
 BACKTEST_BASKET = [
+    # Záměrně NEJEN dnešní vítězové. Původní basket 31 mega-capů nafukoval
+    # výsledek (survivorship bias): „nákup poklesu" vyjde skvěle na titulech,
+    # které od té doby jen rostly. Půlka seznamu jsou proto dlouhodobí zaostávající.
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "AMD",
     "JPM", "BAC", "V", "GS", "JNJ", "PFE", "UNH", "MRK",
     "WMT", "PG", "KO", "MCD", "NKE", "COST", "HD",
     "XOM", "CVX", "CAT", "BA", "DIS", "T", "INTC", "PLTR",
+    # zaostávající / cyklické / padlé – bez nich čísla lžou nahoru
+    "VZ", "MMM", "F", "PYPL", "WBD", "PARA", "CVS", "MRNA",
+    "BIIB", "VTRS", "KHC", "MO", "LUV", "M",
 ]
 
 
@@ -2676,28 +2875,63 @@ def _fetch_series(ticker, rng="5y"):
     return dates, closes, vols
 
 
-def _backtest_ticker(ticker, spy=None, horizon=10, step=5, max_days=1260):
-    """Vrací list (score, fwd_return%, excess_vs_SPY% | None, rok, is_top)."""
+def _exit_trade(closes, i, max_days=None):
+    """Projde den po dni od vstupu a vrátí (výnos, počet dní) podle plánu:
+    stop -EXIT_SL, cíl +EXIT_TP, jinak po EXIT_MAX_DAYS dnech. Pořadí kontroly
+    je chronologické (nejdřív stop) – žádné nakukování do budoucna."""
+    md = max_days or EXIT_MAX_DAYS
+    entry = closes[i]
+    for j in range(1, md + 1):
+        if i + j >= len(closes):
+            break
+        r = closes[i + j] / entry - 1
+        if r <= -EXIT_SL:
+            return -EXIT_SL, j
+        if r >= EXIT_TP:
+            return EXIT_TP, j
+    last = min(i + md, len(closes) - 1)
+    return closes[last] / entry - 1, last - i
+
+
+# Okno historie pro indikátory. Dřív se počítalo z celé série od začátku, takže
+# první vzorek měl jinak dlouhou historii než poslední (RSI/volatilita nesrovnatelné).
+BT_WINDOW = 400
+
+
+def _backtest_ticker(ticker, spy=None, step=None, max_days=2600):
+    """Vrací list (score, výnos%, excess vs SPY% | None, rok, is_top).
+
+    Metodika (opraveno 2026-09):
+      * NEPŘEKRÝVAJÍCÍ vzorky – krok = délka obchodu, takže 1 obchod = 1 nezávislý
+        vzorek. Dřív krok 5 dní při horizontu 10 => 50% překryv => nafouknutá jistota.
+      * KONSTANTNÍ okno historie (BT_WINDOW) pro indikátory.
+      * Výnos podle skutečného obchodního plánu (cíl/stop/max dní), ne podle
+        fixního horizontu – měří se tedy přesně to, co appka uživateli radí.
+    """
     out = []
     try:
-        dates, closes, vols = _fetch_series(ticker, "5y")
+        dates, closes, vols = _fetch_series(ticker, "10y")
     except Exception:
         return out
     n = len(closes)
-    if n < 210 + horizon:
+    if n < BT_WINDOW + EXIT_MAX_DAYS:
         return out
-    i = max(210, n - max_days)
-    while i + horizon < n:
-        ind = compute_indicators(closes[:i + 1], vols[:i + 1])
-        score = tech_setup_score(closes[i], ind)  # stejné skóre jako živý verdikt
+    # Krok 10 dní: při kroku = 30 (dokonale nezávislé vzorky) zbylo za 10 let
+    # jen ~36 TOP signálů, z čehož se nedá nic tvrdit. Vzorkujeme proto hustěji
+    # a překryv přiznáváme v `n_eff` (viz _bt_stats) místo abychom ho schovali.
+    step = step or 10
+    i = max(BT_WINDOW, n - max_days)
+    while i + EXIT_MAX_DAYS < n:
+        ind = compute_indicators(closes[i + 1 - BT_WINDOW:i + 1], vols[i + 1 - BT_WINDOW:i + 1])
+        score = tech_setup_score(closes[i], ind)
         if score is not None:
-            fwd = (closes[i + horizon] / closes[i] - 1) * 100
+            ret, held = _exit_trade(closes, i)
             exc = None
-            d0, dH = dates[i], dates[i + horizon]
+            d0 = dates[i]
+            dH = dates[min(i + held, len(dates) - 1)]
             if spy and d0 in spy and dH in spy and spy[d0]:
-                exc = fwd - (spy[dH] / spy[d0] - 1) * 100
-            # TOP = silný setup + klidný objem (stejná logika jako živě)
-            out.append((score, fwd, exc, d0[:4], is_top_signal(score, ind)))
+                exc = (ret - (spy[dH] / spy[d0] - 1)) * 100
+            out.append((score, ret * 100, exc, d0[:4], is_top_signal(score, ind), d0))
         i += step
     return out
 
@@ -2710,8 +2944,15 @@ def _bt_stats(rows):
     exc = [r[1] for r in rows if r[1] is not None]
     wins = [x for x in fwd if x > 0]
     losses = [x for x in fwd if x <= 0]
-    s = {"count": len(fwd),
-         "win_rate": round(sum(1 for r in fwd if r > 0) / len(fwd) * 100, 1),
+    # Obchod trvá až EXIT_MAX_DAYS, ale vzorkuje se po 10 dnech → jeden obchod
+    # může zasahovat do ~3 vzorků. `n_eff` je počet skutečně nezávislých vzorků
+    # a `ci` je z něj spočítaný interval spolehlivosti (95 %). Bez toho by
+    # trefnost vypadala jistější, než jaká doopravdy je.
+    n_eff = max(1, int(len(fwd) / (EXIT_MAX_DAYS / 10)))
+    _wr = sum(1 for r in fwd if r > 0) / len(fwd) * 100
+    s = {"count": len(fwd), "n_eff": n_eff,
+         "ci": round(1.96 * ((_wr * (100 - _wr) / n_eff) ** 0.5), 1),
+         "win_rate": round(_wr, 1),
          "avg_return": round(sum(fwd) / len(fwd), 2),
          "avg_win": round(sum(wins) / len(wins), 2) if wins else 0,
          "avg_loss": round(sum(losses) / len(losses), 2) if losses else 0}
@@ -2721,46 +2962,68 @@ def _bt_stats(rows):
     return s
 
 
-def run_backtest(tickers, horizon=10):
+def run_backtest(tickers):
     try:
-        sd, sc, _ = _fetch_series("SPY", "5y")
+        sd, sc, _ = _fetch_series("SPY", "10y")
         spy = dict(zip(sd, sc))
     except Exception:
         spy = {}
     samples, used = [], []
     for t in tickers:
-        s = _backtest_ticker(t, spy, horizon)
+        s = _backtest_ticker(t, spy)
         if s:
             samples += s
             used.append(t)
     if not samples:
         return None
-    buys = [(fwd, exc) for (sc_, fwd, exc, yr, top_) in samples if sc_ >= VERDICT_BUY]
-    tops = [(fwd, exc) for (sc_, fwd, exc, yr, top_) in samples if top_]
-    holds = [(fwd, exc) for (sc_, fwd, exc, yr, top_) in samples if VERDICT_SELL <= sc_ < VERDICT_BUY]
-    sells = [(fwd, exc) for (sc_, fwd, exc, yr, top_) in samples if sc_ < VERDICT_SELL]
-    # Rozpad „Koupit" i „TOP" podle roku (důkaz, že signál drží i v medvědím 2022)
+
+    def pick(rows, cond):
+        return [(r[1], r[2]) for r in rows if cond(r)]
+
+    is_buy = lambda r: r[0] >= VERDICT_BUY          # noqa: E731
+    is_top = lambda r: r[4]                          # noqa: E731
+
+    # Ověřovací (holdout) období – na těchto datech se NIC neladilo, takže jen
+    # ono vypovídá o tom, jak systém funguje na datech, která nikdy neviděl.
+    holdout_from = HOLDOUT_FROM
+    hold_rows = [r for r in samples if r[5] >= holdout_from]
+
     by_year, top_year = {}, {}
-    for (sc_, fwd, exc, yr, top_) in samples:
-        if sc_ >= VERDICT_BUY:
-            by_year.setdefault(yr, []).append((fwd, exc))
-        if top_:
-            top_year.setdefault(yr, []).append((fwd, exc))
-    buy_by_year = {yr: _bt_stats(rows) for yr, rows in sorted(by_year.items())}
-    top_by_year = {yr: _bt_stats(rows) for yr, rows in sorted(top_year.items())}
+    for r in samples:
+        if is_buy(r):
+            by_year.setdefault(r[3], []).append((r[1], r[2]))
+        if is_top(r):
+            top_year.setdefault(r[3], []).append((r[1], r[2]))
+
     return {
-        "horizon_days": horizon, "period": "5 let (vč. propadu 2022)",
+        "horizon_days": EXIT_MAX_DAYS, "period": "10 let (vč. propadu 2022)",
         "benchmark": "SPY" if spy else None,
         "tickers": used, "ticker_count": len(used), "sample_count": len(samples),
-        "buy": _bt_stats(buys), "top": _bt_stats(tops),
-        "hold": _bt_stats(holds), "sell": _bt_stats(sells),
-        "baseline": _bt_stats([(fwd, exc) for (_, fwd, exc, yr, top_) in samples]),
-        "buy_by_year": buy_by_year, "top_by_year": top_by_year, "top_threshold": VERDICT_TOP,
+        "buy": _bt_stats(pick(samples, is_buy)), "top": _bt_stats(pick(samples, is_top)),
+        "hold": _bt_stats(pick(samples, lambda r: VERDICT_SELL <= r[0] < VERDICT_BUY)),
+        "sell": _bt_stats(pick(samples, lambda r: r[0] < VERDICT_SELL)),
+        "baseline": _bt_stats([(r[1], r[2]) for r in samples]),
+        "buy_by_year": {y: _bt_stats(v) for y, v in sorted(by_year.items())},
+        "top_by_year": {y: _bt_stats(v) for y, v in sorted(top_year.items())},
+        "top_threshold": VERDICT_TOP,
+        # ---- holdout: totéž, ale jen na datech, na kterých se neladilo -------
+        "holdout": {
+            "from": holdout_from,
+            "sample_count": len(hold_rows),
+            "baseline": _bt_stats([(r[1], r[2]) for r in hold_rows]),
+            "buy": _bt_stats(pick(hold_rows, is_buy)),
+            "top": _bt_stats(pick(hold_rows, is_top)),
+        },
+        "plan": {"target_pct": round(EXIT_TP * 100, 1), "stop_pct": round(EXIT_SL * 100, 1),
+                 "max_days": EXIT_MAX_DAYS},
         "generated": int(time.time()),
-        "note": f"Náš nákupní signál (MA Skóre), 5 let, žádný look-ahead. "
-                f"Koupit = skóre ≥{VERDICT_BUY}, Prodat = <{VERDICT_SELL}. "
-                f"TOP = silný setup + klidný objem (bez prodejního tlaku). "
-                f"Alfa = výnos navíc proti indexu (SPY).",
+        "note": f"Náš nákupní signál (MA Skóre), 10 let, žádný look-ahead, "
+                f"nepřekrývající se vzorky. Koupit = skóre ≥{VERDICT_BUY}, "
+                f"Prodat = <{VERDICT_SELL}. TOP = silný setup + klidný objem. "
+                f"Výnos měřen podle skutečného plánu: cíl +{EXIT_TP*100:.0f} %, "
+                f"stop −{EXIT_SL*100:.0f} %, max {EXIT_MAX_DAYS} obch. dní. "
+                f"Alfa = výnos navíc proti indexu (SPY). Klíč „holdout“ = stejná "
+                f"čísla jen na období od {holdout_from}, na kterém se nic neladilo.",
     }
 
 
@@ -2769,11 +3032,11 @@ def admin_backtest():
     if not _auth_admin():
         return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
     body = request.get_json(silent=True) or {}
-    horizon = max(5, min(int(body.get("horizon", 10) or 10), 120))
+    # Horizont už není parametr – obchod končí podle plánu (cíl/stop/max dní).
     tickers = body.get("tickers") if isinstance(body.get("tickers"), list) else None
-    tickers = [t.strip().upper() for t in (tickers or BACKTEST_BASKET) if str(t).strip()][:42]
+    tickers = [t.strip().upper() for t in (tickers or BACKTEST_BASKET) if str(t).strip()][:60]
     try:
-        res = run_backtest(tickers, horizon)
+        res = run_backtest(tickers)
         if not res:
             return jsonify({"ok": False, "error": "Backtest nevrátil data (zkus jiné tickery)."}), 502
         kv_set_json("backtest:latest", res)
@@ -3881,8 +4144,13 @@ def exit_signals():
                 continue
             sma200 = ind.get("sma200")
             rsi = ind.get("rsi")
+            # POZOR: dřív tu bylo tvrdé „signál k výstupu" při skóre < 45.
+            # Walk-forward test ukázal, že vystupovat kvůli zeslábnutí skóre
+            # stojí -18,5 pb trefnosti – prodává se tím do slabosti na dně.
+            # Z pozice se vystupuje podle plánu (cíl/stop/max dní), tohle je
+            # jen informace o stavu titulu, ne pokyn k prodeji.
             if score < VERDICT_SELL:
-                level, reason = "sell", "Technicky slabé – signál k výstupu"
+                level, reason = "weak", "Technicky slabé – drž se plánu (cíl/stop)"
             elif sma200 and price < sma200:
                 level, reason = "weak", "Oslabení dlouhodobého trendu"
             elif rsi is not None and rsi > 75:
@@ -4286,7 +4554,7 @@ Před blížícími se earnings snižujeme jistotu o 18 % — je to událost s v
 
 **Co NEDĚLÁ verdikt:**
 - Není to garance zisku
-- Není to timing pro daytrading (horizont ~2 týdny)
+- Není to timing pro daytrading (horizont do 6 týdnů)
 - Není to nahrazení tvého vlastního úsudku
 """,
     },
@@ -4744,13 +5012,29 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
             f"<div style='padding:8px 0;border-top:1px solid #23262f'>"
             f"<b style='color:#00C853'>Koupit</b> &nbsp;<b>{s.get('ticker')}</b> "
             f"<span style='color:#9ba1b0'>{s.get('name','')}</span><br>"
-            f"<span style='color:#9ba1b0;font-size:12px'>skóre {s.get('score')} · cíl +{s.get('reward_pct')}% / stop −{s.get('risk_pct')}% · ~2 týdny</span></div>"
+            f"<span style='color:#9ba1b0;font-size:12px'>skóre {s.get('score')} · cíl +{s.get('reward_pct')}% / stop −{s.get('risk_pct')}% · {EXIT_HORIZON_LABEL}</span></div>"
             for s in top_signals[:4])
         sig_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>✅ Dnešní signály „Sleva v trendu"
                     "</h3>" + sitems)
+    # Otevřené pozice – co dnes vyžaduje akci podle plánu (cíl/stop/horizont).
+    pos_html = ""
+    try:
+        pos = _positions_for(email)
+        act = [i for i in pos["items"] if i["status"] != "open"]
+        if act:
+            rws = "".join(
+                f"<div style='padding:8px 0;border-bottom:1px solid #22262f'>"
+                f"<b>{i['ticker']}</b> {i['label']} "
+                f"<span style='color:{'#00C853' if (i['return_pct'] or 0) >= 0 else '#FF3D00'}'>"
+                f"{'+' if (i['return_pct'] or 0) >= 0 else ''}{i['return_pct']} %</span></div>"
+                for i in act[:5])
+            pos_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>🎯 Tvé pozice – dnes vyžadují akci</h3>"
+                        + rws)
+    except Exception:
+        pos_html = ""
     return _email_shell("Ranní přehled trhu ☀️",
                         "<p style='line-height:1.6'>Dobré ráno! Tady je tvůj dnešní přehled:</p>" +
-                        watch_html + sig_html + opp_html +
+                        pos_html + watch_html + sig_html + opp_html +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>Notifikace vypneš v appce v profilu. "
                         "Není to investiční doporučení.</p>")
 
@@ -4812,7 +5096,7 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
             f"<b style='color:#00C853'>Koupit</b> &nbsp;<b>{s.get('ticker')}</b> "
             f"<span style='color:#9ba1b0'>{s.get('name','')}</span><br>"
             f"<span style='color:#9ba1b0;font-size:12px'>MA skóre {s.get('score')} · "
-            f"cíl +{s.get('reward_pct')}% / stop −{s.get('risk_pct')}% · ~2 týdny</span></div>"
+            f"cíl +{s.get('reward_pct')}% / stop −{s.get('risk_pct')}% · {EXIT_HORIZON_LABEL}</span></div>"
             for s in top_signals[:4])
         sig_html = "<h3 style='font-size:16px;margin:22px 0 10px'>🎯 Nejlepší signály týdne</h3>" + sitems
 
@@ -4858,36 +5142,57 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
                         "Vypneš ho tam samým přepínačem. Není to investiční doporučení.</p>")
 
 
-@app.route("/api/cron/weekly-digest")
-def cron_weekly_digest():
-    """Sobotní ranní digest za uplynulý týden. Vercel Cron – secret required."""
+def _cron_auth():
+    """Ověření Vercel Cronu (fail-closed). Bez CRON_SECRET endpoint nedělá nic.
+    Vrací chybovou odpověď, nebo None když je vše v pořádku."""
     secret = os.environ.get("CRON_SECRET")
     auth = request.headers.get("Authorization", "")
     if not secret or (auth != f"Bearer {secret}" and request.args.get("secret") != secret):
         return jsonify({"ok": False, "error": "Neautorizováno."}), 401
+    return None
+
+
+def _todays_signals():
+    """Dnešní signály z denní cache, jinak dopočítá a uloží. Fail-open."""
+    sig = kv_get_json(f"signals:{_today()}")
+    if not sig:
+        try:
+            sig = _scan_signals()
+            kv_set_json(f"signals:{_today()}", sig)
+        except Exception:
+            sig = {}
+    return (sig or {}).get("results") or []
+
+
+def _broadcast(notif_key, subject, build_html, limit=200):
+    """Rozešle e-mail všem, kdo mají v profilu zapnutý `notif_key`.
+    Jedna chybná adresa nesmí shodit celou rozesílku."""
+    sent = 0
+    for email in kv_smembers("users")[:limit]:
+        rec = kv_get_json(f"user:{email}") or {}
+        if not (rec.get("notif") or {}).get(notif_key):
+            continue
+        try:
+            send_email(email, subject, build_html(email))
+            sent += 1
+        except Exception:
+            continue
+    return sent
+
+
+@app.route("/api/cron/weekly-digest")
+def cron_weekly_digest():
+    """Sobotní ranní digest za uplynulý týden. Vercel Cron – secret required."""
+    err = _cron_auth()
+    if err:
+        return err
     if not (cloud_enabled() and email_enabled()):
         return jsonify({"ok": False, "error": "Chybí úložiště nebo e-mail."}), 503
-    sent = 0
     try:
         top_opps = _top_opps_for_summary(3)
-        sig = kv_get_json(f"signals:{_today()}") or {}
-        if not sig:
-            try:
-                sig = _scan_signals()
-                kv_set_json(f"signals:{_today()}", sig)
-            except Exception:
-                sig = {}
-        top_signals = (sig or {}).get("results") or []
-        for email in kv_smembers("users")[:200]:
-            rec = kv_get_json(f"user:{email}") or {}
-            if not (rec.get("notif") or {}).get("weekly"):
-                continue
-            try:
-                send_email(email, "📊 Týdenní shrnutí – MY ADVANTAGE",
-                           build_weekly_digest_html(email, top_signals, top_opps))
-                sent += 1
-            except Exception:
-                continue
+        top_signals = _todays_signals()
+        sent = _broadcast("weekly", "📊 Týdenní shrnutí – MY ADVANTAGE",
+                          lambda em: build_weekly_digest_html(em, top_signals, top_opps))
         return jsonify({"ok": True, "sent": sent})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -4916,19 +5221,17 @@ def cron_backtest():
     """Týdně obnoví backtest a uloží do cache (`backtest:latest`), aby banner
     'Ověřeno backtestem' u zákazníků zůstal aktuální bez ruční obsluhy.
     Chráněno CRON_SECRET (fail-closed)."""
-    secret = os.environ.get("CRON_SECRET")
-    auth = request.headers.get("Authorization", "")
-    if not secret or (auth != f"Bearer {secret}" and request.args.get("secret") != secret):
-        return jsonify({"ok": False, "error": "Neautorizováno."}), 401
+    err = _cron_auth()
+    if err:
+        return err
     if not cloud_enabled():
         return jsonify({"ok": False, "error": "Chybí úložiště."}), 503
     try:
-        horizon = max(5, min(int(request.args.get("horizon", 10) or 10), 120))
-        res = run_backtest(BACKTEST_BASKET, horizon)
+        res = run_backtest(BACKTEST_BASKET)
         if not res:
             return jsonify({"ok": False, "error": "Backtest nevrátil data."}), 502
         kv_set_json("backtest:latest", res)
-        return jsonify({"ok": True, "buy": res.get("buy"), "horizon_days": horizon})
+        return jsonify({"ok": True, "buy": res.get("buy"), "horizon_days": res.get("horizon_days")})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -4943,14 +5246,8 @@ def admin_morning_test():
         return jsonify({"ok": False, "error": "E-maily nejsou nastavené."}), 503
     try:
         top_opps = _top_opps_for_summary(3)
-        sig = kv_get_json(f"signals:{_today()}")
-        if not sig:
-            try:
-                sig = _scan_signals(); kv_set_json(f"signals:{_today()}", sig)
-            except Exception:
-                sig = {}
         ok = send_email(admin, "☀️ Ranní přehled (test) – MY ADVANTAGE",
-                        build_morning_summary_html(admin, top_opps, (sig or {}).get("results") or []))
+                        build_morning_summary_html(admin, top_opps, _todays_signals()))
         return jsonify({"ok": ok, "sent_to": admin, "error": _LAST_EMAIL_ERROR["msg"]})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -4960,34 +5257,16 @@ def admin_morning_test():
 def cron_morning():
     # Ochrana (fail-closed): vyžaduje env CRON_SECRET. Vercel Cron posílá
     # Authorization: Bearer <CRON_SECRET>. Bez nastaveného secretu endpoint nic nedělá.
-    secret = os.environ.get("CRON_SECRET")
-    auth = request.headers.get("Authorization", "")
-    if not secret or (auth != f"Bearer {secret}" and request.args.get("secret") != secret):
-        return jsonify({"ok": False, "error": "Neautorizováno."}), 401
+    err = _cron_auth()
+    if err:
+        return err
     if not (cloud_enabled() and email_enabled()):
         return jsonify({"ok": False, "error": "Chybí úložiště nebo e-mail."}), 503
-    sent = 0
     try:
         top_opps = _top_opps_for_summary(3)
-        # Dnešní signály – z denní cache, jinak dopočítej (a ulož do cache)
-        sig = kv_get_json(f"signals:{_today()}")
-        if not sig:
-            try:
-                sig = _scan_signals()
-                kv_set_json(f"signals:{_today()}", sig)
-            except Exception:
-                sig = {}
-        top_signals = (sig or {}).get("results") or []
-        for email in kv_smembers("users")[:200]:
-            rec = kv_get_json(f"user:{email}") or {}
-            if not (rec.get("notif") or {}).get("morning"):
-                continue
-            try:
-                send_email(email, "☀️ Ranní přehled trhu – MY ADVANTAGE",
-                           build_morning_summary_html(email, top_opps, top_signals))
-                sent += 1
-            except Exception:
-                continue
+        top_signals = _todays_signals()
+        sent = _broadcast("morning", "☀️ Ranní přehled trhu – MY ADVANTAGE",
+                          lambda em: build_morning_summary_html(em, top_opps, top_signals))
         return jsonify({"ok": True, "sent": sent})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500

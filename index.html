@@ -568,6 +568,17 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .ov-hero .sub {color:var(--text2); font-size:14px;}
 .ov-grid {display:grid; grid-template-columns:repeat(12,1fr); gap:16px;}
 .ov-grid > * {min-width:0;}
+.pos-row {display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border);}
+.pos-row:last-child {border-bottom:none;}
+.pos-t {font-weight:700; min-width:78px;}
+.pos-lbl {flex:1; color:var(--text2); font-size:13px;}
+.pos-ret {font-weight:700; font-variant-numeric:tabular-nums;}
+.pos-tag {font-size:11px; padding:3px 8px; border-radius:999px; white-space:nowrap;}
+.pos-tag.target {background:rgba(0,230,118,.15); color:var(--up);}
+.pos-tag.stop {background:rgba(255,61,0,.15); color:var(--down);}
+.pos-tag.expired {background:var(--amber-soft); color:var(--amber);}
+.pos-tag.open {background:var(--elev2); color:var(--text2);}
+#ov-pos-badge {font-size:12px; color:var(--accent); font-weight:700;}
 .ov-col-8 {grid-column:span 8;}
 .ov-col-6 {grid-column:span 6;}
 .ov-col-4 {grid-column:span 4;}
@@ -1146,6 +1157,45 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 </head>
 <body>
 
+<!-- ================= VSTUPNÍ ZÁMEK (privátní režim) =======================
+     Celý web je zavřený na heslo. Ověřuje se SERVEROVĚ (/api/gate) – tohle je
+     jen obrazovka; i kdyby ji někdo v prohlížeči odklikl, všechna /api/* volání
+     zůstanou zamčená. Vypnutí: env SITE_LOCK=off.
+========================================================================== -->
+<style>
+#siteLock{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;
+  background:var(--bg);padding:24px;}
+#siteLock::before{content:'';position:absolute;top:-30%;left:50%;transform:translateX(-50%);
+  width:90vw;height:60vw;background:radial-gradient(circle,var(--accent-glow) 0%,transparent 60%);
+  opacity:.14;pointer-events:none;}
+.sl-card{position:relative;width:100%;max-width:380px;text-align:center;background:var(--surface);
+  border:1px solid var(--border);border-radius:20px;padding:36px 28px;}
+.sl-brand{font-family:var(--fh);font-size:24px;font-weight:800;letter-spacing:1px;margin-bottom:6px;}
+.sl-brand span{color:var(--accent);}
+.sl-sub{color:var(--text2);font-size:14px;margin-bottom:22px;}
+.sl-row{display:flex;gap:8px;}
+#slInput{flex:1;min-width:0;background:var(--elev);border:1px solid var(--border2);border-radius:12px;
+  color:var(--text);font-family:var(--fb);font-size:17px;letter-spacing:3px;text-align:center;padding:13px 14px;outline:none;}
+#slInput:focus{border-color:var(--border-accent);}
+#slBtn{background:var(--accent);color:#1a0e00;border:none;border-radius:12px;font-family:var(--fb);
+  font-weight:700;font-size:15px;padding:13px 20px;cursor:pointer;white-space:nowrap;}
+#slBtn:disabled{opacity:.55;cursor:default;}
+#slErr{color:var(--down);font-size:13px;min-height:18px;margin-top:12px;}
+</style>
+<div id="siteLock">
+  <div class="sl-card">
+    <div class="applogo" style="width:54px;height:54px;margin:0 auto 14px"></div>
+    <div class="sl-brand">MY <span>ADVANTAGE</span></div>
+    <div class="sl-sub">Aplikace je v privátním režimu.<br>Zadejte přístupové heslo.</div>
+    <div class="sl-row">
+      <input id="slInput" type="password" inputmode="numeric" autocomplete="off"
+             placeholder="••••" aria-label="Přístupové heslo">
+      <button id="slBtn" type="button">Vstoupit</button>
+    </div>
+    <div id="slErr"></div>
+  </div>
+</div>
+
 <!-- ZÁMEK – zobrazí se jen když je nastaveno heslo (env APP_PASSWORD) -->
 <!-- PŘÍSTUPOVÁ ZEĎ – přihlášení / vybrat plán -->
 <div id="gateWall" class="lock-screen" style="display:none;">
@@ -1319,7 +1369,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.07.03</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.09.12·b</div>
 
 <div class="container">
   
@@ -1779,6 +1829,14 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
           </div>
         </div>
 
+        <!-- ŽIVÝ STAV POZIC – cíl/stop se kontrolují každý den -->
+        <div class="ov-col-12" id="ov-positions-wrap" style="display:none;">
+          <div class="ov-card">
+            <h3><i class="ti ti-target-arrow"></i> Tvé pozice — živý stav <span id="ov-pos-badge"></span></h3>
+            <div id="ov-positions"></div>
+          </div>
+        </div>
+
         <!-- KALENDÁŘ UDÁLOSTÍ -->
         <div class="ov-col-6">
           <div class="ov-card">
@@ -1923,7 +1981,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
       <div class="opp-head">
         <div class="opp-title">
           <i class="ti ti-target-arrow" style="color:var(--up)"></i> Co koupit teď — signál „Sleva v trendu"
-          <span class="opp-sub">Akcie, které <b>právě teď</b> splňují náš backtestem prověřený nákupní signál. Horizont ~2 týdny. <span id="signals-proof" style="color:var(--up)"></span> <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span>
+          <span class="opp-sub">Akcie, které <b>právě teď</b> splňují náš backtestem prověřený nákupní signál. Horizont do 6 týdnů. <span id="signals-proof" style="color:var(--up)"></span> <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span>
         </div>
         <div class="opp-actions">
           <span class="opp-updated" id="signals-updated"></span>
@@ -2343,7 +2401,65 @@ function updateMarketWidget() {
 }
 function initMarketWidget() { updateMarketWidget(); setInterval(updateMarketWidget, 30000); }
 
+/* ---- VSTUPNÍ ZÁMEK ---------------------------------------------------
+   Server je jediná autorita (/api/gate + HttpOnly cookie). localStorage klíč
+   je jen kosmetika, aby odemčenému uživateli neproblikla zamykací obrazovka. */
+const SL_HINT = 'ma_gate_ok';
+
+function slHide(){
+    const el = document.getElementById('siteLock');
+    if (el) el.style.display = 'none';
+}
+
+async function slSubmit(){
+    const inp = document.getElementById('slInput');
+    const btn = document.getElementById('slBtn');
+    const err = document.getElementById('slErr');
+    const pw = (inp.value || '').trim();
+    if (!pw) { inp.focus(); return; }
+    btn.disabled = true; err.textContent = '';
+    try {
+        const r = await fetch('/api/gate', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({password: pw})
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.ok) {
+            localStorage.setItem(SL_HINT, '1');
+            location.reload();     // čistý boot appky už za odemčenou bránou
+            return;
+        }
+        err.textContent = d.error || 'Nesprávné heslo.';
+    } catch (e) {
+        err.textContent = 'Nepodařilo se ověřit heslo.';
+    }
+    btn.disabled = false;
+    inp.value = ''; inp.focus();
+}
+
+function initSiteLock(){
+    const el = document.getElementById('siteLock');
+    if (!el) return;
+    // Odemčeného uživatele nenecháme koukat na zámek, než doběhne fetch.
+    if (localStorage.getItem(SL_HINT) === '1') el.style.display = 'none';
+
+    document.getElementById('slBtn').addEventListener('click', slSubmit);
+    document.getElementById('slInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') slSubmit();
+    });
+
+    fetch('/api/gate').then(r => r.json()).then(d => {
+        if (d && d.open) { localStorage.setItem(SL_HINT, '1'); slHide(); }
+        else {
+            localStorage.removeItem(SL_HINT);   // cookie vypršela → zamknout zpět
+            el.style.display = 'flex';
+            document.getElementById('slInput').focus();
+        }
+    }).catch(() => {});
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+    initSiteLock();
     initResetFromUrl();
     initGate();
     initMarketWidget();
@@ -2458,16 +2574,6 @@ function formatNum(num) {
 }
 
 // --- ROBUSTNÍ JSON PARSER: Vytáhne JSON i z obalených odpovědí modelu ---
-function extractJson(rawStr) {
-    // 1) Zkusíme přímé parsování
-    try { return JSON.parse(rawStr); } catch {}
-    // 2) Najdeme první { ... } blok v textu (třeba po ```json nebo textu)
-    const match = rawStr.match(/\{[\s\S]*\}/);
-    if(match) {
-        try { return JSON.parse(match[0]); } catch {}
-    }
-    throw new Error("Nelze parsovat JSON z odpovědi modelu");
-}
 
 // Server-side AI: zavolá náš endpoint (uživatel nezadává žádný klíč). Vrací data nebo null.
 async function serverAI(path, body) {
@@ -2699,15 +2805,21 @@ function closeProfile() {
     document.getElementById('profileModal').classList.remove('open');
     refreshGate();
 }
+/* Který tier backtestu ukazovat: TOP když má vzorky, jinak Koupit.
+   Bylo to na 4 místech zkopírované – jedna změna pravidla se musela dělat 4x. */
+function btBest() {
+    return btProof && (btProof.top && btProof.top.count ? btProof.top : btProof.buy);
+}
+
 function openAbout() {
     _hideGate();
     document.getElementById('aboutModal').classList.add('open');
     const el = document.getElementById('about-proof');
     if (!el) return;
-    const bp = btProof && (btProof.top && btProof.top.count ? btProof.top : btProof.buy);
+    const bp = btBest();
     if (bp && bp.win_rate != null) {
         const alpha = (bp.alpha != null) ? ` a porážel index o <b style="color:var(--up)">+${bp.alpha} b.</b>` : '';
-        el.innerHTML = `Náš nákupní signál měl na <b>${btProof.period || '5letém backtestu'}</b> (bez nahlížení do budoucna) <b style="color:var(--up)">${bp.win_rate}% úspěšnost</b>${alpha} na ~${btProof.horizon_days || 10}denním horizontu — napříč ${btProof.ticker_count || 'desítkami'} akciemi${btProof.sample_count ? ' a ' + btProof.sample_count + ' obchody' : ''}, <b>včetně propadu 2022</b>. K tomu vedeme veřejný <b>track record</b> reálných verdiktů. Výsledky ukazujeme otevřeně, i slabší období.`;
+        el.innerHTML = `Náš nákupní signál měl na <b>${btProof.period || '10letém backtestu'}</b> (bez nahlížení do budoucna) <b style="color:var(--up)">${bp.win_rate}% úspěšnost</b>${alpha} na ~${btProof.horizon_days || 10}denním horizontu — napříč ${btProof.ticker_count || 'desítkami'} akciemi${btProof.sample_count ? ' a ' + btProof.sample_count + ' obchody' : ''}, <b>včetně propadu 2022</b>. K tomu vedeme veřejný <b>track record</b> reálných verdiktů. Výsledky ukazujeme otevřeně, i slabší období.`;
     } else {
         el.innerHTML = `Náš systém je ověřený <b>5letým backtestem</b> (bez nahlížení do budoucna, vč. propadu 2022) a doplněný veřejným <b>track recordem</b> reálných verdiktů. Konkrétní čísla najdeš přímo u analýz.`;
     }
@@ -2738,6 +2850,35 @@ async function loadMarketNews() {
 // ====================== PŘEHLED (uvítací dashboard) ======================
 let overviewLoaded = false;
 let overviewLoading = false;
+/* Živý stav otevřených pozic. Plán (cíl/stop/max dní) se nastaví při analýze,
+   ale kontroluje se KAŽDÝ DEN proti aktuální ceně – to je podle backtestu ta
+   funkční ochrana. Reagovat navíc na zeslábnutí skóre naopak škodí, proto to
+   tady schválně není. */
+async function fetchOverviewPositions() {
+    const wrap = document.getElementById('ov-positions-wrap');
+    if (!wrap) return;
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/positions`, { headers: authHeaders() });
+        const d = await r.json();
+        if (!d.ok || !d.count) { wrap.style.display = 'none'; return; }
+        const tag = {target:'Cíl', stop:'Stop', expired:'Horizont', open:'Drží se'};
+        document.getElementById('ov-positions').innerHTML = d.items.map(i => {
+            const col = (i.return_pct || 0) >= 0 ? 'var(--up)' : 'var(--down)';
+            return `<div class="pos-row">
+                <span class="pos-t">${escapeHtml(i.ticker)}</span>
+                <span class="pos-tag ${i.status}">${tag[i.status] || i.status}</span>
+                <span class="pos-lbl">${escapeHtml(i.label || '')} · ${i.days_held} dní</span>
+                <span class="pos-ret" style="color:${col}">${(i.return_pct||0) >= 0 ? '+' : ''}${i.return_pct}%</span>
+            </div>`;
+        }).join('');
+        document.getElementById('ov-pos-badge').textContent =
+            d.action_count ? `${d.action_count} vyžaduje akci` : '';
+        wrap.style.display = '';
+    } catch (e) {
+        wrap.style.display = 'none';
+    }
+}
+
 async function loadOverview(force) {
     if (overviewLoading) return;
     if (overviewLoaded && !force) { renderOverviewPortfolio(); return; }
@@ -2752,6 +2893,7 @@ async function loadOverview(force) {
         fetchOverviewSectors(),
         fetchOverviewAlerts(),
         fetchOverviewPerf(),
+        fetchOverviewPositions(),
     ];
     renderOverviewPortfolio();
     renderOverviewEvents();
@@ -3529,14 +3671,13 @@ async function runCompare() {
 
 // „Jak hodnotíme?" odkazy teď otevírají jednotný panel O nás (bez prozrazení receptu)
 function openMethod() { openAbout(); }
-function closeMethod() { closeAbout(); }
 function openSim() { document.getElementById('simModal').classList.add('open'); runSim(); }
 function closeSim() { document.getElementById('simModal').classList.remove('open'); }
 function runSim() {
     const out = document.getElementById('sim-out');
     const cap = Math.max(0, parseFloat(document.getElementById('sim-cap').value) || 0);
     const trades = Math.max(1, Math.min(parseInt(document.getElementById('sim-trades').value) || 1, 200));
-    const bp = btProof && (btProof.top && btProof.top.count ? btProof.top : btProof.buy);
+    const bp = btBest();
     if (!bp || bp.avg_return == null) {
         out.innerHTML = '<div style="color:var(--text2);font-size:13px;">Spusť nejdřív backtest (Admin), ať máme z čeho počítat.</div>';
         return;
@@ -4679,13 +4820,6 @@ function fmtCap(c) {
     if(c >= 1e6)  return (c/1e6).toFixed(0)+' mil.';
     return c.toFixed(0);
 }
-function fmtVol(v) {
-    if(!v) return '—';
-    if(v >= 1e9) return (v/1e9).toFixed(1)+'B';
-    if(v >= 1e6) return (v/1e6).toFixed(1)+'M';
-    if(v >= 1e3) return (v/1e3).toFixed(0)+'k';
-    return ''+v;
-}
 
 let signalsLoaded = false;
 async function loadSignals(force) {
@@ -5327,10 +5461,10 @@ async function loadTrackRecord() {
 
         // Hlavní karty z backtestu (důkaz, ne 0 %): TOP tier + expectancy
         let cards = '';
-        const bp = btProof && (btProof.top && btProof.top.count ? btProof.top : btProof.buy);
+        const bp = btBest();
         if (bp && bp.win_rate != null) {
-            cards += `<div class="track-stat" style="border-color:rgba(0,230,118,0.4)"><div class="l">Spolehlivost TOP signálu (backtest)</div><div class="v" style="color:${wcol(bp.win_rate)}">${bp.win_rate}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">5 let, ${btProof.sample_count} obchodů</div></div>`;
-            cards += `<div class="track-stat"><div class="l">Očekávaný výnos / obchod</div><div class="v" style="color:${bp.avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${bp.avg_return >= 0 ? '+' : ''}${bp.avg_return}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">~2 týdny</div></div>`;
+            cards += `<div class="track-stat" style="border-color:rgba(0,230,118,0.4)"><div class="l">Spolehlivost TOP signálu (backtest)</div><div class="v" style="color:${wcol(bp.win_rate)}">${bp.win_rate}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">${btProof.period || '10 let'}, ${btProof.sample_count} obchodů</div></div>`;
+            cards += `<div class="track-stat"><div class="l">Očekávaný výnos / obchod</div><div class="v" style="color:${bp.avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${bp.avg_return >= 0 ? '+' : ''}${bp.avg_return}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">do 6 týdnů</div></div>`;
         }
         if (enough) {
             cards += `
@@ -5588,7 +5722,7 @@ function renderDeepReport(d) {
         </div>` : '';
 
     // Důkaz spolehlivosti z backtestu – vedeno přes TOP tier + expectancy (pokud je cache)
-    const bp = btProof && (btProof.top && btProof.top.count ? btProof.top : btProof.buy);
+    const bp = btBest();
     const bpLabel = (btProof && btProof.top && btProof.top.count) ? 'TOP signál' : 'signál Koupit';
     const expTxt = (bp && bp.avg_return != null) ? ` · očekávaný výnos <b>${bp.avg_return >= 0 ? '+' : ''}${bp.avg_return}%</b>/obchod` : '';
     const alphaTxt = (bp && bp.alpha != null) ? ` · nad indexem ${bp.alpha >= 0 ? '+' : ''}${bp.alpha} b.` : '';
