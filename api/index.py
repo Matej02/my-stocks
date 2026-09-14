@@ -5367,6 +5367,33 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
                         "Vypneš ho tam samým přepínačem. Není to investiční doporučení.</p>")
 
 
+SEND_HOUR_PRAGUE = 8   # v kolik má digest odejít místního času
+
+
+def _prague_hour():
+    """Aktuální hodina v Praze. Vercel crony umí jen UTC, takže se posun musí
+    dopočítat – jinak by digest po přechodu na zimní čas chodil o hodinu dřív.
+    Primárně `zoneinfo`; když v runtime chybí tzdata, spočítá se EU pravidlo
+    (letní čas = poslední neděle v březnu až poslední neděle v říjnu)."""
+    now = datetime.now(timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+        return now.astimezone(ZoneInfo("Europe/Prague")).hour
+    except Exception:
+        pass
+
+    def _last_sunday(year, month):
+        d = datetime(year, month, 31, tzinfo=timezone.utc)
+        while d.month != month:
+            d -= timedelta(days=1)
+        return d - timedelta(days=(d.weekday() + 1) % 7)
+
+    start = _last_sunday(now.year, 3).replace(hour=1)    # 01:00 UTC
+    end = _last_sunday(now.year, 10).replace(hour=1)
+    offset = 2 if start <= now < end else 1
+    return (now + timedelta(hours=offset)).hour
+
+
 def _cron_auth():
     """Ověření Vercel Cronu (fail-closed). Bez CRON_SECRET endpoint nedělá nic.
     Vrací chybovou odpověď, nebo None když je vše v pořádku."""
@@ -5505,9 +5532,15 @@ def cron_morning():
             _brief_payload()
         except Exception:
             pass
+        # Cron běží ve dvou UTC časech (6:00 a 7:00), aby jeden z nich vždy padl
+        # na 8:00 pražského času – letního i zimního. Odešle jen ten správný.
+        hour = _prague_hour()
+        if hour != SEND_HOUR_PRAGUE:
+            return jsonify({"ok": True, "sent": 0, "skipped": True,
+                            "prague_hour": hour, "send_hour": SEND_HOUR_PRAGUE})
         sent = _broadcast("morning", "☀️ Ranní přehled trhu – MY ADVANTAGE",
                           lambda em: build_morning_summary_html(em, top_opps, top_signals))
-        return jsonify({"ok": True, "sent": sent,
+        return jsonify({"ok": True, "sent": sent, "prague_hour": hour,
                         "sending_enabled": digest_sending_enabled()})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500

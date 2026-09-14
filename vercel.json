@@ -1,31 +1,91 @@
 {
   "builds": [
-    { "src": "index.html", "use": "@vercel/static" },
-    { "src": "manifest.webmanifest", "use": "@vercel/static" },
-    { "src": "logo/**", "use": "@vercel/static" },
-    { "src": "api/index.py", "use": "@vercel/python" }
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "manifest.webmanifest",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "logo/**",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index.py" },
-    { "src": "/manifest.webmanifest", "dest": "/manifest.webmanifest", "headers": { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=86400" } },
-    { "src": "/logo/(.*)", "dest": "/logo/$1", "headers": { "Cache-Control": "public, max-age=2592000" } },
-    { "src": "/stock/(.*)", "dest": "/api/index.py" },
-    { "src": "/blog", "dest": "/api/index.py" },
-    { "src": "/blog/(.*)", "dest": "/api/index.py" },
-    { "src": "/sitemap.xml", "dest": "/api/index.py" },
-    { "src": "/robots.txt", "dest": "/api/index.py" },
-    { "src": "/(.*)", "dest": "/index.html", "headers": {
-      "X-Content-Type-Options": "nosniff",
-      "X-Frame-Options": "SAMEORIGIN",
-      "Referrer-Policy": "strict-origin-when-cross-origin",
-      "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-      "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
-      "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
-    } }
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/manifest.webmanifest",
+      "dest": "/manifest.webmanifest",
+      "headers": {
+        "Content-Type": "application/manifest+json",
+        "Cache-Control": "public, max-age=86400"
+      }
+    },
+    {
+      "src": "/logo/(.*)",
+      "dest": "/logo/$1",
+      "headers": {
+        "Cache-Control": "public, max-age=2592000"
+      }
+    },
+    {
+      "src": "/stock/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/blog",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/blog/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/sitemap.xml",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/robots.txt",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html",
+      "headers": {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+      }
+    }
   ],
   "crons": [
-    { "path": "/api/cron/morning", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/backtest", "schedule": "0 7 * * 1" },
-    { "path": "/api/cron/weekly-digest", "schedule": "0 7 * * 6" }
+    {
+      "path": "/api/cron/morning",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/morning",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/backtest",
+      "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/cron/weekly-digest",
+      "schedule": "0 7 * * 6"
+    }
   ]
 }
