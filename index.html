@@ -579,6 +579,75 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .pos-tag.expired {background:var(--amber-soft); color:var(--amber);}
 .pos-tag.open {background:var(--elev2); color:var(--text2);}
 #ov-pos-badge {font-size:12px; color:var(--accent); font-weight:700;}
+.brief-nav {display:flex; align-items:center; gap:10px; margin:0 0 14px;}
+.brief-arrow {background:var(--elev2); border:1px solid var(--border); color:var(--text); border-radius:10px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;}
+.brief-arrow:disabled {opacity:.35; cursor:default;}
+.brief-date {flex:1; text-align:center; font-weight:700; font-size:14px;}
+.brief-mood {font-size:15px; margin:0 0 10px;}
+.brief-macro {display:flex; flex-wrap:wrap; gap:8px 14px; font-size:12px; color:var(--text2); margin-bottom:12px;}
+.brief-sec {font-size:13px; margin:0 0 12px;}
+.brief-act {margin:14px 0; padding:13px 15px; border-radius:12px; background:var(--accent-soft); border:1px solid var(--border-accent); font-weight:700; color:var(--accent); line-height:1.5;}
+.brief-h {font-size:12px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin:16px 0 7px;}
+.brief-news a {display:block; padding:6px 0; color:var(--text); text-decoration:none; font-size:13px; line-height:1.45; border-bottom:1px solid var(--border);}
+.brief-news a:last-child {border-bottom:none;}
+.brief-news a:hover {color:var(--accent);}
+.brief-sig {display:flex; align-items:center; gap:10px; padding:8px 0; font-size:13px; border-bottom:1px solid var(--border); flex-wrap:wrap;}
+.brief-sig:last-child {border-bottom:none;}
+.brief-sig b {min-width:62px;}
+
+/* ====================== MOBIL ======================
+   Pravidlo: široký obsah se scroluje UVNITŘ svého boxu, stránka sama
+   vodorovně nikdy. Tabulky a mřížky s pevnými sloupci jsou jediné,
+   co se na 375 px nevejde – proto dostávají vlastní scroll nebo se skládají. */
+.table-scroll {overflow-x:auto; -webkit-overflow-scrolling:touch;}
+.admin-table {width:100%;}
+
+@media (max-width:760px) {
+  /* Navbar: čtyři tlačítka s popisky se na telefon nevejdou a text se lámal
+     po jednom písmenu. Třída .nav-btn-label existovala, ale neměla pravidlo. */
+  .nav-btn-label {display:none;}
+  .profile-btn {padding:9px 11px;}
+  .nav-actions {gap:8px;}
+}
+
+@media (max-width:560px) {
+  /* Karta pozic: z jednoho řádku udělej dva, ať se text needrolí */
+  .pos-row {flex-wrap:wrap; gap:6px 10px; padding:12px 0;}
+  .pos-t {min-width:auto; font-size:15px;}
+  .pos-lbl {flex:1 1 100%; order:3; font-size:12px;}
+  .pos-ret {margin-left:auto;}
+  .alloc-leg {gap:6px 12px; font-size:11px;}
+
+  /* Ranní přehled */
+  .brief-macro {gap:6px 10px; font-size:11px;}
+  .brief-date {font-size:13px;}
+  .brief-sig b {min-width:auto;}
+
+  /* Modaly ať nepřetékají a dají se zavřít palcem */
+  .profile-box {max-width:100% !important; padding:20px 16px; border-radius:16px;
+                max-height:92vh; overflow-y:auto;}
+
+  /* Mřížky s pevnými px sloupci se na úzkém displeji nevejdou */
+  .tr-live-row {grid-template-columns:1fr auto; gap:4px 8px;}
+  .tr-live-row .px {display:none;}
+
+  /* Dlouhé tickery/URL nesmí roztáhnout stránku */
+  body {overflow-wrap:anywhere;}
+}
+
+/* Poslední pojistka: kdyby se přece jen něco široké dostalo ven,
+   ať to nerozjede celou stránku do strany. */
+html, body {max-width:100%;}
+
+.alloc {margin:4px 0 14px;}
+.alloc-bar {display:flex; height:10px; border-radius:999px; overflow:hidden; background:var(--elev2);}
+.alloc-bar i {display:block; height:100%;}
+.alloc-bar .a {background:var(--accent);}
+.alloc-bar .c {background:rgba(255,255,255,0.18);}
+.alloc-leg {display:flex; flex-wrap:wrap; gap:16px; margin-top:9px; font-size:12px; color:var(--text2);}
+.alloc-leg b {color:var(--text);}
+.alloc-dot {display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:6px;}
+.alloc-note {font-size:11px; color:var(--text3); margin-top:7px; line-height:1.5;}
 .ov-col-8 {grid-column:span 8;}
 .ov-col-6 {grid-column:span 6;}
 .ov-col-4 {grid-column:span 4;}
@@ -1369,7 +1438,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.09.12·b</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.09.14·e</div>
 
 <div class="container">
   
@@ -1386,6 +1455,10 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
     </div>
 
     <div class="nav-actions">
+      <button class="profile-btn" onclick="openBrief()" title="Ranní přehled — co se děje a co dnes dělat">
+        <i class="ti ti-sun"></i>
+        <span class="nav-btn-label">Přehled dne</span>
+      </button>
       <button class="profile-btn" onclick="openNews()" title="Novinky z trhu">
         <i class="ti ti-news"></i>
         <span class="nav-btn-label">Novinky</span>
@@ -1396,7 +1469,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
       </button>
       <button class="profile-btn" id="profileBtn" onclick="openProfile()" title="Profil & portfolio">
         <i class="ti ti-user-circle"></i>
-        <span id="profileBtnLabel">Profil</span>
+        <span class="nav-btn-label" id="profileBtnLabel">Profil</span>
         <span class="notif-dot" id="notif-dot" style="display:none;">0</span>
       </button>
     </div>
@@ -1773,6 +1846,20 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
   </div>
 
   <!-- NOVINKY Z TRHU + stav burzy -->
+  <div class="pl-modal" id="briefModal">
+    <div class="profile-box" style="max-width:620px;">
+      <button class="profile-close" onclick="closeBrief()"><i class="ti ti-x"></i></button>
+      <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-sun" style="color:var(--accent)"></i> Ranní přehled</h2>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:12px;">Co se na trzích děje, co se k tomu píše a co s tím dnes dělat.</div>
+      <div class="brief-nav">
+        <button class="brief-arrow" id="brief-prev" onclick="briefStep(1)" title="Starší den"><i class="ti ti-chevron-left"></i></button>
+        <div class="brief-date" id="brief-date">–</div>
+        <button class="brief-arrow" id="brief-next" onclick="briefStep(-1)" title="Novější den"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div id="brief-body"></div>
+    </div>
+  </div>
+
   <div class="pl-modal" id="newsModal">
     <div class="profile-box" style="max-width:560px;">
       <button class="profile-close" onclick="closeNews()"><i class="ti ti-x"></i></button>
@@ -1833,6 +1920,7 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
         <div class="ov-col-12" id="ov-positions-wrap" style="display:none;">
           <div class="ov-card">
             <h3><i class="ti ti-target-arrow"></i> Tvé pozice — živý stav <span id="ov-pos-badge"></span></h3>
+            <div id="ov-alloc"></div>
             <div id="ov-positions"></div>
           </div>
         </div>
@@ -2825,6 +2913,98 @@ function openAbout() {
     }
 }
 function closeAbout() { document.getElementById('aboutModal').classList.remove('open'); refreshGate(); }
+/* ---- RANNÍ PŘEHLED (web + archiv) -----------------------------------
+   Stejná data jako ranní e-mail, jen se dají prolistovat zpětně.
+   Zprávy jsou VEDLE pohybů jako kontext, ne jako jejich vysvětlení. */
+let briefDates = [], briefIdx = 0;
+
+function openBrief() {
+    _hideGate();
+    document.getElementById('briefModal').classList.add('open');
+    loadBriefDates();
+}
+function closeBrief() {
+    document.getElementById('briefModal').classList.remove('open');
+    refreshGate();
+}
+function briefStep(delta) {
+    const i = briefIdx + delta;
+    if (i < 0 || i >= briefDates.length) return;
+    briefIdx = i;
+    loadBrief(briefDates[i]);
+}
+async function loadBriefDates() {
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/brief/dates`)).json();
+        briefDates = (d && d.dates) || [];
+    } catch (e) { briefDates = []; }
+    briefIdx = 0;
+    loadBrief(briefDates[0]);
+}
+async function loadBrief(date) {
+    const body = document.getElementById('brief-body');
+    body.innerHTML = '<div style="color:var(--text2);font-size:13px"><i class="ti ti-loader spin"></i> Načítám přehled…</div>';
+    document.getElementById('brief-prev').disabled = briefIdx >= briefDates.length - 1;
+    document.getElementById('brief-next').disabled = briefIdx <= 0;
+    try {
+        const url = `${BACKEND_URL}/api/brief` + (date ? `?date=${encodeURIComponent(date)}` : '');
+        const d = await (await fetch(url, { headers: authHeaders() })).json();
+        renderBrief(d);
+    } catch (e) {
+        body.innerHTML = '<div style="color:var(--text2);font-size:13px">Přehled se teď nepodařilo načíst.</div>';
+    }
+}
+function briefDateLabel(iso, isToday) {
+    if (!iso) return '–';
+    const p = iso.split('-');
+    const dt = new Date(+p[0], +p[1] - 1, +p[2]);
+    const txt = dt.toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'long' });
+    return isToday ? `Dnes — ${txt}` : txt.charAt(0).toUpperCase() + txt.slice(1);
+}
+function renderBrief(d) {
+    const body = document.getElementById('brief-body');
+    document.getElementById('brief-date').textContent = briefDateLabel(d.date, d.is_today);
+    if (!d.ok) {
+        body.innerHTML = `<div style="color:var(--text2);font-size:13px">${escapeHtml(d.error || 'Pro tenhle den nemáme přehled.')}</div>`;
+        return;
+    }
+    const m = d.market || {};
+    let h = '';
+    if (m.mood) h += `<p class="brief-mood">Trh je <b>${escapeHtml(m.mood)}</b>.</p>`;
+    if ((m.macro || []).length) {
+        // Barva podle REŽIMU, ne podle znaménka: rostoucí VIX nebo výnosy jsou
+        // špatná zpráva, i když je změna kladná. Zelená u „VIX +8 %" by lhala.
+        const regCol = {calm: 'var(--up)', stress: 'var(--down)', high: 'var(--amber)'};
+        h += '<div class="brief-macro">' + m.macro.filter(x => x.price != null).map(x => {
+            const c = regCol[x.regime] || 'var(--text2)';
+            return `<span>${escapeHtml(x.label)} <b style="color:${c}">${x.price}${escapeHtml(x.unit || '')}</b>
+                <span style="opacity:.75">${(x.chg || 0) >= 0 ? '+' : ''}${x.chg} %</span></span>`;
+        }).join('') + '</div>';
+    }
+    if (m.best && m.worst) {
+        h += `<p class="brief-sec">Nejvíc roste <b>${escapeHtml(m.best.label)}</b>
+              <span style="color:var(--up)">${m.best.chg > 0 ? '+' : ''}${m.best.chg} %</span>,
+              nejvíc klesá <b>${escapeHtml(m.worst.label)}</b>
+              <span style="color:var(--down)">${m.worst.chg} %</span>.</p>`;
+    }
+    if (d.action) h += `<div class="brief-act">${escapeHtml(d.action)}</div>`;
+    if ((m.news || []).length) {
+        h += '<div class="brief-h">Co se k tomu píše</div><div class="brief-news">' +
+             m.news.map(n => `<a href="${escapeHtml(n.link)}" target="_blank" rel="noopener">${escapeHtml(n.title)}</a>`).join('') +
+             '</div>';
+    }
+    if ((d.signals || []).length) {
+        h += '<div class="brief-h">Signály toho dne</div>' + d.signals.map(sg =>
+            `<div class="brief-sig"><b>${escapeHtml(sg.ticker || '')}</b>
+             <span style="color:var(--text2);flex:1">${escapeHtml(sg.name || '')}</span>
+             <span style="color:var(--up)">skóre ${sg.score != null ? sg.score : '–'}</span></div>`).join('');
+    }
+    if (!d.is_today) {
+        h += '<div class="alloc-note" style="margin-top:14px">Archivní přehled — pozice a doporučená akce se ukazují jen u dnešního dne.</div>';
+    }
+    body.innerHTML = h || '<div style="color:var(--text2);font-size:13px">Pro tenhle den nemáme data.</div>';
+}
+
 function openNews() { _hideGate(); document.getElementById('newsModal').classList.add('open'); loadMarketNews(); }
 function closeNews() { document.getElementById('newsModal').classList.remove('open'); refreshGate(); }
 async function loadMarketNews() {
@@ -2860,7 +3040,7 @@ async function fetchOverviewPositions() {
     try {
         const r = await fetch(`${BACKEND_URL}/api/positions`, { headers: authHeaders() });
         const d = await r.json();
-        if (!d.ok || !d.count) { wrap.style.display = 'none'; return; }
+        if (!d.ok) { wrap.style.display = 'none'; return; }
         const tag = {target:'Cíl', stop:'Stop', expired:'Horizont', open:'Drží se'};
         document.getElementById('ov-positions').innerHTML = d.items.map(i => {
             const col = (i.return_pct || 0) >= 0 ? 'var(--up)' : 'var(--down)';
@@ -2873,6 +3053,20 @@ async function fetchOverviewPositions() {
         }).join('');
         document.getElementById('ov-pos-badge').textContent =
             d.action_count ? `${d.action_count} vyžaduje akci` : '';
+        const a = d.allocation;
+        document.getElementById('ov-alloc').innerHTML = a ? `<div class="alloc">
+            <div class="alloc-bar">
+              <i class="a" style="width:${a.active_pct}%"></i>
+              <i class="c" style="width:${a.core_pct}%"></i>
+            </div>
+            <div class="alloc-leg">
+              <span><span class="alloc-dot" style="background:var(--accent)"></span>
+                Aktivní signály <b>${a.active_pct} %</b> (${a.slots_used}/${a.slots_max} pozic po ${a.per_position_pct} %)</span>
+              <span><span class="alloc-dot" style="background:rgba(255,255,255,0.18)"></span>
+                Indexové jádro <b>${a.core_pct} %</b></span>
+            </div>
+            <div class="alloc-note">${escapeHtml(a.note)}</div>
+          </div>` : '';
         wrap.style.display = '';
     } catch (e) {
         wrap.style.display = 'none';
@@ -4621,7 +4815,7 @@ function renderBacktest(res) {
     }
     return `
         <div style="font-size:11px;color:var(--text2);margin-bottom:6px">${res.ticker_count} titulů · ${res.sample_count} vzorků · horizont ${res.horizon_days} dní · ${escapeHtml(res.period || '')}</div>
-        <table class="admin-table" style="font-size:12px">
+        <div class="table-scroll"><table class="admin-table" style="font-size:12px">
             <thead><tr><th>Signál</th><th style="text-align:right">Trefnost</th><th style="text-align:right">Výnos</th><th style="text-align:right">Alfa</th></tr></thead>
             <tbody>
                 ${row('⭐ TOP signál (≥80, klidný objem)', res.top, true)}
@@ -4631,6 +4825,7 @@ function renderBacktest(res) {
                 ${row('⚪ Baseline (vše)', res.baseline)}
             </tbody>
         </table>
+        </div>
         ${edgeMsg}
         ${byYearHtml}
         <div style="font-size:11px;color:var(--text2);margin-top:6px">${escapeHtml(res.note || '')}</div>`;

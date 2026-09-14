@@ -395,20 +395,29 @@ VERDICT_TOP = 80  # konviktní „TOP signál" – přísnější výběr, vyš�
 # vs. ~60 % široký signál. Práh kalibrován na basketu (viz /tmp/bt_improve3.py).
 TOP_VOL_MAX = 1.15
 
-# OBCHODNÍ PLÁN – kalibrovaný walk-forward testem (ladění 2018-2022, ověření na
-# odděleném období 2023-2026, 190 titulů včetně dlouhodobých propadáků).
-# Cíl +5 % / stop -8 % / max 30 obch. dní, kontrolováno KAŽDÝ DEN proti živé ceně.
-# Na ověřovacím období zvedlo tohle pravidlo trefnost TOP signálů z 57,4 % na
-# 64,9 % při stejném průměrném výnosu.
+# OBCHODNÍ PLÁN – kalibrovaný na VÝSLEDEK PORTFOLIA, ne na trefnost jednoho obchodu.
+# Ladění 2018-2022, ověření na odděleném 2023-2026, 190 titulů vč. propadáků,
+# simulace skutečného účtu (omezený počet souběžných pozic, denní přecenění).
+#
+# Proč cíl +15 % a ne +5 %: dřívější plán +5 %/-8 % měl vyšší trefnost jednotlivého
+# obchodu (63 % vs 55 %), ale portfoliově byl NEJHORŠÍ z testovaných – vydělával
+# +13,8 % ročně při propadu -19,4 %, zatímco +15 %/-10 % dal +22,2 % ročně při
+# MĚLČÍM propadu -16,6 %. Vysoká trefnost se kupuje tím, že se uřízne každý velký
+# zisk, zatímco ztráty zůstanou stejné. Poměr zisk:riziko je teď 1,5 (dřív 0,62).
+#
 # POZOR – měřeno a zamítnuto (nepřidávat zpět):
 #   * vystoupit, když technické skóre spadne pod 45  -> -18,5 pb trefnosti
 #     (prodává se tím do slabosti přesně na dně)
 #   * pojistka na prudký jednodenní propad           -> -5,7 pb až 0,0 pb
-#     (od -7 % ji stejně zachytí stop na -8 %, takže je zbytečná)
-EXIT_TP = 0.05
-EXIT_SL = 0.08
+#     (od -7 % ji stejně zachytí stop, takže je zbytečná)
+#   * koncentrace do méně pozic bez indexového jádra -> horší výnos I hlubší propad
+EXIT_TP = 0.15
+EXIT_SL = 0.10
 EXIT_MAX_DAYS = 30
-# Od tohoto data se při kalibraci NIC neladilo – slouží jako čistý test.
+# Portfolio: max tolik souběžných aktivních pozic, zbytek drží indexové jádro.
+# Nezapojená hotovost byla největší jednotlivá ztráta – 71,5 % kapitálu leželo
+# ladem a portfolio dělalo +3,8 % ročně místo +11,2 %.
+PORTFOLIO_SLOTS = 5
 HOLDOUT_FROM = "2023-01-01"
 # 30 obch. dní ≈ 6 kalendářních týdnů (většina obchodů skončí dřív na cíli/stopu).
 EXIT_HORIZON_LABEL = "do 6 týdnů"
@@ -2616,6 +2625,12 @@ def _today():
     return datetime.now(timezone.utc).strftime("%Y%m%d")
 
 
+def _today_iso():
+    """Datum ve tvaru YYYY-MM-DD – pro archiv přehledů a pro URL. `_today()`
+    (kompaktní tvar) se používá jako klíč u jiných dat, tak ho neměníme."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
 @app.route("/api/analysis/<path:ticker>", methods=["POST"])
 def deep_analysis(ticker):
     user = _auth_user()
@@ -2738,9 +2753,9 @@ def _positions_for(user, limit=12):
         mine = [v for v in (kv_lrange("verdicts", -200, -1) or [])
                 if v.get("user") == user and v.get("verdict") == "Koupit"][-limit:]
     except Exception:
-        return {"count": 0, "action_count": 0, "items": []}
+        return {"count": 0, "action_count": 0, "items": [], "allocation": _allocation(0)}
     if not mine:
-        return {"count": 0, "action_count": 0, "items": []}
+        return {"count": 0, "action_count": 0, "items": [], "allocation": _allocation(0)}
     prices, paths = _price_paths({v.get("ticker") for v in mine if v.get("ticker")})
     now = int(time.time())
     items = []
@@ -2761,7 +2776,27 @@ def _positions_for(user, limit=12):
     order = {"target": 0, "stop": 1, "expired": 2, "open": 3}
     items.sort(key=lambda x: (order.get(x["status"], 9), -(x["ts"] or 0)))
     return {"count": len(items), "items": items,
-            "action_count": sum(1 for i in items if i["status"] != "open")}
+            "action_count": sum(1 for i in items if i["status"] != "open"),
+            "allocation": _allocation(sum(1 for i in items if i["status"] == "open"))}
+
+
+def _allocation(open_positions):
+    """Rozložení portfolia: aktivní signály vs indexové jádro.
+
+    Portfoliová simulace ukázala, že největší jednotlivá ztráta nebyla ve výběru
+    akcií, ale v LEŽÍCÍM KAPITÁLU – signálů je málo, takže ~71 % peněz nedělalo
+    nic a portfolio vyneslo +3,8 % ročně místo +11,2 %. Každá aktivní pozice má
+    proto pevnou váhu 1/PORTFOLIO_SLOTS a zbytek patří do širokého indexu."""
+    used = max(0, min(open_positions, PORTFOLIO_SLOTS))
+    per = 100.0 / PORTFOLIO_SLOTS
+    return {
+        "slots_max": PORTFOLIO_SLOTS, "slots_used": used,
+        "per_position_pct": round(per, 1),
+        "active_pct": round(used * per, 1),
+        "core_pct": round(100 - used * per, 1),
+        "note": ("Každý signál dostane stejný díl, zbytek drží široký indexový "
+                 "fond. Volná hotovost je nejdražší chyba – nevydělává nic."),
+    }
 
 
 @app.route("/api/positions")
@@ -4980,6 +5015,155 @@ def _top_opps_for_summary(n=3):
     return out[:n]
 
 
+def _market_brief():
+    """Ranní situace: co dělá trh, co se nejvíc hýbe a co se k tomu píše.
+
+    Stojí na STEJNÝCH primitivech jako dashboard (_fetch_macro_one, _MACRO_TICKERS,
+    _SECTOR_ETFS, _fetch_rss) – žádná druhá kopie logiky. Zprávy se ukazují VEDLE
+    pohybů, ne jako jejich vysvětlení: tvrdit „sektor klesl kvůli tomuhle titulku"
+    by byla vymyšlená příčinnost, kterou z dat nemáme."""
+    out = {"macro": [], "best": None, "worst": None, "news": [], "mood": None}
+    for (tk, label, unit, lo, hi, low_calm) in _MACRO_TICKERS:
+        d = _fetch_macro_one(tk)
+        if d:
+            out["macro"].append({"label": label, "unit": unit, "price": d["price"],
+                                 "chg": d["chg_pct"],
+                                 "regime": _macro_regime(d["price"], lo, hi, low_calm)})
+    vix = next((m for m in out["macro"] if m["label"] == "VIX"), None)
+    if vix and vix["price"] is not None:
+        out["mood"] = ("klidný" if vix["price"] < 15
+                       else "nervózní" if vix["price"] > 25 else "neutrální")
+    secs = []
+    for (tk, label, _icon) in _SECTOR_ETFS:
+        d = _fetch_macro_one(tk)
+        if d and d.get("chg_pct") is not None:
+            secs.append({"label": label, "chg": d["chg_pct"]})
+    if secs:
+        secs.sort(key=lambda x: x["chg"])
+        out["worst"], out["best"] = secs[0], secs[-1]
+    # Pořadí = od nejvíc burzovních zdrojů po obecné zpravodajství. Obecné feedy
+    # mají nízkou výtěžnost po filtru, proto jsou až na konci jako doplněk.
+    seen = set()
+    for key in ("roklen", "kurzy_svet", "seekingalpha", "fool", "marketwatch", "cnbc", "e15"):
+        for it in (_fetch_rss(key) or [])[:10]:
+            t = (it.get("title") or "").strip()
+            k = t.lower()[:60]
+            if t and k not in seen and _is_market_news(t):
+                seen.add(k)
+                out["news"].append({"title": t, "link": it.get("link") or ""})
+        if len(out["news"]) >= 4:
+            break
+    out["news"] = out["news"][:4]
+    return out
+
+
+# Obecné zpravodajské feedy vedle burzovních zpráv vozí i lifestyle a zdravotnictví.
+# Ukázat pod „nejvíc klesá Zdravotnictví" článek o školném vnoučat je horší než
+# neukázat nic – naznačuje to souvislost, která neexistuje. Radši prázdno než šum.
+_MARKET_WORDS = (
+    "stock", "stocks", "market", "markets", "fed", "rate", "rates", "yield",
+    "inflation", "cpi", "earnings", "nasdaq", "s&p", "dow", "tariff", "oil",
+    "recession", "rally", "selloff", "sell-off", "bond", "treasury", "economy",
+    "jobs", "payroll", "gdp", "dollar", "shares", "investors", "trading",
+    "akcie", "akcií", "trh", "trhy", "trhů", "inflace", "sazb", "výnos",
+    "ropa", "ropy", "burza", "burzy", "investor", "ekonomik", "dolar", "koruna",
+)
+
+
+def _is_market_news(title):
+    t = (title or "").lower()
+    return any(w in t for w in _MARKET_WORDS)
+
+
+def _todays_action(email, top_signals):
+    """Jedna věta: co dnes udělat. Tohle je ta část „nechci to řešit"."""
+    try:
+        pos = _positions_for(email)
+    except Exception:
+        return None
+    act = [i for i in pos["items"] if i["status"] != "open"]
+    alloc = pos.get("allocation") or _allocation(0)
+    if act:
+        parts = []
+        for i in act[:3]:
+            if i["status"] == "target":
+                parts.append(f"vyber zisk u {i['ticker']}")
+            elif i["status"] == "stop":
+                parts.append(f"ukonči {i['ticker']} na stopu")
+            else:
+                parts.append(f"přehodnoť {i['ticker']} (vypršel horizont)")
+        return "Dnes: " + ", ".join(parts) + "."
+    free = alloc["slots_max"] - alloc["slots_used"]
+    if free and top_signals:
+        return (f"Dnes: máš {free} volných pozic z {alloc['slots_max']}. Nejsilnější "
+                f"signál je {top_signals[0].get('ticker')} (váha {alloc['per_position_pct']} %). "
+                f"Zbytek drží indexové jádro.")
+    if free:
+        return ("Dnes: žádný nový signál. Nech kapitál v indexovém jádru – "
+                "volná hotovost je ta nejdražší chyba.")
+    return f"Dnes: nic. Všech {alloc['slots_max']} pozic běží podle plánu."
+
+
+def _brief_payload(user=None, date=None):
+    """Strukturovaná data ranního přehledu – JEDEN zdroj pro web i e-mail.
+
+    Tržní část se archivuje pod `brief:<datum>`, takže si jde rozkliknout i
+    zpětně („proč to tehdy padalo"). Pozice a instrukce jsou per-uživatel a
+    počítají se vždy živě – archivovat je nedává smysl.
+    """
+    today = _today_iso()
+    date = date or today
+    market, signals = None, []
+    if date == today:
+        market = _market_brief()
+        signals = _todays_signals()[:5]
+        try:                       # ulož snímek dne do archivu
+            kv_set_json(f"brief:{date}", {"market": market, "signals": signals,
+                                          "generated": int(time.time())})
+            kv_sadd("brief:dates", date)
+        except Exception:
+            pass
+    else:
+        snap = kv_get_json(f"brief:{date}") or {}
+        market, signals = snap.get("market"), snap.get("signals") or []
+        if not market:
+            return {"ok": False, "date": date, "error": "Pro tenhle den nemáme uložený přehled."}
+
+    out = {"ok": True, "date": date, "is_today": date == today,
+           "market": market, "signals": signals}
+    if user and date == today:
+        out["positions"] = _positions_for(user)
+        out["action"] = _todays_action(user, signals)
+    return out
+
+
+@app.route("/api/brief")
+def api_brief():
+    """Ranní přehled na webu. Bez parametru dnešní, s ?date=YYYY-MM-DD z archivu."""
+    if not _rate_ok("brief", 60, 60):
+        return jsonify({"ok": False, "error": "Moc požadavků, zkus to za chvíli."}), 429
+    date = (request.args.get("date") or "").strip()
+    if date and not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+        return jsonify({"ok": False, "error": "Špatný formát data."}), 400
+    try:
+        return jsonify(_brief_payload(_auth_user(), date or None))
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/brief/dates")
+def api_brief_dates():
+    """Dny, ke kterým máme uložený přehled (nejnovější první)."""
+    try:
+        ds = sorted([d for d in (kv_smembers("brief:dates") or []) if d], reverse=True)
+        today = _today_iso()
+        if today not in ds:
+            ds.insert(0, today)
+        return jsonify({"ok": True, "dates": ds[:60]})
+    except Exception:
+        return jsonify({"ok": True, "dates": [_today_iso()]})
+
+
 def build_morning_summary_html(email, top_opps, top_signals=None):
     pf = kv_get_json(f"portfolio:{email}") or {}
     watch = (pf.get("watchlist") or [])[:8]
@@ -5014,7 +5198,7 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
             f"<span style='color:#9ba1b0'>{s.get('name','')}</span><br>"
             f"<span style='color:#9ba1b0;font-size:12px'>skóre {s.get('score')} · cíl +{s.get('reward_pct')}% / stop −{s.get('risk_pct')}% · {EXIT_HORIZON_LABEL}</span></div>"
             for s in top_signals[:4])
-        sig_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>✅ Dnešní signály „Sleva v trendu"
+        sig_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>✅ Dnešní signály „Sleva v trendu“"
                     "</h3>" + sitems)
     # Otevřené pozice – co dnes vyžaduje akci podle plánu (cíl/stop/horizont).
     pos_html = ""
@@ -5032,8 +5216,49 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
                         + rws)
     except Exception:
         pos_html = ""
+    # Ranní situace nahoru – „co se děje a proč" má být první, co uvidíš.
+    brief_html = ""
+    try:
+        b = _market_brief()
+        # Barva podle REŽIMU, ne podle znaménka – rostoucí VIX je špatná zpráva,
+        # i když je změna kladná (zelené „VIX +8 %" by čtenáře mátlo).
+        _rc = {"calm": "#00C853", "stress": "#FF3D00", "high": "#FFB347"}
+        mac = " · ".join(
+            f"{m['label']} <b style='color:{_rc.get(m.get('regime'), '#9ba1b0')}'>"
+            f"{m['price']}{m['unit']}</b> "
+            f"<span style='opacity:.75'>{'+' if (m['chg'] or 0) >= 0 else ''}{m['chg']} %</span>"
+            for m in b["macro"] if m.get("price") is not None)
+        mood = (f"<p style='line-height:1.6;margin:0 0 10px'>Trh je dnes "
+                f"<b>{b['mood']}</b>.</p>") if b.get("mood") else ""
+        movers = ""
+        if b.get("best") and b.get("worst"):
+            movers = (f"<p style='margin:10px 0 0;font-size:14px'>Nejvíc roste "
+                      f"<b>{b['best']['label']}</b> "
+                      f"<span style='color:#00C853'>{b['best']['chg']:+.2f} %</span>, "
+                      f"nejvíc klesá <b>{b['worst']['label']}</b> "
+                      f"<span style='color:#FF3D00'>{b['worst']['chg']:+.2f} %</span>.</p>")
+        news = ""
+        if b.get("news"):
+            news = ("<p style='margin:14px 0 6px;font-size:13px;color:#9ba1b0'>"
+                    "Co se k tomu dnes píše:</p>" + "".join(
+                        f"<div style='padding:4px 0;font-size:13px'>• "
+                        f"<a href='{n['link']}' style='color:#F0A030;text-decoration:none'>"
+                        f"{_html_escape(n['title'])}</a></div>" for n in b["news"]))
+        brief_html = ("<h3 style='font-size:16px;margin:4px 0 8px'>🌍 Ranní situace</h3>"
+                      + mood
+                      + (f"<p style='font-size:13px;color:#9ba1b0;margin:0'>{mac}</p>" if mac else "")
+                      + movers + news)
+    except Exception:
+        brief_html = ""
+
+    action = _todays_action(email, top_signals or [])
+    action_html = (f"<div style='margin:18px 0 4px;padding:14px 16px;border-radius:12px;"
+                   f"background:rgba(255,122,0,0.10);border:1px solid rgba(255,122,0,0.30)'>"
+                   f"<b style='color:#F0A030'>{_html_escape(action)}</b></div>") if action else ""
+
     return _email_shell("Ranní přehled trhu ☀️",
-                        "<p style='line-height:1.6'>Dobré ráno! Tady je tvůj dnešní přehled:</p>" +
+                        "<p style='line-height:1.6'>Dobré ráno!</p>" +
+                        brief_html + action_html +
                         pos_html + watch_html + sig_html + opp_html +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>Notifikace vypneš v appce v profilu. "
                         "Není to investiční doporučení.</p>")
@@ -5164,9 +5389,18 @@ def _todays_signals():
     return (sig or {}).get("results") or []
 
 
+def digest_sending_enabled():
+    """Rozesílání digestů je ZÁMĚRNĚ vypnuté, dokud se nezapne env DIGEST_SEND=on.
+    Přehled se i tak každý den spočítá a uloží do archivu, takže si ho jde
+    prohlédnout na webu – jen se nikomu nic neposílá."""
+    return (os.environ.get("DIGEST_SEND") or "off").strip().lower() in ("on", "1", "true", "yes")
+
+
 def _broadcast(notif_key, subject, build_html, limit=200):
     """Rozešle e-mail všem, kdo mají v profilu zapnutý `notif_key`.
     Jedna chybná adresa nesmí shodit celou rozesílku."""
+    if not digest_sending_enabled():
+        return 0
     sent = 0
     for email in kv_smembers("users")[:limit]:
         rec = kv_get_json(f"user:{email}") or {}
@@ -5265,9 +5499,16 @@ def cron_morning():
     try:
         top_opps = _top_opps_for_summary(3)
         top_signals = _todays_signals()
+        # Archiv vzniká VŽDY, i když se nerozesílá – jinak by v historii na webu
+        # zely díry za dny, kdy bylo posílání vypnuté.
+        try:
+            _brief_payload()
+        except Exception:
+            pass
         sent = _broadcast("morning", "☀️ Ranní přehled trhu – MY ADVANTAGE",
                           lambda em: build_morning_summary_html(em, top_opps, top_signals))
-        return jsonify({"ok": True, "sent": sent})
+        return jsonify({"ok": True, "sent": sent,
+                        "sending_enabled": digest_sending_enabled()})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
