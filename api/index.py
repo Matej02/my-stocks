@@ -5164,6 +5164,38 @@ def api_brief_dates():
         return jsonify({"ok": True, "dates": [_today_iso()]})
 
 
+def _portfolio_why(tickers, limit=3):
+    """„Proč" k pohybům v portfoliu – skutečné události (SEC podání, revize
+    analytiků), ne domyšlená příčinnost. Staví na `_events_for_ticker`,
+    stejném zdroji, jaký používá karta událostí v appce."""
+    # Form 4 (insider) se podává při každém prodeji akcií manažerem – děje se to
+    # pořád a s pohybem ceny obvykle nesouvisí. Vydávat ho za „proč to padá"
+    # by byla falešná příčinnost, tak ho sem nepouštíme. Zbylé druhy událostí
+    # (8-K, revize analytiků, výsledky) vysvětlují pohyb reálně.
+    GOOD = ("material", "analyst", "quarterly", "earnings")
+    rows = []
+    for t in tickers[:5]:
+        try:
+            rel = [e for e in _events_for_ticker(t, since_days=5)
+                   if e.get("kind") in GOOD]
+            for e in rel[:1]:
+                col = "#FFB347" if e.get("severity") == "warn" else "#9ba1b0"
+                rows.append(
+                    f"<div style='padding:5px 0;font-size:13px'>"
+                    f"<b>{_html_escape(t)}</b> · <span style='color:{col}'>"
+                    f"{_html_escape(e.get('title') or '')}</span>"
+                    f"<div style='color:#9ba1b0;font-size:12px'>"
+                    f"{_html_escape(e.get('hint') or '')}</div></div>")
+        except Exception:
+            continue
+        if len(rows) >= limit:
+            break
+    if not rows:
+        return ""
+    return ("<div style='color:#9ba1b0;font-size:12px;margin:12px 0 4px'>"
+            "Proč se to hýbe:</div>" + "".join(rows))
+
+
 def build_morning_summary_html(email, top_opps, top_signals=None):
     pf = kv_get_json(f"portfolio:{email}") or {}
     watch = (pf.get("watchlist") or [])[:8]
@@ -5181,7 +5213,7 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
                      f"<td style='padding:6px 0;text-align:right;color:{col}'>{'+' if chg>=0 else ''}{chg:.2f}%</td></tr>")
         except Exception:
             continue
-    watch_html = (f"<h3 style='font-size:16px;margin:18px 0 8px'>📊 Tvé sledované akcie</h3>"
+    watch_html = (f"<div style='color:#9ba1b0;font-size:12px;margin:14px 0 4px'>Sledované akcie:</div>"
                   f"<table style='width:100%;border-collapse:collapse;font-size:14px'>{rows}</table>") if rows else ""
     opp_html = ""
     if top_opps:
@@ -5201,19 +5233,33 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
         sig_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>✅ Dnešní signály „Sleva v trendu“"
                     "</h3>" + sitems)
     # Otevřené pozice – co dnes vyžaduje akci podle plánu (cíl/stop/horizont).
-    pos_html = ""
+    # Celý stav portfolia, ne jen to, co křičí. Uživatel chce ráno vidět,
+    # co se s jeho penězi děje – i když se zrovna nic dělat nemá.
+    pos_html, why_tickers = "", []
     try:
         pos = _positions_for(email)
-        act = [i for i in pos["items"] if i["status"] != "open"]
-        if act:
+        items = pos.get("items") or []
+        why_tickers = [i["ticker"] for i in items]
+        if items:
             rws = "".join(
                 f"<div style='padding:8px 0;border-bottom:1px solid #22262f'>"
-                f"<b>{i['ticker']}</b> {i['label']} "
-                f"<span style='color:{'#00C853' if (i['return_pct'] or 0) >= 0 else '#FF3D00'}'>"
+                f"<b>{i['ticker']}</b> "
+                f"<span style='color:#9ba1b0;font-size:13px'>{_html_escape(i.get('label') or '')}"
+                f" · {i.get('days_held', 0)} dní</span> "
+                f"<span style='float:right;color:"
+                f"{'#00C853' if (i['return_pct'] or 0) >= 0 else '#FF3D00'}'>"
                 f"{'+' if (i['return_pct'] or 0) >= 0 else ''}{i['return_pct']} %</span></div>"
-                for i in act[:5])
-            pos_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>🎯 Tvé pozice – dnes vyžadují akci</h3>"
-                        + rws)
+                for i in items[:6])
+            a = pos.get("allocation") or {}
+            alloc_line = (f"<div style='color:#9ba1b0;font-size:12px;margin:8px 0 10px'>"
+                          f"Aktivní signály {a.get('active_pct')} % "
+                          f"({a.get('slots_used')}/{a.get('slots_max')} pozic) · "
+                          f"indexové jádro {a.get('core_pct')} %</div>") if a else ""
+            pos_html = ("<div style='color:#9ba1b0;font-size:12px;margin:4px 0'>"
+                        "Otevřené pozice proti plánu:</div>" + rws + alloc_line)
+        else:
+            pos_html = ("<div style='color:#9ba1b0;font-size:13px;margin:4px 0 10px'>"
+                        "Žádná otevřená pozice — kapitál patří do indexového jádra.</div>")
     except Exception:
         pos_html = ""
     # Ranní situace nahoru – „co se děje a proč" má být první, co uvidíš.
@@ -5256,10 +5302,14 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
                    f"background:rgba(255,122,0,0.10);border:1px solid rgba(255,122,0,0.30)'>"
                    f"<b style='color:#F0A030'>{_html_escape(action)}</b></div>") if action else ""
 
+    why_html = _portfolio_why(why_tickers + [t for t in watch if t not in why_tickers])
+    portfolio_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>📊 Tvé portfolio</h3>"
+                      + pos_html + watch_html + why_html)
+
     return _email_shell("Ranní přehled trhu ☀️",
                         "<p style='line-height:1.6'>Dobré ráno!</p>" +
-                        brief_html + action_html +
-                        pos_html + watch_html + sig_html + opp_html +
+                        brief_html + portfolio_html + action_html +
+                        sig_html + opp_html +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>Notifikace vypneš v appce v profilu. "
                         "Není to investiční doporučení.</p>")
 
