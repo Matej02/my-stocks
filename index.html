@@ -1451,7 +1451,7 @@ html, body {max-width:100%;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.09.14·h</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.09.14·i</div>
 
 <div class="container">
   
@@ -3000,12 +3000,49 @@ function renderBrief(d) {
               nejvíc klesá <b>${escapeHtml(m.worst.label)}</b>
               <span style="color:var(--down)">${m.worst.chg} %</span>.</p>`;
     }
-    if (d.action) h += `<div class="brief-act">${escapeHtml(d.action)}</div>`;
+    // Pořadí musí sedět s ranním e-mailem: trh → co se píše → TVÉ PORTFOLIO
+    // (+ proč) → co dnes udělat → zbytek. Dřív tu portfolio chybělo úplně
+    // a akce byla vražená mezi trh a zprávy.
     if ((m.news || []).length) {
         h += '<div class="brief-h">Co se k tomu píše</div><div class="brief-news">' +
              m.news.map(n => `<a href="${escapeHtml(n.link)}" target="_blank" rel="noopener">${escapeHtml(n.title)}</a>`).join('') +
              '</div>';
     }
+
+    const pos = d.positions;
+    if (pos) {
+        h += '<div class="brief-h">Tvé portfolio</div>';
+        const items = pos.items || [];
+        if (items.length) {
+            const tag = {target:'Cíl', stop:'Stop', expired:'Horizont', open:'Drží se'};
+            h += items.slice(0, 6).map(i => {
+                const col = (i.return_pct || 0) >= 0 ? 'var(--up)' : 'var(--down)';
+                return `<div class="pos-row">
+                    <span class="pos-t">${escapeHtml(i.ticker)}</span>
+                    <span class="pos-tag ${i.status}">${tag[i.status] || i.status}</span>
+                    <span class="pos-lbl">${i.days_held} dní</span>
+                    <span class="pos-ret" style="color:${col}">${(i.return_pct||0) >= 0 ? '+' : ''}${i.return_pct}%</span>
+                </div>`;
+            }).join('');
+            const a = pos.allocation;
+            if (a) {
+                h += `<div class="alloc" style="margin-top:10px">
+                    <div class="alloc-bar"><i class="a" style="width:${a.active_pct}%"></i><i class="c" style="width:${a.core_pct}%"></i></div>
+                    <div class="alloc-leg"><span>Aktivní signály <b>${a.active_pct} %</b> (${a.slots_used}/${a.slots_max})</span>
+                    <span>Indexové jádro <b>${a.core_pct} %</b></span></div></div>`;
+            }
+        } else {
+            h += '<div class="alloc-note" style="margin:2px 0 6px">Žádná otevřená pozice — kapitál patří do indexového jádra.</div>';
+        }
+        if ((d.why || []).length) {
+            h += '<div style="color:var(--text2);font-size:12px;margin:12px 0 4px">Proč se to hýbe:</div>' +
+                 d.why.map(w => `<div style="padding:5px 0;font-size:13px">
+                    <b>${escapeHtml(w.ticker)}</b> · <span style="color:${w.severity === 'warn' ? 'var(--amber)' : 'var(--text2)'}">${escapeHtml(w.title || '')}</span>
+                    <div style="color:var(--text2);font-size:12px">${escapeHtml(w.hint || '')}</div></div>`).join('');
+        }
+    }
+
+    if (d.action) h += `<div class="brief-act">${escapeHtml(d.action)}</div>`;
     if ((d.signals || []).length) {
         h += '<div class="brief-h">Signály toho dne</div>' + d.signals.map(sg =>
             `<div class="brief-sig"><b>${escapeHtml(sg.ticker || '')}</b>

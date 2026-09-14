@@ -5031,8 +5031,16 @@ def _market_brief():
                                  "regime": _macro_regime(d["price"], lo, hi, low_calm)})
     vix = next((m for m in out["macro"] if m["label"] == "VIX"), None)
     if vix and vix["price"] is not None:
-        out["mood"] = ("klidný" if vix["price"] < 15
-                       else "nervózní" if vix["price"] > 25 else "neutrální")
+        # Nejen ÚROVEŇ, ale i denní skok. VIX 17,8 je sám o sobě neutrální,
+        # ale skok o +13 % za den znamená, že se něco děje – hlásit u toho
+        # „trh je neutrální" odporuje titulkům hned vedle.
+        jump = vix.get("chg") or 0
+        if vix["price"] > 25 or jump >= 10:
+            out["mood"] = "nervózní"
+        elif vix["price"] < 15 and jump <= 3:
+            out["mood"] = "klidný"
+        else:
+            out["mood"] = "neutrální"
     secs = []
     for (tk, label, _icon) in _SECTOR_ETFS:
         d = _fetch_macro_one(tk)
@@ -5132,8 +5140,27 @@ def _brief_payload(user=None, date=None):
     out = {"ok": True, "date": date, "is_today": date == today,
            "market": market, "signals": signals}
     if user and date == today:
-        out["positions"] = _positions_for(user)
+        pos = _positions_for(user)
+        out["positions"] = pos
         out["action"] = _todays_action(user, signals)
+        # „Proč" k pohybům – stejný zdroj jako e-mail, jen jako data pro web.
+        # Form 4 (insider) vynechán: podává se pořád a pohyb nevysvětluje.
+        try:
+            pf = kv_get_json(f"portfolio:{user}") or {}
+            tk = [i["ticker"] for i in (pos.get("items") or [])]
+            tk += [t for t in (pf.get("watchlist") or [])[:5] if t not in tk]
+            why = []
+            for t in tk[:5]:
+                for e in _events_for_ticker(t, since_days=5):
+                    if e.get("kind") in ("material", "analyst", "quarterly", "earnings"):
+                        why.append({"ticker": t, "title": e.get("title"),
+                                    "hint": e.get("hint"), "severity": e.get("severity")})
+                        break
+                if len(why) >= 3:
+                    break
+            out["why"] = why
+        except Exception:
+            out["why"] = []
     return out
 
 
