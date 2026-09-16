@@ -588,7 +588,10 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .brief-sec {font-size:13px; margin:0 0 12px;}
 .brief-act {margin:14px 0; padding:13px 15px; border-radius:12px; background:var(--accent-soft); border:1px solid var(--border-accent); font-weight:700; color:var(--accent); line-height:1.5;}
 .brief-h {font-size:12px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin:16px 0 7px;}
-.brief-news a {display:block; padding:6px 0; color:var(--text); text-decoration:none; font-size:13px; line-height:1.45; border-bottom:1px solid var(--border);}
+.brief-news a {display:block; padding:8px 0; color:var(--text); text-decoration:none; border-bottom:1px solid var(--border);}
+.brief-news .bn-title {display:block; font-size:13px; font-weight:600; line-height:1.4;}
+.brief-news .bn-blurb {display:block; font-size:12px; color:var(--text2); line-height:1.45; margin-top:2px;}
+.brief-news a:hover .bn-title {color:var(--accent);}
 .brief-news a:last-child {border-bottom:none;}
 .brief-news a:hover {color:var(--accent);}
 .brief-sig {display:flex; align-items:center; gap:10px; padding:8px 0; font-size:13px; border-bottom:1px solid var(--border); flex-wrap:wrap;}
@@ -1451,7 +1454,7 @@ html, body {max-width:100%;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.09.14·i</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.09.14·j</div>
 
 <div class="container">
   
@@ -3005,7 +3008,10 @@ function renderBrief(d) {
     // a akce byla vražená mezi trh a zprávy.
     if ((m.news || []).length) {
         h += '<div class="brief-h">Co se k tomu píše</div><div class="brief-news">' +
-             m.news.map(n => `<a href="${escapeHtml(n.link)}" target="_blank" rel="noopener">${escapeHtml(n.title)}</a>`).join('') +
+             m.news.map(n => `<a href="${escapeHtml(n.link)}" target="_blank" rel="noopener">
+                <span class="bn-title">${escapeHtml(n.title)}</span>
+                ${n.blurb ? `<span class="bn-blurb">${escapeHtml(n.blurb)}</span>` : ''}
+             </a>`).join('') +
              '</div>';
     }
 

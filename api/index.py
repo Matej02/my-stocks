@@ -5051,16 +5051,32 @@ def _market_brief():
         out["worst"], out["best"] = secs[0], secs[-1]
     # Pořadí = od nejvíc burzovních zdrojů po obecné zpravodajství. Obecné feedy
     # mají nízkou výtěžnost po filtru, proto jsou až na konci jako doplněk.
-    seen = set()
+    # DENNÍ SHRNUTÍ (kurzy_svet/roklen mívají skutečný wrap-up dne s konkrétním
+    # vysvětlením pohybu) jde vždy první, i kdyby v pořadí zdrojů bylo pozdě –
+    # je to nejblíž tomu, co uživatel chce: ne titulek, ale důvod.
+    seen, rest = set(), []
+    daily_wrap = None
     for key in ("roklen", "kurzy_svet", "seekingalpha", "fool", "marketwatch", "cnbc", "e15"):
         for it in (_fetch_rss(key) or [])[:10]:
             t = (it.get("title") or "").strip()
             k = t.lower()[:60]
-            if t and k not in seen and _is_market_news(t):
-                seen.add(k)
-                out["news"].append({"title": t, "link": it.get("link") or ""})
-        if len(out["news"]) >= 4:
+            if not t or k in seen or not _is_market_news(t):
+                continue
+            seen.add(k)
+            low = t.lower()
+            # Denní shrnutí dostane delší limit – ať se blurb stihne dostat
+            # k samotnému DŮVODU ("Jedním z hlavních zdrojů obav byl…"),
+            # ne uříznout těsně před ním jako s kratším limitem u ostatních.
+            is_wrap = daily_wrap is None and ("shrnutí" in low or "denní" in low)
+            entry = {"title": t, "link": it.get("link") or "",
+                     "blurb": _news_blurb(it, limit=220 if is_wrap else 120)}
+            if is_wrap:
+                daily_wrap = entry
+            else:
+                rest.append(entry)
+        if len(rest) + (1 if daily_wrap else 0) >= 6:
             break
+    out["news"] = ([daily_wrap] if daily_wrap else []) + rest
     out["news"] = out["news"][:4]
     return out
 
@@ -5076,6 +5092,28 @@ _MARKET_WORDS = (
     "akcie", "akcií", "trh", "trhy", "trhů", "inflace", "sazb", "výnos",
     "ropa", "ropy", "burza", "burzy", "investor", "ekonomik", "dolar", "koruna",
 )
+
+
+def _strip_html(text):
+    """Vyčistí RSS summary od HTML značek a entit. Bez tohohle by se do e-mailu
+    i webu dostal syrový <img src=...> tag (dělá to zdroj e15) – needitované HTML
+    v datech, ne markup, který bychom chtěli vykreslit."""
+    import re as _re
+    import html as _html
+    t = _re.sub(r"<[^>]+>", " ", text or "")
+    t = _html.unescape(t)
+    return _re.sub(r"\s+", " ", t).strip()
+
+
+def _news_blurb(item, limit=150):
+    """Krátká věta s KONKRÉTNÍM důvodem z RSS summary, ne jen holý titulek.
+    Kurzy_svet/Roklen mívají v summary skutečné vysvětlení pohybu
+    ("eskalace na Blízkém východě posiluje obavy...") – to je přesně to,
+    co dřív holý titulek nedal."""
+    t = _strip_html(item.get("summary") or "")
+    if not t or t.lower().startswith((item.get("title") or "").lower()[:20]):
+        return ""
+    return (t[:limit].rsplit(" ", 1)[0] + "…") if len(t) > limit else t
 
 
 def _is_market_news(title):
@@ -5312,11 +5350,14 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
                       f"<span style='color:#FF3D00'>{b['worst']['chg']:+.2f} %</span>.</p>")
         news = ""
         if b.get("news"):
+            def _news_row(n):
+                blurb = (f"<div style='color:#9ba1b0;font-size:12px;margin:2px 0 0 14px'>"
+                        f"{_html_escape(n['blurb'])}</div>") if n.get("blurb") else ""
+                return (f"<div style='padding:6px 0;font-size:13px'>• "
+                       f"<a href='{_html_escape(n['link'])}' style='color:#F0A030;text-decoration:none;font-weight:600'>"
+                       f"{_html_escape(n['title'])}</a>{blurb}</div>")
             news = ("<p style='margin:14px 0 6px;font-size:13px;color:#9ba1b0'>"
-                    "Co se k tomu dnes píše:</p>" + "".join(
-                        f"<div style='padding:4px 0;font-size:13px'>• "
-                        f"<a href='{n['link']}' style='color:#F0A030;text-decoration:none'>"
-                        f"{_html_escape(n['title'])}</a></div>" for n in b["news"]))
+                    "Co se k tomu dnes píše:</p>" + "".join(_news_row(n) for n in b["news"]))
         brief_html = ("<h3 style='font-size:16px;margin:4px 0 8px'>🌍 Ranní situace</h3>"
                       + mood
                       + (f"<p style='font-size:13px;color:#9ba1b0;margin:0'>{mac}</p>" if mac else "")
