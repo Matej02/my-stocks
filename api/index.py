@@ -7513,19 +7513,28 @@ def digest_sending_enabled():
 def _broadcast(notif_key, subject, build_html, limit=200):
     """Rozešle e-mail všem, kdo mají v profilu zapnutý `notif_key`.
     Jedna chybná adresa nesmí shodit celou rozesílku."""
-    if not digest_sending_enabled():
-        return 0
-    sent = 0
-    for email in kv_smembers("users")[:limit]:
-        rec = kv_get_json(f"user:{email}") or {}
-        if not (rec.get("notif") or {}).get(notif_key):
-            continue
-        try:
-            send_email(email, subject, build_html(email))
-            sent += 1
-        except Exception:
-            continue
-    return sent
+    users = kv_smembers("users")[:limit]
+    recips = [e for e in users if ((kv_get_json(f"user:{e}") or {}).get("notif") or {}).get(notif_key)]
+    stat = {"ts": int(time.time()), "recipients": len(recips), "sent": 0, "failed": 0, "error": None,
+            "sending_enabled": digest_sending_enabled()}
+    if not stat["sending_enabled"]:
+        stat["error"] = "Rozesílání je vypnuté (env DIGEST_SEND není „on“)."
+    else:
+        for email in recips:
+            try:
+                if send_email(email, subject, build_html(email)):
+                    stat["sent"] += 1
+                else:
+                    stat["failed"] += 1
+                    stat["error"] = _LAST_EMAIL_ERROR["msg"]
+            except Exception as e:
+                stat["failed"] += 1
+                stat["error"] = str(e)[:300]
+    try:      # diagnostika pro admina: poslední rozesílka
+        kv_set_json(f"cron:send:{notif_key}", stat)
+    except Exception:
+        pass
+    return stat["sent"]
 
 
 @app.route("/api/cron/weekly-digest")
@@ -7544,6 +7553,26 @@ def cron_weekly_digest():
         return jsonify({"ok": True, "sent": sent})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/email-status")
+def admin_email_status():
+    """Proč (ne)chodí ranní/týdenní e-maily – vše na jednom místě."""
+    admin = _auth_admin()
+    if not admin:
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    users = kv_smembers("users") or []
+    cnt = {"morning": 0, "weekly": 0}
+    for e in users[:500]:
+        n = (kv_get_json(f"user:{e}") or {}).get("notif") or {}
+        for k in cnt:
+            cnt[k] += 1 if n.get(k) else 0
+    me = (kv_get_json(f"user:{admin}") or {}).get("notif") or {}
+    return jsonify({"ok": True, "email_enabled": email_enabled(), "sender": os.environ.get("SENDER_EMAIL") or None,
+                    "digest_send": digest_sending_enabled(), "cron_secret": bool(os.environ.get("CRON_SECRET")),
+                    "recipients": cnt, "me": {"email": admin, "morning": bool(me.get("morning")), "weekly": bool(me.get("weekly"))},
+                    "last_run_morning": kv_get_json("cron:run:morning"), "last_send_morning": kv_get_json("cron:send:morning"),
+                    "last_send_weekly": kv_get_json("cron:send:weekly"), "send_hour": SEND_HOUR_PRAGUE})
 
 
 @app.route("/api/admin/weekly-test", methods=["POST"])
@@ -7671,6 +7700,11 @@ def cron_morning():
         # Cron běží ve dvou UTC časech (6:00 a 7:00), aby jeden z nich vždy padl
         # na 8:00 pražského času – letního i zimního. Odešle jen ten správný.
         hour = _prague_hour()
+        try:      # diagnostika: kdy cron opravdu běžel (Vercel může spouštět s posunem)
+            kv_set_json("cron:run:morning", {"ts": int(time.time()), "prague_hour": hour,
+                                             "send_hour": SEND_HOUR_PRAGUE})
+        except Exception:
+            pass
         if hour != SEND_HOUR_PRAGUE:
             return jsonify({"ok": True, "sent": 0, "skipped": True,
                             "prague_hour": hour, "send_hour": SEND_HOUR_PRAGUE})

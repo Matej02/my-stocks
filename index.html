@@ -1686,7 +1686,7 @@ html, body {max-width:100%;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.14·e</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.14·f</div>
 
 <div class="container">
   
@@ -4883,6 +4883,7 @@ async function loadAdmin() {
         ]);
         if (!usersR.ok) { el.innerHTML = `<div style="color:var(--down); padding:14px;">${usersR.error || 'Chyba'}</div>`; return; }
         renderAdmin(usersR.users || [], invR.invites || []);
+        loadEmailStatus();
     } catch (e) {
         el.innerHTML = '<div style="color:var(--down); padding:14px;">Chyba načítání admin dat.</div>';
     }
@@ -4936,7 +4937,8 @@ function renderAdmin(users, invites) {
             <button class="btn-primary admin-mk" onclick="adminEmailTest()"><i class="ti ti-send"></i> Poslat test</button>
             <button class="tool-btn" onclick="adminMorningTest()"><i class="ti ti-sun"></i> Ranní souhrn (test)</button>
         </div>
-        <div id="email-test-result" style="font-size:12px; color:var(--text2); margin-bottom:18px;"></div>
+        <div id="email-test-result" style="font-size:12px; color:var(--text2); margin-bottom:10px;"></div>
+        <div id="email-status" style="font-size:12.5px; line-height:1.7; margin-bottom:18px; padding:10px 12px; border-radius:12px; background:var(--surface); border:1px solid var(--border);"><i class="ti ti-loader spin"></i> Zjišťuji stav ranních e-mailů…</div>
 
         <div class="admin-sub"><i class="ti ti-radar" style="color:var(--accent)"></i> <b>Denní sken S&amp;P 500</b> <span style="font-size:11px;color:var(--text2)">(běží sám v 5:00–5:40 UTC; ruční spuštění pokračuje tam, kde sken skončil)</span></div>
         <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap; align-items:center;">
@@ -4968,6 +4970,26 @@ function renderAdmin(users, invites) {
             <thead><tr><th>E-mail</th><th>Plán</th><th>Stav</th><th>Vytvořen</th><th>Změnit plán</th><th></th></tr></thead>
             <tbody>${rows || '<tr><td colspan="6" style="color:var(--text2)">Žádní uživatelé.</td></tr>'}</tbody>
         </table></div>`;
+}
+
+async function loadEmailStatus() {
+    const box = document.getElementById('email-status');
+    if (!box) return;
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/admin/email-status`, { headers: authHeaders() })).json();
+        if (!d.ok) { box.textContent = d.error || 'Stav se nepodařilo zjistit.'; return; }
+        const ok = (c, txt, fix) => `<div>${c ? '<span style="color:var(--up)">✓</span>' : '<span style="color:var(--down)">✗</span>'} ${txt}${!c && fix ? ` <span style="color:var(--amber)">→ ${fix}</span>` : ''}</div>`;
+        const when = x => x && x.ts ? new Date(x.ts * 1000).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'nikdy';
+        const run = d.last_run_morning, snd = d.last_send_morning;
+        box.innerHTML = `<b>Stav ranních e-mailů</b>` +
+            ok(d.email_enabled, `Odesílání přes Brevo nastavené${d.sender ? ' (odesílatel ' + escapeHtml(d.sender) + ')' : ''}`, 'na Vercelu chybí BREVO_API_KEY nebo SENDER_EMAIL') +
+            ok(d.digest_send, 'Rozesílání zapnuté (DIGEST_SEND=on)', 'Vercel → Settings → Environment Variables → přidej DIGEST_SEND = on (Production) a dej Redeploy') +
+            ok(d.cron_secret, 'Ranní cron má heslo (CRON_SECRET)', 'na Vercelu chybí CRON_SECRET – bez něj cron nic neudělá') +
+            ok(d.me.morning, `Ty máš ranní souhrn zapnutý (${escapeHtml(d.me.email)})`, 'zapni ho v Profil → Notifikace') +
+            `<div style="color:var(--text2)">Odběratelé: ranní ${d.recipients.morning}, sobotní ${d.recipients.weekly}</div>` +
+            `<div style="color:var(--text2)">Cron naposledy běžel: <b style="color:var(--text)">${when(run)}</b>${run ? ` (v Praze ${run.prague_hour}:xx, posílá se v ${run.send_hour}:xx)` : ' – pokud tu bude „nikdy" i zítra, cron se nespouští'}</div>` +
+            `<div style="color:var(--text2)">Poslední rozesílka: <b style="color:var(--text)">${when(snd)}</b>${snd ? ` · příjemců ${snd.recipients}, odesláno ${snd.sent}, chyb ${snd.failed}${snd.error ? ` · <span style="color:var(--down)">${escapeHtml(snd.error)}</span>` : ''}` : ''}</div>`;
+    } catch (e) { box.textContent = 'Stav se nepodařilo zjistit.'; }
 }
 
 async function adminMorningTest() {
