@@ -3317,6 +3317,9 @@ def _scan_finalize(date, uni, rows):
         "value": [_value_item(r) for r in value],
         "vm_map": {r["ticker"]: int(round(r["vm"] * 100)) for r in recs if r.get("vm") is not None},
         "sector_map": {r["ticker"]: r.get("sector") or "" for r in recs},
+        "rank_map": {r["ticker"]: r["vm_rank"] for r in ranked},
+        "name_map": {r["ticker"]: r.get("name") or r["ticker"] for r in recs},
+        "mcap_map": {r["ticker"]: round(r["mcap"] / 1e6) for r in recs if r.get("mcap")},
         "rule": {"vm_min": int(VM_MIN * 100), "setup_min": VERDICT_TOP, "sector_cap": SECTOR_CAP},
     }
     try:
@@ -3446,6 +3449,1058 @@ def _paper_record(date, signals):
         kv_set_json(f"paper:day:{date}", {"n": len(signals)})
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# DLOUHODOBÝ PLÁN (2026-10) – skutečné pozice, jádro + akcie, „Kam s penězi",
+# rentgen portfolia, stres test, cesta k cíli a 3letý časový test.
+#
+# Pravidla ověřila simulace dlouhodobého investora, který jen přidává peníze
+# (LONGTERM níže, 2015-2026, historické složení S&P 500, náklady 10 bps):
+#  * jádro = S&P 500 UCITS ETF, satelit = akcie podle hodnoty & momenta
+#  * nové peníze jdou na mezery vůči cíli (úměrně mezerám), nic se neprodává
+#    kvůli vyvažování – měsíční přeskupování bylo o 5 bodů ročně horší
+#  * nový titul vstoupí JEN do volného slotu, max 30 % slotů z jednoho sektoru;
+#    držený titul zůstává v plánu, dokud je v top 3×N
+#  * VÍTĚZE NECHAT BĚŽET: prodávat titul jen proto, že vypadl z plánu, stálo
+#    3 body ročně (odřízlo NVDA, AVGO, KLAC…; platí i bez NVDA). Po 36 měsících
+#    (v ČR bez daně) se jen ořízne pozice nad 3× cílové váhy (riziko jedné
+#    firmy) a prodají se zakrnělé tituly mimo plán pod ½ cílové váhy (úklid).
+#  * dluhopisy jako „konzervativní" složka zamítnuty: -2,5 b./rok výnosu za
+#    -1,5 b. propadu (2022 padaly s akciemi).
+# ---------------------------------------------------------------------------
+LONGTERM = {'rule': {'core': 'S&P 500 UCITS ETF',
+          'buffer_x': 3,
+          'trim_x': 3,
+          'cleanup_below_x': 0.5,
+          'after_months': 36,
+          'sector_cap_pct': 30,
+          'cost_bps': 10},
+ 'profiles': {'conservative': {'stocks_pct': 20,
+                               'slots': 10,
+                               'train': {'cagr': 14.0,
+                                         'max_dd': -25.7,
+                                         'sharpe': 0.87,
+                                         'holdings': 32,
+                                         'trims_per_year': 0.5,
+                                         'sells_per_year': 3.2,
+                                         'new_per_year': 7.2,
+                                         'max_weight': 7.5},
+                               'holdout': {'cagr': 20.9,
+                                           'max_dd': -7.7,
+                                           'sharpe': 1.61,
+                                           'holdings': 34,
+                                           'trims_per_year': 0.0,
+                                           'sells_per_year': 2.7,
+                                           'new_per_year': 11.7,
+                                           'max_weight': 7.1},
+                               'full': {'cagr': 18.2,
+                                        'max_dd': -25.7,
+                                        'sharpe': 1.13,
+                                        'holdings': 37,
+                                        'trims_per_year': 2.5,
+                                        'sells_per_year': 4.9,
+                                        'new_per_year': 8.0,
+                                        'max_weight': 7.9}},
+              'balanced': {'stocks_pct': 40,
+                           'slots': 20,
+                           'train': {'cagr': 15.2,
+                                     'max_dd': -26.5,
+                                     'sharpe': 0.91,
+                                     'holdings': 48,
+                                     'trims_per_year': 1.6,
+                                     'sells_per_year': 5.5,
+                                     'new_per_year': 11.5,
+                                     'max_weight': 10.7},
+                           'holdout': {'cagr': 21.3,
+                                       'max_dd': -6.9,
+                                       'sharpe': 1.64,
+                                       'holdings': 48,
+                                       'trims_per_year': 0.0,
+                                       'sells_per_year': 4.3,
+                                       'new_per_year': 17.1,
+                                       'max_weight': 5.3},
+                           'full': {'cagr': 19.5,
+                                    'max_dd': -26.5,
+                                    'sharpe': 1.18,
+                                    'holdings': 50,
+                                    'trims_per_year': 3.0,
+                                    'sells_per_year': 7.4,
+                                    'new_per_year': 11.7,
+                                    'max_weight': 10.7}},
+              'aggressive': {'stocks_pct': 70,
+                             'slots': 25,
+                             'train': {'cagr': 16.6,
+                                       'max_dd': -27.8,
+                                       'sharpe': 0.96,
+                                       'holdings': 62,
+                                       'trims_per_year': 1.6,
+                                       'sells_per_year': 6.2,
+                                       'new_per_year': 14.0,
+                                       'max_weight': 14.0},
+                             'holdout': {'cagr': 20.6,
+                                         'max_dd': -6.3,
+                                         'sharpe': 1.58,
+                                         'holdings': 56,
+                                         'trims_per_year': 0.0,
+                                         'sells_per_year': 5.1,
+                                         'new_per_year': 20.0,
+                                         'max_weight': 7.5},
+                             'full': {'cagr': 22.6,
+                                      'max_dd': -27.8,
+                                      'sharpe': 1.24,
+                                      'holdings': 59,
+                                      'trims_per_year': 2.6,
+                                      'sells_per_year': 8.9,
+                                      'new_per_year': 14.0,
+                                      'max_weight': 14.0}}},
+ 'benchmark': {'train': {'cagr': 11.3, 'max_dd': -23.9, 'sharpe': 0.75},
+               'holdout': {'cagr': 20.4, 'max_dd': -8.3, 'sharpe': 1.58},
+               'full': {'cagr': 14.1, 'max_dd': -23.9, 'sharpe': 0.97}},
+ 'alternatives': {'conservative': {'sell_out_of_plan_36m': {'train': 12.3,
+                                                            'holdout': 21.0,
+                                                            'full': 15.5},
+                                   'monthly_rebalance': {'train': 12.3,
+                                                         'holdout': 20.4,
+                                                         'full': 14.9}},
+                  'balanced': {'sell_out_of_plan_36m': {'train': 13.5,
+                                                        'holdout': 21.9,
+                                                        'full': 16.5},
+                               'monthly_rebalance': {'train': 12.2, 'holdout': 19.8, 'full': 14.6}},
+                  'aggressive': {'sell_out_of_plan_36m': {'train': 14.1,
+                                                          'holdout': 21.4,
+                                                          'full': 16.8},
+                                 'monthly_rebalance': {'train': 13.2,
+                                                       'holdout': 18.5,
+                                                       'full': 14.9}}}}
+
+LT_PROFILES = {"conservative": (0.20, 10), "balanced": (0.40, 20), "aggressive": (0.70, 25)}
+LT_BUFFER = 3
+LT_TRIM_X = 3                # po 36 m oříznout pozici nad 3× cílové váhy
+LT_CLEANUP_X = 0.5           # po 36 m prodat titul mimo plán menší než ½ cíle
+LT_SECTOR_CAP = 0.30         # max podíl slotů z jednoho sektoru pro nové tituly
+TAX_FREE_MONTHS = 36
+MIN_ORDER_CZK = 500          # menší nákupy nedávají smysl (poplatky, drobení)
+CORE_ETF = {"ticker": "SXR8.DE", "name": "iShares Core S&P 500 UCITS ETF (Acc)"}
+# ETF, která appka bere jako indexové jádro. „world" ≈ 63 % USA (pro rentgen).
+CORE_ETFS = {
+    "SXR8.DE": "sp500", "CSPX.L": "sp500", "CSPX.AS": "sp500", "VUAA.DE": "sp500", "VUAA.L": "sp500",
+    "VUSA.L": "sp500", "VUSA.AS": "sp500", "VUSA.DE": "sp500", "SPY5.L": "sp500", "IUSA.DE": "sp500",
+    "SPXS.L": "sp500", "SPY": "sp500", "VOO": "sp500", "IVV": "sp500",
+    "VWCE.DE": "world", "VWRA.L": "world", "VWRL.L": "world", "VWRL.AS": "world",
+    "IWDA.AS": "world", "IWDA.L": "world", "SWDA.L": "world", "EUNL.DE": "world",
+}
+WORLD_US_SHARE = 0.63
+DUAL_CLASS_SECONDARY = {"GOOG", "FOX", "NWS"}
+# Čitelné názvy ETF jádra (Yahoo vrací zkratky typu „ISHARES VII PLC ISHRS CORE S&P")
+CORE_NAMES = {"SXR8.DE": "iShares Core S&P 500", "CSPX.L": "iShares Core S&P 500", "CSPX.AS": "iShares Core S&P 500",
+              "VUAA.DE": "Vanguard S&P 500 (Acc)", "VUAA.L": "Vanguard S&P 500 (Acc)", "VUSA.L": "Vanguard S&P 500",
+              "VUSA.AS": "Vanguard S&P 500", "VUSA.DE": "Vanguard S&P 500", "IUSA.DE": "iShares S&P 500 (Dist)",
+              "SPY5.L": "SPDR S&P 500", "VWCE.DE": "Vanguard FTSE All-World (Acc)", "VWRA.L": "Vanguard FTSE All-World (Acc)",
+              "VWRL.L": "Vanguard FTSE All-World", "VWRL.AS": "Vanguard FTSE All-World", "IWDA.AS": "iShares Core MSCI World",
+              "IWDA.L": "iShares Core MSCI World", "SWDA.L": "iShares Core MSCI World", "EUNL.DE": "iShares Core MSCI World"}
+FX_SYMBOLS = {"USD": "CZK=X", "EUR": "EURCZK=X", "GBP": "GBPCZK=X", "CHF": "CHFCZK=X", "PLN": "PLNCZK=X"}
+US_EXCHANGES = {"NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS", "NYS", "NAS"}
+
+
+SECTOR_CZ = {
+    "Information Technology": "Technologie", "Health Care": "Zdravotnictví", "Financials": "Finance",
+    "Consumer Discretionary": "Zbytná spotřeba", "Consumer Staples": "Základní spotřeba",
+    "Communication Services": "Komunikace a média", "Industrials": "Průmysl", "Energy": "Energetika",
+    "Materials": "Suroviny", "Utilities": "Energetické sítě", "Real Estate": "Nemovitosti",
+}
+
+
+def _sector_cz(s):
+    return SECTOR_CZ.get(s, s or "")
+
+
+def _spx_key(t):
+    """Yahoo ticker → klíč ve skenu S&P 500 (BRK-B → BRK.B)."""
+    return (t or "").upper().replace("-", ".")
+
+
+def _fx_czk(cur):
+    """Kurz měny → CZK (kešováno hodinu). Londýnské ceny v pencích (GBp) /100."""
+    if not cur or cur.upper() == "CZK":
+        return 1.0
+    pence = cur in ("GBp", "GBX")
+    c = "GBP" if pence else cur.upper()
+    sym = FX_SYMBOLS.get(c)
+    if not sym:
+        return None
+    rate = None
+    try:
+        cached = kv_get_json(f"fx:{c}")
+        if cached and time.time() - cached.get("ts", 0) < 3600:
+            rate = cached["rate"]
+    except Exception:
+        pass
+    if rate is None:
+        try:
+            meta = yahoo_chart(sym, "5d", "1d").get("meta") or {}
+            rate = float(meta.get("regularMarketPrice"))
+            try:
+                kv_set_json(f"fx:{c}", {"ts": time.time(), "rate": rate})
+            except Exception:
+                pass
+        except Exception:
+            return None
+    return rate / 100 if pence else rate
+
+
+def _quotes(tickers):
+    """Aktuální cena, měna, název a denní změna pro seznam tickerů (paralelně)."""
+    def one(t):
+        try:
+            d = yahoo_chart(t, "5d", "1d")
+            meta = d.get("meta") or {}
+            cl = [c for c in (((d.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []) if c]
+            price = meta.get("regularMarketPrice") or (cl[-1] if cl else None)
+            prev = _prev_close(cl, meta)
+            return t, {"price": price, "currency": meta.get("currency") or "USD",
+                       "name": meta.get("shortName") or meta.get("longName") or t,
+                       "type": meta.get("instrumentType") or "",
+                       "chg": round((price - prev) / prev * 100, 2) if (price and prev) else None}
+        except Exception:
+            return t, None
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        return dict(ex.map(one, [t for t in tickers if t]))
+
+
+def _num(v):
+    """Číslo z AI/uživatele: „1 234,56", „1,234.56", „12.5 ks" → float."""
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = re.sub(r"[^\d,.\-]", "", str(v).replace(" ", "").replace(" ", ""))
+    if not s:
+        return None
+    if "," in s and "." in s:
+        s = s.replace(",", "") if s.rfind(".") > s.rfind(",") else s.replace(".", "").replace(",", ".")
+    elif "," in s:
+        s = s.replace(",", ".") if len(s.split(",")[-1]) != 3 else s.replace(",", "")
+    try:
+        return float(s)
+    except Exception:
+        return None
+
+
+def _pc(x, d=1):
+    """Procento česky: 19,0 (desetinná čárka)."""
+    return f"{x:.{d}f}".replace(".", ",")
+
+
+def _kc(x):
+    """Částka česky: 12 345 Kč (nezlomitelná mezera)."""
+    return f"{x:,.0f}".replace(",", "\u00a0") + "\u00a0Kč"
+
+
+def _clean_holdings(raw):
+    """Validace nákupů (lotů): [{ticker, qty, buy_month?, name?}]. Stejný ticker
+    a měsíc se sloučí; různé měsíce zůstávají zvlášť – 3letý časový test platí
+    pro každý nákup zvlášť, sloučení by mohlo mylně hlásit „bez daně"."""
+    merged = {}
+    for h in (raw or [])[:600]:
+        if not isinstance(h, dict):
+            continue
+        t = (h.get("ticker") or "").strip().upper()
+        if not re.match(r"^[A-Z0-9.\-=^]{1,15}$", t):
+            continue
+        qty = _num(h.get("qty"))
+        if qty is None or not (0 < qty < 1e9):
+            continue
+        bm = (h.get("buy_month") or "").strip()
+        bm = bm if re.match(r"^\d{4}-(0[1-9]|1[0-2])$", bm) else None
+        k = (t, bm)
+        if k in merged:
+            merged[k]["qty"] = round(merged[k]["qty"] + qty, 6)
+        else:
+            merged[k] = {"ticker": t, "qty": round(qty, 6), "buy_month": bm, "name": str(h.get("name") or "")[:80]}
+    return list(merged.values())[:400]
+
+
+def _tax_free_from(ym):
+    y, m = map(int, ym.split("-"))
+    m2 = y * 12 + (m - 1) + TAX_FREE_MONTHS
+    return f"{m2 // 12}-{m2 % 12 + 1:02d}"
+
+
+def _scan_maps(scan):
+    """Pořadí, sektory, názvy a kapitalizace z posledního skenu. Starší sken
+    (před 2026-10) pořadí neukládal – dopočítá se z vm_map."""
+    vms = scan.get("vm_map") or {}
+    ranks = scan.get("rank_map")
+    if not ranks:
+        ranks = {t: i for i, t in enumerate(sorted(vms, key=lambda t: -vms[t]), 1)}
+    return ranks, vms, scan.get("sector_map") or {}, scan.get("name_map") or {}, scan.get("mcap_map") or {}
+
+
+def _months_between(ym, today=None):
+    today = today or datetime.now(timezone.utc).date()
+    y, m = map(int, ym.split("-"))
+    return (today.year - y) * 12 + (today.month - m)
+
+
+def _value_holdings(holdings):
+    """Ocenění v CZK po titulech (loty sečtené) + zařazení (jádro / akcie
+    S&P 500 / ostatní), data modelu a 3letý časový test po jednotlivých nákupech."""
+    lots = _clean_holdings(holdings)
+    by_t = {}
+    for l in lots:
+        by_t.setdefault(l["ticker"], []).append(l)
+    q = _quotes(list(by_t))
+    scan = market_scan(allow_step=False) or {}
+    ranks, vms, smap, _n, _m = _scan_maps(scan)
+    rows, missing = [], []
+    for t, ls in by_t.items():
+        qt = q.get(t)
+        fx = _fx_czk(qt["currency"]) if qt else None
+        if not qt or not qt.get("price") or not fx:
+            missing.append(t)
+            continue
+        key = _spx_key(t)
+        kind = "core" if t in CORE_ETFS else ("stock" if key in ranks else "other")
+        qty = round(sum(l["qty"] for l in ls), 6)
+        px_czk = qt["price"] * fx
+        free_q = sum(l["qty"] for l in ls if l["buy_month"] and _months_between(l["buy_month"]) >= TAX_FREE_MONTHS)
+        unknown_q = sum(l["qty"] for l in ls if not l["buy_month"])
+        pending = sorted(_tax_free_from(l["buy_month"]) for l in ls
+                         if l["buy_month"] and _months_between(l["buy_month"]) < TAX_FREE_MONTHS)
+        known = sorted(l["buy_month"] for l in ls if l["buy_month"])
+        row = {"ticker": t, "qty": qty, "name": CORE_NAMES.get(t) or qt["name"] or ls[0].get("name") or t,
+               "lots": [{"qty": l["qty"], "buy_month": l["buy_month"]} for l in sorted(ls, key=lambda l: l["buy_month"] or "")],
+               "price": round(qt["price"], 4), "currency": qt["currency"], "fx": round(fx, 4),
+               "value_czk": round(qty * px_czk, 2), "chg": qt.get("chg"), "kind": kind,
+               "vm": vms.get(key), "vm_rank": ranks.get(key),
+               "sector": smap.get(key) or ("ETF" if kind == "core" else ""),
+               "tax_free_qty": round(free_q, 6), "tax_free_value_czk": round(free_q * px_czk),
+               "unknown_qty": round(unknown_q, 6),
+               "tax_free": unknown_q == 0 and free_q >= qty - 1e-9,
+               "tax_next": pending[0] if pending else None,
+               "tax_free_from": (pending[-1] if pending else (known[0] and _tax_free_from(known[0]))) if known else None,
+               "months_held": _months_between(known[0]) if known else None}
+        rows.append(row)
+    total = sum(r["value_czk"] for r in rows)
+    for r in rows:
+        r["weight"] = round(r["value_czk"] / total * 100, 2) if total else 0
+    rows.sort(key=lambda r: -r["value_czk"])
+    return rows, total, missing, scan
+
+
+def _build_plan(rows, risk, scan):
+    """Cílové portfolio podle ověřených pravidel (sloty, limit sektoru, vítěze
+    nechat běžet). Každé pozici doplní stav a případnou akci (ořez/prodej)."""
+    split, N = LT_PROFILES[_risk(risk)]
+    ranks, vms, smap, names, _m = _scan_maps(scan)
+    by_t = {r["ticker"]: r for r in (scan.get("value") or [])}
+    total = sum(r["value_czk"] for r in rows)
+    slot = split / N * total
+    stocks = [r for r in rows if r["kind"] == "stock"]
+    keep = sorted([r for r in stocks if r["vm_rank"] and r["vm_rank"] <= LT_BUFFER * N],
+                  key=lambda r: r["vm_rank"])[:N]
+    keep_t = {r["ticker"] for r in keep}
+    held = {_spx_key(r["ticker"]) for r in rows}
+    cnt = {}
+    for r in keep:
+        cnt[r.get("sector")] = cnt.get(r.get("sector"), 0) + 1
+    capn = math.ceil(LT_SECTOR_CAP * N)
+    free, new, skipped = N - len(keep), [], []
+    for t, rk in sorted(ranks.items(), key=lambda x: x[1]):
+        if free <= 0 or rk > 2 * N:
+            break
+        if t in held:
+            continue
+        sec = smap.get(t) or ""
+        if sec and cnt.get(sec, 0) >= capn:
+            skipped.append({"ticker": t, "vm_rank": rk, "sector": sec})
+            continue
+        v = by_t.get(t) or {}
+        new.append({"ticker": t.replace(".", "-"), "name": names.get(t) or v.get("name") or t, "vm": vms.get(t),
+                    "vm_rank": rk, "sector": sec, "price": v.get("price"), "currency": v.get("currency"),
+                    "pe": v.get("pe"), "mom_pct": v.get("mom_pct")})
+        cnt[sec] = cnt.get(sec, 0) + 1
+        free -= 1
+    actions = []
+    trim_cap = LT_TRIM_X * slot
+    for r in rows:
+        r["action"] = None
+        if r["kind"] == "core":
+            r["status"], r["status_label"] = "core", "Indexové jádro"
+            continue
+        if r["ticker"] in keep_t:
+            r["status"], r["status_label"] = "plan", f"V plánu · #{r['vm_rank']} v S&P 500"
+        elif r["kind"] == "stock":
+            r["status"] = "hold"
+            r["status_label"] = "Mimo plán · držet, nedokupovat"
+        else:
+            r["status"], r["status_label"] = "other", "Mimo S&P 500 · držet, nedokupovat"
+        free_v = r["tax_free_value_czk"]
+        if slot and r["value_czk"] > trim_cap:
+            excess = r["value_czk"] - trim_cap
+            cap_txt = f"strop je {_pc(LT_TRIM_X * split / N * 100)} % = 3× cílová váha"
+            if free_v >= excess * 0.999:
+                r["action"] = {"type": "trim", "amount_czk": round(excess),
+                               "why": f"Pozice má {_pc(r['weight'])} %, {cap_txt}. Prodej kusů držených přes "
+                                      "3 roky je bez daně; ořez snižuje riziko jedné firmy, peníze jdou do plánu."}
+            elif free_v >= MIN_ORDER_CZK:
+                r["action"] = {"type": "trim", "amount_czk": round(free_v), "partial": True,
+                               "why": f"Pozice má {_pc(r['weight'])} %, {cap_txt}. Bez daně jde teď prodat jen "
+                                      f"kusy starší 3 let (≈ {_kc(free_v)})"
+                                      + (f", další od {r['tax_next']}." if r.get("tax_next") else ".")}
+            elif r["unknown_qty"] > 0:
+                r["action"] = {"type": "trim_check", "amount_czk": round(excess),
+                               "why": f"Pozice má {_pc(r['weight'])} %, {cap_txt}. Doplň měsíc nákupu – ořez dává "
+                                      "smysl až u kusů držených přes 3 roky, kdy je zisk v ČR bez daně."}
+            else:
+                r["action"] = {"type": "trim_wait", "amount_czk": round(excess),
+                               "why": f"Pozice má {_pc(r['weight'])} %, {cap_txt}. Nejbližší kusy ale budou bez daně až "
+                                      f"{r.get('tax_next')}. Do té doby jen nedokupovat."}
+        elif r["status"] == "hold" and slot and r["value_czk"] < LT_CLEANUP_X * slot:
+            if r["tax_free"]:
+                r["action"] = {"type": "sell", "amount_czk": round(r["value_czk"]),
+                               "why": "Mimo plán a po 3 letech pořád malá (pod ½ cílové váhy) – titul "
+                                      "nevyšel. Prodej je bez daně, peníze jdou do plánu."}
+            elif r["unknown_qty"] == 0 and r.get("tax_free_from"):
+                r["action"] = {"type": "sell_wait",
+                               "why": f"Malá pozice mimo plán. Úklid až od {r['tax_free_from']}, kdy je bez daně."}
+        if r["action"] and r["action"]["type"] in ("trim", "sell"):
+            actions.append({"ticker": r["ticker"], "name": r["name"], **r["action"]})
+    p = LONGTERM["profiles"][_risk(risk)]
+    return {"risk": _risk(risk), "stocks_pct": int(split * 100), "core_pct": int(round((1 - split) * 100)),
+            "slots": N, "slots_used": len(keep), "slot_pct": round(split / N * 100, 2), "new": new,
+            "sector_skipped": skipped[:5], "actions": actions,
+            "validation": {k: p[k] for k in ("train", "holdout", "full")},
+            "benchmark": LONGTERM["benchmark"], "rule": LONGTERM["rule"]}
+
+
+def _allocate(amount, rows, total, plan):
+    """„Kam s penězi": vklad se rozdělí úměrně mezerám vůči cíli (ověřené
+    pravidlo); co mezery převýší, jde podle cílových vah. Drobné nákupy pod
+    MIN_ORDER_CZK se nedělají – peníze určené akciím ale zůstávají akciím:
+    soustředí se do titulů s největší mezerou (při shodě lepší pořadí) a
+    ostatní přijdou na řadu příští měsíc. Jinak by malé měsíční vklady
+    končily vždy jen v ETF a akciová část by nikdy nevznikla."""
+    split, N = LT_PROFILES[plan["risk"]]
+    V = total + amount
+    core_rows = [r for r in rows if r["kind"] == "core"]
+    core_val = sum(r["value_czk"] for r in core_rows)
+    cv = (max(core_rows, key=lambda r: r["value_czk"]) if core_rows else
+          {"ticker": CORE_ETF["ticker"], "name": CORE_ETF["name"]})
+    core = {"ticker": cv["ticker"], "name": cv.get("name"), "action": "core", "target": (1 - split) * V,
+            "cur": core_val, "vm_rank": 0, "price": cv.get("price"), "currency": cv.get("currency")}
+    # Pozice mimo plán (starší akcie, jiné ETF) zabírají akciový rozpočet profilu –
+    # jinak by vklady dál zvyšovaly podíl akcií nad zvolené riziko. Ověřeno: výnos
+    # stejný (±0,5 b.), ale profil rizika platí i pro portfolio s historií.
+    legacy = sum(r["value_czk"] for r in rows if r.get("status") not in ("core", "plan"))
+    per_slot = max(0.0, split * V - legacy) / N
+    stocks = []
+    for r in rows:
+        if r.get("status") == "plan":
+            stocks.append({"ticker": r["ticker"], "name": r["name"], "action": "topup", "target": per_slot,
+                           "cur": r["value_czk"], "vm_rank": r["vm_rank"], "sector": r.get("sector"),
+                           "price": r["price"], "currency": r["currency"]})
+    for n in plan["new"]:
+        stocks.append({"ticker": n["ticker"], "name": n["name"], "action": "new", "target": per_slot,
+                       "cur": 0.0, "vm_rank": n["vm_rank"], "sector": n.get("sector"),
+                       "price": n.get("price"), "currency": n.get("currency"),
+                       "pe": n.get("pe"), "mom_pct": n.get("mom_pct")})
+    lines = [core] + stocks
+    for l in lines:
+        l["gap"] = max(0.0, l["target"] - l["cur"])
+        l["amount"] = 0.0
+    need = sum(l["gap"] for l in lines)
+    f = min(1.0, amount / need) if need > 0 else 0.0
+    for l in lines:
+        l["amount"] = l["gap"] * f
+    rest = amount - sum(l["amount"] for l in lines)
+    if rest > 0.5:
+        tw = sum(l["target"] for l in lines) or 1
+        for l in lines:
+            l["amount"] += rest * l["target"] / tw
+    pool = sum(l["amount"] for l in stocks)
+    if pool < MIN_ORDER_CZK:                    # na akcie letos moc málo → celé do jádra
+        core["amount"] += pool
+        for l in stocks:
+            l["deferred"] = l["amount"] > 0
+            l["amount"] = 0.0
+    else:
+        while True:
+            pos = [l for l in stocks if l["amount"] > 0]
+            small = [l for l in pos if l["amount"] < MIN_ORDER_CZK]
+            if not small or len(pos) <= 1:
+                break
+            drop = min(pos, key=lambda l: (l["gap"], -l["vm_rank"]))
+            moved, drop["amount"], drop["deferred"] = drop["amount"], 0.0, True
+            keep = [l for l in pos if l is not drop]
+            base = sum(l["gap"] for l in keep) or 1
+            for l in keep:
+                l["amount"] += moved * l["gap"] / base
+    if 0 < core["amount"] < MIN_ORDER_CZK and any(l["amount"] > 0 for l in stocks):
+        tgt = max(stocks, key=lambda l: l["amount"])
+        tgt["amount"] += core["amount"]
+        core["amount"] = 0.0
+    need_q = [l["ticker"] for l in lines if l["amount"] > 0 and not l.get("price")]
+    q = _quotes(need_q) if need_q else {}
+    out = []
+    for l in sorted(lines, key=lambda l: (-l["amount"], l["vm_rank"])):
+        if l["amount"] <= 0:
+            continue
+        qt = q.get(l["ticker"]) or {}
+        price = l.get("price") or qt.get("price")
+        cur = l.get("currency") or qt.get("currency")
+        if qt.get("name") and l["name"] == l["ticker"]:
+            l["name"] = qt["name"]
+        fx = _fx_czk(cur) if (price and cur) else None
+        px_czk = price * fx if (price and fx) else None
+        now_pct = l["cur"] / total * 100 if total else 0
+        if l["action"] == "core":
+            why = (f"Indexové jádro (S&P 500): cíl {plan['core_pct']} % portfolia, teď {_pc(now_pct, 0)} %."
+                   if core_rows else
+                   f"Základ portfolia: 500 největších firem USA v jednom ETF, cíl {plan['core_pct']} %. "
+                   "Irská UCITS verze – z ČR koupitelná, dividendy reinvestuje sama.")
+        elif l["action"] == "topup":
+            why = (f"Držíš a pořád je v plánu (#{l['vm_rank']} v S&P 500 podle hodnoty+momenta). "
+                   f"Má {_pc(now_pct)} %, cíl {_pc(per_slot / V * 100)} % – dokoupení ji vrací k cíli.")
+        else:
+            facts = ([f"P/E {_pc(l['pe'], 0)}"] if l.get("pe") else []) + \
+                    ([f"za rok {'+' if l['mom_pct'] >= 0 else ''}{_pc(l['mom_pct'], 0)} %"] if l.get("mom_pct") is not None else [])
+            why = (f"Nový titul do volného místa: #{l['vm_rank']} v S&P 500 podle hodnoty+momenta"
+                   + (f" ({_sector_cz(l['sector'])})" if l.get("sector") else "")
+                   + (" · " + " · ".join(facts) if facts else "") + ".")
+        out.append({"ticker": l["ticker"], "name": l.get("name"), "action": l["action"],
+                    "amount_czk": int(round(l["amount"])),
+                    "shares": round(l["amount"] / px_czk, 4) if px_czk else None,
+                    "price": round(price, 2) if price else None, "currency": cur, "why": why,
+                    "sector": l.get("sector"), "vm_rank": l["vm_rank"] or None})
+    diff = int(round(amount)) - sum(o["amount_czk"] for o in out)
+    if out and diff:
+        out[0]["amount_czk"] += diff
+    deferred = [{"ticker": l["ticker"], "name": l.get("name"), "action": l["action"], "vm_rank": l["vm_rank"]}
+                for l in stocks if l.get("deferred")]
+    stock_now = sum(r["value_czk"] for r in rows if r.get("status") != "core")
+    return {"amount_czk": int(round(amount)), "lines": out, "deferred": deferred, "min_order": MIN_ORDER_CZK,
+            "stocks_full": per_slot <= 0, "stocks_now_pct": round(stock_now / total * 100, 1) if total else 0,
+            "legacy_pct": round(legacy / total * 100, 1) if total else 0,
+            "split": {"core": sum(o["amount_czk"] for o in out if o["action"] == "core"),
+                      "topup": sum(o["amount_czk"] for o in out if o["action"] == "topup"),
+                      "new": sum(o["amount_czk"] for o in out if o["action"] == "new")}}
+
+
+def _xray(rows, total, scan):
+    """Rentgen: co skutečně držíš včetně obsahu ETF. Váhy S&P 500 z tržních
+    kapitalizací posledního skenu (SEC počty akcií × cena), celosvětový ETF ≈
+    63 % USA. Přibližné, ale ukáže skrytou koncentraci (např. Apple napřímo i v ETF)."""
+    if not total:
+        return None
+    _r, _v, smap, names, mcap = _scan_maps(scan)
+    names = dict(names)
+    # Dvě třídy akcií jedné firmy mají v SEC stejný počet akcií (celá firma) –
+    # druhou třídu vynechat, jinak by se Alphabet & spol. započítaly dvakrát.
+    mcap = {t: v for t, v in mcap.items() if t not in DUAL_CLASS_SECONDARY}
+    tot_mcap = sum(v for v in mcap.values() if v) or 1
+    sp_val = sum(r["value_czk"] for r in rows if CORE_ETFS.get(r["ticker"]) == "sp500")
+    w_val = sum(r["value_czk"] for r in rows if CORE_ETFS.get(r["ticker"]) == "world")
+    via_etf = sp_val + w_val * WORLD_US_SHARE
+    eff, sect = {}, {}
+    for t, mc in mcap.items():
+        if not mc:
+            continue
+        v = via_etf * mc / tot_mcap
+        eff[t] = eff.get(t, 0) + v
+        sect[smap.get(t) or "?"] = sect.get(smap.get(t) or "?", 0) + v
+    for r in rows:
+        if r["kind"] == "core":
+            continue
+        k = _spx_key(r["ticker"])
+        eff[k] = eff.get(k, 0) + r["value_czk"]
+        s = r.get("sector") or "Ostatní"
+        sect[s] = sect.get(s, 0) + r["value_czk"]
+        names.setdefault(k, r["name"])
+    non_us = w_val * (1 - WORLD_US_SHARE)
+    if non_us:
+        sect["Mimo USA (přes celosvětový ETF)"] = non_us
+    # GOOG + GOOGL je jedna firma
+    if "GOOG" in eff and "GOOGL" in eff:
+        eff["GOOGL"] += eff.pop("GOOG")
+    top = sorted(eff.items(), key=lambda x: -x[1])[:10]
+    us = via_etf + sum(r["value_czk"] for r in rows if r["kind"] == "stock")
+    sectors = [{"sector": _sector_cz(s), "pct": round(v / total * 100, 1)}
+               for s, v in sorted(sect.items(), key=lambda x: -x[1]) if v / total >= 0.005]
+    warnings = []
+    for t, v in top[:3]:
+        pct = v / total * 100
+        if pct >= 10:
+            direct = next((r["value_czk"] for r in rows if _spx_key(r["ticker"]) == t), 0)
+            hidden = v - direct
+            warnings.append(f"{names.get(t) or t} tvoří ve skutečnosti {pct:.0f} % portfolia"
+                            + (f" (z toho {hidden / total * 100:.0f} % skrytě přes ETF)" if direct and hidden / total >= 0.01 else "")
+                            + ". Jeden špatný rok této firmy by bolel celé portfolio.")
+    for x in sectors[:2]:
+        if x["pct"] >= 35 and x["sector"] not in ("Ostatní", "?"):
+            warnings.append(f"Sektor {x['sector']} je {x['pct']:.0f} % portfolia (v S&P 500 bývá největší "
+                            "sektor kolem 30 %). Nové vklady ho postupně ředí.")
+    return {
+        "top": [{"ticker": t, "name": names.get(t) or t, "value_czk": round(v),
+                 "pct": round(v / total * 100, 2), "direct": any(_spx_key(r["ticker"]) == t for r in rows)}
+                for t, v in top],
+        "sectors": sectors, "warnings": warnings,
+        "us_pct": round(us / total * 100, 1),
+        "approx": bool(w_val),
+    }
+
+
+@app.route("/api/holdings", methods=["GET", "POST"])
+def api_holdings():
+    """Uložené pozice přihlášeného uživatele (samostatný klíč – ukládání
+    watchlistu je nemůže přepsat)."""
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    try:
+        if request.method == "POST":
+            hs = _clean_holdings((request.get_json(silent=True) or {}).get("holdings"))
+            kv_set_json(f"holdings:{user}", {"updated": int(time.time()), "holdings": hs})
+            return jsonify({"ok": True, "count": len(hs)})
+        rec = kv_get_json(f"holdings:{user}") or {}
+        return jsonify({"ok": True, "holdings": rec.get("holdings") or [], "updated": rec.get("updated")})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/plan", methods=["POST"])
+def api_plan():
+    """Celý dlouhodobý plán z pozic: ocenění, cíl, stavy pozic, rentgen a
+    (když je zadaná částka) rozdělení vkladu. Bezstavové – pozice v těle."""
+    if not _rate_ok("plan", 60, 60):
+        return jsonify({"ok": False, "error": "Moc požadavků, zkus to za chvíli."}), 429
+    body = request.get_json(silent=True) or {}
+    holdings = body.get("holdings")
+    user = _auth_user()
+    if holdings is None and user:
+        holdings = (kv_get_json(f"holdings:{user}") or {}).get("holdings") or []
+    risk = _risk(body.get("risk") or (_user_risk(user) if user else None))
+    try:
+        rows, total, missing, scan = _value_holdings(holdings or [])
+        plan = _build_plan(rows, risk, scan)
+        out = {"ok": True, "rows": rows, "total_czk": round(total), "missing": missing, "plan": plan,
+               "xray": _xray(rows, total, scan), "scan_date": scan.get("date")}
+        amount = _num(body.get("amount_czk"))
+        if amount and 0 < amount < 1e10:
+            out["deposit"] = _allocate(amount, rows, total, plan)
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# IMPORT POZIC Z FOTKY (Trading 212 screenshot). Obrázek přečte vizuální AI
+# model, tickery se pak ověří proti burze: pro každého kandidáta se spočítá
+# počet × cena × kurz a vybere se ten, který sedí na hodnotu ze screenshotu
+# (rozliší třeba CSPX v Londýně v USD od SXR8 na Xetře v EUR). Fotka se
+# nikam neukládá. Model: env VISION_MODEL (jinak výchozí podle poskytovatele).
+# ---------------------------------------------------------------------------
+VISION_MODELS = {"groq": ["meta-llama/llama-4-scout-17b-16e-instruct",
+                          "meta-llama/llama-4-maverick-17b-128e-instruct"],
+                 "openai": ["gpt-4o-mini"]}
+IMPORT_PROMPT = """Na obrázku je přehled investičního portfolia (nejčastěji aplikace Trading 212, může být česky nebo anglicky).
+Vypiš KAŽDOU pozici, která je na obrázku vidět. Nic si nedomýšlej – co nevidíš, dej null.
+Pro každou pozici:
+- "name": název tak, jak je napsaný (např. "Apple", "iShares Core S&P 500 (Acc)")
+- "ticker": symbol, pokud je vidět (např. "AAPL", "CSPX", "SXR8"), jinak null
+- "quantity": počet kusů/akcií jako číslo (zlomky jsou běžné, např. 12.3456), jinak null
+- "value": aktuální hodnota pozice jako číslo, jinak null
+- "currency": měna hodnoty ("CZK", "EUR", "USD", "GBP"), jinak null
+- "avg_price": průměrná nákupní cena, pokud je vidět, jinak null
+Čísla piš bez mezer a jednotek, desetinnou tečkou. Nezahrnuj celkový součet účtu, hotovost ani zisk/ztrátu jako pozici.
+Odpověz JEN JSON: {"positions": [...], "account_currency": "CZK"}"""
+ETF_SUFFIXES = (".DE", ".L", ".AS", ".MI", ".PA", ".SW")
+
+
+def call_vision(image_data_url, prompt=IMPORT_PROMPT):
+    """Vrací (dict | None, chyba). Zkusí modely poskytovatele po řadě."""
+    prov = (os.environ.get("VISION_PROVIDER") or _llm_creds()[0]).lower()
+    key = os.environ.get("VISION_API_KEY") or _llm_creds()[1]
+    if not key:
+        return None, "Chybí API klíč pro AI (ANALYSIS_API_KEY)."
+    url = ("https://api.openai.com/v1/chat/completions" if prov == "openai"
+           else "https://api.groq.com/openai/v1/chat/completions")
+    models = ([os.environ["VISION_MODEL"]] if os.environ.get("VISION_MODEL")
+              else VISION_MODELS.get(prov, VISION_MODELS["groq"]))
+    err = None
+    for model in models:
+        payload = {"model": model, "temperature": 0, "response_format": {"type": "json_object"},
+                   "messages": [{"role": "user", "content": [
+                       {"type": "text", "text": prompt},
+                       {"type": "image_url", "image_url": {"url": image_data_url}}]}]}
+        try:
+            r = requests.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                              data=json.dumps(payload), timeout=25)
+            if r.status_code != 200:
+                err = f"{model}: HTTP {r.status_code} {r.text[:160]}"
+                continue
+            content = (((r.json() or {}).get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+            m = re.search(r"\{.*\}", content, re.S)
+            return json.loads(m.group(0) if m else content), None
+        except Exception as e:
+            err = f"{model}: {e}"
+    return None, err
+
+
+def _yahoo_search(q, n=8):
+    try:
+        r = requests.get(f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(q)}"
+                         f"&quotesCount={n}&newsCount=0&listsCount=0", headers=HEADERS, timeout=8)
+        return [{"ticker": x["symbol"], "name": x.get("shortname") or x.get("longname") or x["symbol"],
+                 "exchange": x.get("exchDisp") or x.get("exchange") or "", "type": x.get("quoteType") or "",
+                 "us": x.get("exchange") in US_EXCHANGES}
+                for x in (r.json().get("quotes") or [])
+                if x.get("symbol") and x.get("quoteType") in ("EQUITY", "ETF", "MUTUALFUND")]
+    except Exception:
+        return []
+
+
+def _resolve_position(p):
+    """Jedna pozice z AI → ověřený ticker + počet kusů. Vrací dict pro kontrolu."""
+    name = (str(p.get("name") or "")).strip()[:80]
+    raw_t = re.sub(r"[^A-Za-z0-9.\-]", "", str(p.get("ticker") or "")).upper()[:12]
+    qty, value = _num(p.get("quantity")), _num(p.get("value"))
+    vcur = (p.get("currency") or "CZK").upper()
+    if vcur not in FX_SYMBOLS and vcur != "CZK":
+        vcur = "CZK"
+    value_czk = value * _fx_czk(vcur) if (value and _fx_czk(vcur)) else None
+    cands, seen = [], set()
+
+    def add(ticker, name="", exchange="", type="", us=False):
+        t = (ticker or "").upper()
+        if t and t not in seen and len(cands) < 10:
+            seen.add(t)
+            cands.append({"ticker": t, "name": name, "exchange": exchange, "type": type, "us": us})
+    if raw_t:
+        for x in _yahoo_search(raw_t):
+            if x["ticker"].split(".")[0] == raw_t.split(".")[0]:
+                add(**x)
+        add(raw_t)
+        if "." not in raw_t:
+            for suf in ETF_SUFFIXES[:3]:
+                add(raw_t + suf)
+    if name and len(cands) < 6:
+        for x in _yahoo_search(name, 6)[:5]:
+            add(**x)
+    q = _quotes([c["ticker"] for c in cands])
+    scored = []
+    for c in cands:
+        qt = q.get(c["ticker"])
+        if not qt or not qt.get("price"):
+            continue
+        fx = _fx_czk(qt["currency"])
+        if not fx:
+            continue
+        px_czk = qt["price"] * fx
+        c.update(price=round(qt["price"], 4), currency=qt["currency"], name=c["name"] or qt["name"],
+                 px_czk=px_czk, type=c["type"] or qt.get("type") or "")
+        if qty and value_czk:
+            c["err"] = abs(qty * px_czk - value_czk) / value_czk
+        scored.append(c)
+    if not scored:
+        return {"name": name or raw_t, "raw_ticker": raw_t, "ticker": None, "qty": qty,
+                "value_czk": round(value_czk) if value_czk else None, "status": "unresolved", "candidates": []}
+    base = raw_t.split(".")[0] if raw_t else ""
+
+    def pref(c):
+        # Tatáž akcie na víc burzách má v Kč skoro stejnou hodnotu → vezmi
+        # „domovskou" kótaci: US (model zná S&P 500 pod US tickerem), přesný
+        # ticker ze screenshotu, Xetra/Londýn, a až pak regionální burzy.
+        t = c["ticker"]
+        return (0 if (c["us"] and c["type"] == "EQUITY") else 1,
+                0 if (base and t.split(".")[0] == base) else 1,
+                0 if t in CORE_ETFS else 1,
+                0 if ("." not in t or t.endswith((".DE", ".L"))) else 1)
+    if qty and value_czk:
+        top_err = min(c["err"] for c in scored)
+        best = min([c for c in scored if c["err"] <= top_err + 0.03], key=pref)
+        status = "ok" if best["err"] <= 0.15 else "check"
+    else:
+        exact = [c for c in scored if c["ticker"].split(".")[0] == base] if base else []
+        best = min(exact or scored, key=pref)
+        status = "ok" if exact else "check"
+    if not qty and value_czk and best.get("px_czk"):
+        qty = round(value_czk / best["px_czk"], 6)
+        derived = True
+    else:
+        derived = False
+    return {
+        "name": name or best["name"], "raw_ticker": raw_t or None, "ticker": best["ticker"],
+        "qty": qty, "qty_derived": derived, "value_czk": round(value_czk) if value_czk else None,
+        "implied_czk": round(qty * best["px_czk"]) if qty else None, "status": status if qty else "check",
+        "avg_price": _num(p.get("avg_price")),
+        "candidates": [{"ticker": c["ticker"], "name": c["name"], "exchange": c["exchange"],
+                        "price": c["price"], "currency": c["currency"],
+                        "implied_czk": round(qty * c["px_czk"]) if qty else None}
+                       for c in sorted(scored, key=lambda c: (c is not best, c.get("err", 9)))[:5]],
+    }
+
+
+@app.route("/api/holdings/import", methods=["POST"])
+def api_holdings_import():
+    """Jeden screenshot (data URL, klient ho zmenší) → pozice ke kontrole.
+    Klient posílá každou fotku zvlášť a výsledky slučuje (překryv při
+    scrollování řeší deduplikace podle tickeru)."""
+    if not _rate_ok("import", 30, 3600):
+        return jsonify({"ok": False, "error": "Moc importů za hodinu, zkus to později."}), 429
+    img = (request.get_json(silent=True) or {}).get("image") or ""
+    if not re.match(r"^data:image/(jpeg|png|webp);base64,", img) or len(img) > 4_000_000:
+        return jsonify({"ok": False, "error": "Pošli obrázek JPG/PNG (max ~3 MB)."}), 400
+    data, err = call_vision(img)
+    if data is None:
+        return jsonify({"ok": False, "error": "Fotku se nepodařilo přečíst.", "detail": err}), 502
+    raw = [p for p in (data.get("positions") or []) if isinstance(p, dict)][:60]
+    from concurrent.futures import ThreadPoolExecutor
+    def safe(p):
+        try:
+            return _resolve_position(p)
+        except Exception:
+            return {"name": str(p.get("name") or p.get("ticker") or "?")[:80], "ticker": None,
+                    "qty": _num(p.get("quantity")), "status": "unresolved", "candidates": []}
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        res = list(ex.map(safe, raw))
+    return jsonify({"ok": True, "positions": res, "read": len(raw),
+                    "account_currency": data.get("account_currency")})
+
+
+@app.route("/api/holdings/resolve")
+def api_holdings_resolve():
+    """Ruční oprava v kontrole importu: ticker/název → kandidáti s cenou."""
+    q = (request.args.get("q") or "").strip()[:60]
+    if not q:
+        return jsonify({"ok": True, "candidates": []})
+    res = _resolve_position({"ticker": q if re.match(r"^[A-Za-z0-9.\-]{1,12}$", q) else None, "name": q,
+                             "quantity": request.args.get("qty"), "value": request.args.get("value"),
+                             "currency": "CZK"})
+    return jsonify({"ok": True, **res})
+
+
+# ---------------------------------------------------------------------------
+# STRES TEST V KČ a CESTA K CÍLI
+# ---------------------------------------------------------------------------
+STRESS_SCENARIOS = [
+    {"id": "gfc", "label": "Finanční krize 2008", "start": "2007-10-09", "end": "2009-03-09"},
+    {"id": "covid", "label": "Covid krach 2020", "start": "2020-02-19", "end": "2020-03-23"},
+    {"id": "bear22", "label": "Inflace a sazby 2022", "start": "2022-01-03", "end": "2022-10-12"},
+    {"id": "tariff25", "label": "Clový šok 2025", "start": "2025-02-19", "end": "2025-04-08"},
+]
+STRESS_PROXY = "^GSPC"
+
+
+def _weekly(ticker):
+    """{date_iso: close} týdně za 20 let (kešováno den)."""
+    key = f"wk:{ticker}"
+    try:
+        c = kv_get_json(key)
+        if c and time.time() - c.get("ts", 0) < 86400:
+            return c["px"]
+    except Exception:
+        pass
+    try:
+        d = yahoo_chart(ticker, "20y", "1wk")
+        cl = ((d.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+        px = {datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d"): c
+              for t, c in zip(d.get("timestamp") or [], cl) if c}
+        try:
+            kv_set_json(key, {"ts": time.time(), "px": px})
+        except Exception:
+            pass
+        return px
+    except Exception:
+        return {}
+
+
+def _px_at(px, day, before=True):
+    """Cena nejblíž danému dni (týdenní svíčky): poslední ≤ den, jinak první ≥ den."""
+    ds = sorted(px)
+    if not ds or day < ds[0]:
+        return None
+    best = None
+    for d in ds:
+        if d <= day:
+            best = d
+        else:
+            if best is None or not before:
+                best = d
+            break
+    return px.get(best) if best else None
+
+
+def _stress(rows):
+    """Kolik by TVOJE dnešní portfolio ztratilo v Kč v minulých krizích.
+    Pozice bez historie (např. novější ETF nebo firma) se počítají přes
+    S&P 500 a jsou označené. Kurz koruny je započítaný – v krizích dolar
+    obvykle posílí, což českému investorovi část ztráty vrátí."""
+    tickers = sorted({r["ticker"] for r in rows} | {STRESS_PROXY, "CZK=X", "EURCZK=X", "GBPCZK=X"})
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        hist = dict(zip(tickers, ex.map(_weekly, tickers)))
+    fxsym = {"USD": "CZK=X", "EUR": "EURCZK=X", "GBP": "GBPCZK=X", "GBp": "GBPCZK=X", "GBX": "GBPCZK=X"}
+    total = sum(r["value_czk"] for r in rows)
+    out = []
+    spx = hist.get(STRESS_PROXY) or {}
+    for sc in STRESS_SCENARIOS:
+        a, b = sc["start"], sc["end"]
+        p0, p1 = _px_at(spx, a), _px_at(spx, b)
+        spx_ret = (p1 / p0 - 1) if (p0 and p1) else None
+        usd = hist.get("CZK=X") or {}
+        u0, u1 = _px_at(usd, a), _px_at(usd, b)
+        usd_ret = (u1 / u0 - 1) if (u0 and u1) else 0.0
+        loss, proxied, worst = 0.0, [], []
+        for r in rows:
+            h = hist.get(r["ticker"]) or {}
+            q0, q1 = _px_at(h, a), _px_at(h, b)
+            if q0 and q1 and min(h) <= a:
+                ret, cur = q1 / q0 - 1, r["currency"]
+            else:                                   # bez historie → S&P 500 v USD
+                ret, cur = (spx_ret if spx_ret is not None else 0.0), "USD"
+                proxied.append(r["ticker"])
+            fs = fxsym.get(cur)
+            if fs:
+                fh = hist.get(fs) or {}
+                f0, f1 = _px_at(fh, a), _px_at(fh, b)
+                fx_ret = (f1 / f0 - 1) if (f0 and f1) else (usd_ret if fs == "CZK=X" else 0.0)
+            else:
+                fx_ret = 0.0
+            r_czk = (1 + ret) * (1 + fx_ret) - 1
+            loss += r["value_czk"] * r_czk
+            worst.append((r["ticker"], r_czk))
+        # zotavení S&P 500: kdy index znovu překonal vrchol před krizí
+        rec = None
+        if p0:
+            for d in sorted(spx):
+                if d > b and spx[d] >= p0:
+                    rec = d
+                    break
+        months = None
+        if rec:
+            y0, m0 = int(b[:4]), int(b[5:7])
+            y1, m1 = int(rec[:4]), int(rec[5:7])
+            months = (y1 - y0) * 12 + (m1 - m0)
+        worst.sort(key=lambda x: x[1])
+        out.append({**sc, "loss_czk": round(loss), "loss_pct": round(loss / total * 100, 1) if total else None,
+                    "spx_pct": round(spx_ret * 100, 1) if spx_ret is not None else None,
+                    "usd_czk_pct": round(usd_ret * 100, 1), "recovery_months": months,
+                    "proxied": proxied, "proxied_pct": round(sum(r["value_czk"] for r in rows if r["ticker"] in proxied)
+                                                             / total * 100) if total else 0,
+                    "worst": [{"ticker": t, "pct": round(x * 100, 1)} for t, x in worst[:3]]})
+    return out
+
+
+@app.route("/api/plan/stress", methods=["POST"])
+def api_plan_stress():
+    if not _rate_ok("stress", 20, 60):
+        return jsonify({"ok": False, "error": "Moc požadavků, zkus to za chvíli."}), 429
+    body = request.get_json(silent=True) or {}
+    holdings = body.get("holdings")
+    user = _auth_user()
+    if holdings is None and user:
+        holdings = (kv_get_json(f"holdings:{user}") or {}).get("holdings") or []
+    try:
+        hs = _clean_holdings(holdings or [])
+        q = _quotes([h["ticker"] for h in hs])
+        rows = []
+        for h in hs:
+            qt = q.get(h["ticker"])
+            fx = _fx_czk(qt["currency"]) if qt else None
+            if qt and qt.get("price") and fx:
+                rows.append({"ticker": h["ticker"], "currency": qt["currency"],
+                             "value_czk": h["qty"] * qt["price"] * fx})
+        if not rows:
+            return jsonify({"ok": True, "scenarios": [], "total_czk": 0})
+        return jsonify({"ok": True, "scenarios": _stress(rows),
+                        "total_czk": round(sum(r["value_czk"] for r in rows))})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def _sp500tr_monthly():
+    """Měsíční výnosy S&P 500 vč. dividend od 1988 (kešováno týden)."""
+    try:
+        c = kv_get_json("hist:sp500tr")
+        if c and time.time() - c.get("ts", 0) < 7 * 86400 and len(c.get("r") or []) > 300:
+            return c["r"]
+    except Exception:
+        pass
+    d = yahoo_chart("^SP500TR", "40y", "1mo")
+    cl = [c for c in (((d.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []) if c]
+    rets = [cl[i] / cl[i - 1] - 1 for i in range(1, len(cl))]
+    try:
+        kv_set_json("hist:sp500tr", {"ts": time.time(), "r": [round(x, 6) for x in rets]})
+    except Exception:
+        pass
+    return rets
+
+
+def _goal_sim(start, monthly, years, goal, n=3000, block=12, cost=0.002):
+    """Cesta k cíli: blokový bootstrap měsíčních výnosů S&P 500 (12měsíční
+    bloky drží krize pohromadě). Záměrně BEZ předpokladu, že model trh porazí.
+    Konečná hodnota je lineární ve vkladu (V = start·G + měsíčně·A), takže
+    z jedné simulace vyjde i to, kolik měsíčně je potřeba pro 80% šanci."""
+    import random
+    rets = _sp500tr_monthly()
+    M = int(years * 12)
+    rnd = random.Random(f"{start}|{monthly}|{years}|{goal}")
+    fee = cost / 12
+    Gs, As, fans = [], [], [[] for _ in range(int(years) + 1)]
+    L = len(rets)
+    for _ in range(n):
+        G, A = 1.0, 0.0
+        path = []
+        while len(path) < M:
+            i = rnd.randrange(0, L - block)
+            path.extend(rets[i:i + block])
+        for k in range(M):
+            g = (1 + path[k]) * (1 - fee)
+            A = (A + 1.0) * g
+            G *= g
+            if (k + 1) % 12 == 0:
+                fans[(k + 1) // 12].append(start * G + monthly * A)
+        Gs.append(G)
+        As.append(A)
+    finals = sorted(start * G + monthly * A for G, A in zip(Gs, As))
+
+    def pct(arr, p):
+        return arr[min(len(arr) - 1, int(p * len(arr)))]
+    fan = [{"year": 0, "p10": start, "p50": start, "p90": start}]
+    for y in range(1, int(years) + 1):
+        f = sorted(fans[y])
+        fan.append({"year": y, "p10": round(pct(f, .10)), "p50": round(pct(f, .50)), "p90": round(pct(f, .90))})
+    out = {"p10": round(pct(finals, .10)), "p50": round(pct(finals, .50)), "p90": round(pct(finals, .90)),
+           "contributed": round(start + monthly * M), "fan": fan, "paths": n,
+           "history": f"S&P 500 vč. dividend, {L // 12} let historie"}
+    if goal:
+        out["prob"] = round(sum(1 for v in finals if v >= goal) / n * 100)
+        need = sorted(max(0.0, (goal - start * G) / A) for G, A in zip(Gs, As))
+        out["monthly_for_80"] = int(math.ceil(pct(need, .80) / 100) * 100)
+        out["monthly_for_50"] = int(math.ceil(pct(need, .50) / 100) * 100)
+    # 2,5% inflace: hodnota v dnešních penězích
+    out["p50_real"] = round(out["p50"] / (1.025 ** years))
+    return out
+
+
+@app.route("/api/plan/goal", methods=["POST"])
+def api_plan_goal():
+    if not _rate_ok("goal", 30, 60):
+        return jsonify({"ok": False, "error": "Moc požadavků, zkus to za chvíli."}), 429
+    b = request.get_json(silent=True) or {}
+    start = max(0.0, _num(b.get("start_czk")) or 0.0)
+    monthly = max(0.0, _num(b.get("monthly_czk")) or 0.0)
+    years = int(min(40, max(1, _num(b.get("years")) or 10)))
+    goal = _num(b.get("goal_czk"))
+    if start + monthly <= 0:
+        return jsonify({"ok": False, "error": "Zadej hodnotu portfolia nebo měsíční vklad."}), 400
+    try:
+        return jsonify({"ok": True, "years": years, **_goal_sim(start, monthly, years, goal if goal and goal > 0 else None)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/signals")
@@ -5753,6 +6808,54 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
                         "Není to investiční doporučení.</p>")
 
 
+def _plan_email_html(email):
+    """Sekce „Tvůj investiční plán" do sobotního e-mailu: hodnota v Kč a změna
+    za týden, úkoly (ořez/úklid bez daně) a první víkend v měsíci připomínka
+    pravidelného vkladu. Bez uložených pozic prázdné."""
+    lots = (kv_get_json(f"holdings:{email}") or {}).get("holdings") or []
+    if not lots:
+        return ""
+    rows, total, _missing, scan = _value_holdings(lots)
+    if not total:
+        return ""
+    plan = _build_plan(rows, _user_risk(email), scan)
+    # Změna za týden jen z pohybu cen (v Kč) u toho, co držíš – nové vklady
+    # by jinak vypadaly jako výdělek.
+    last = kv_get_json(f"plan:last:{email}") or {}
+    px_now = {r["ticker"]: r["value_czk"] / r["qty"] for r in rows if r["qty"]}
+    try:
+        kv_set_json(f"plan:last:{email}", {"ts": int(time.time()), "px": {t: round(v, 4) for t, v in px_now.items()}})
+    except Exception:
+        pass
+    chg = ""
+    old = last.get("px") or {}
+    if old and time.time() - last.get("ts", 0) < 10 * 86400:
+        both = [r for r in rows if r["ticker"] in old and r["qty"]]
+        base = sum(r["qty"] * old[r["ticker"]] for r in both)
+        if base:
+            d = sum(r["qty"] * (px_now[r["ticker"]] - old[r["ticker"]]) for r in both)
+            col = "#00C853" if d >= 0 else "#FF3D00"
+            chg = (f"<span style='color:{col};font-size:14px;margin-left:8px'>{'+' if d >= 0 else '−'}{_kc(abs(d))}"
+                   f" ({'+' if d >= 0 else '−'}{_pc(abs(d) / base * 100)} %) za týden</span>")
+    core = sum(r["weight"] for r in rows if r.get("status") == "core")
+    html = (f"<h3 style='font-size:16px;margin:18px 0 10px'>🧭 Tvůj investiční plán</h3>"
+            f"<div style='background:#12141c;border:1px solid #23262f;border-radius:12px;padding:14px 16px;margin-bottom:12px'>"
+            f"<div style='font-size:22px;font-weight:700'>{_kc(total)}{chg}</div>"
+            f"<div style='color:#9ba1b0;font-size:13px;margin-top:4px'>Jádro {_pc(core, 0)} % (cíl {plan['core_pct']} %) · "
+            f"akcie v plánu {plan['slots_used']}/{plan['slots']}</div></div>")
+    for a in plan["actions"][:3]:
+        verb = "Oříznout" if a["type"] == "trim" else "Prodat"
+        html += (f"<div style='padding:10px 12px;border-radius:10px;background:rgba(255,179,71,0.1);"
+                 f"border:1px solid rgba(255,179,71,0.3);margin-bottom:8px;font-size:14px;line-height:1.5'>"
+                 f"✂️ <b>{verb} {a['ticker']} za ≈ {_kc(a['amount_czk'])}</b> – {a['why']}</div>")
+    if not plan["actions"]:
+        html += "<div style='color:#9ba1b0;font-size:14px'>✅ Tento týden nemusíš nic dělat – plán drží.</div>"
+    if datetime.now(timezone.utc).day <= 7:
+        html += (f"<div style='margin-top:12px;font-size:14px;line-height:1.5'>📅 <b>Začátek měsíce – čas na pravidelný vklad.</b> "
+                 f"Otevři appku → Moje portfolio → <i>Kam s penězi</i>, zadej částku a appka řekne, co koupit.</div>")
+    return html
+
+
 def build_weekly_digest_html(email, top_signals=None, top_opps=None):
     """Sobotní shrnutí týdne pro uživatele."""
     pf = kv_get_json(f"portfolio:{email}") or {}
@@ -5840,8 +6943,13 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
            f"padding:12px 26px;font-weight:700;text-decoration:none;border-radius:12px'>"
            f"🚀 Otevřít MY ADVANTAGE</a></div>")
 
+    try:
+        plan_html = _plan_email_html(email)
+    except Exception:
+        plan_html = ""
+
     return _email_shell("Týdenní shrnutí 📊",
-                        intro + perf_html + sig_html + events_html + opp_html + cta +
+                        intro + plan_html + perf_html + sig_html + events_html + opp_html + cta +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>"
                         "Sobotní digest posíláme, pokud jsi ho zapnul v profilu. "
                         "Vypneš ho tam samým přepínačem. Není to investiční doporučení.</p>")
