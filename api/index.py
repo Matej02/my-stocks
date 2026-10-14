@@ -3553,7 +3553,33 @@ LONGTERM = {'rule': {'core': 'S&P 500 UCITS ETF',
                                       'trims_per_year': 2.6,
                                       'sells_per_year': 8.9,
                                       'new_per_year': 14.0,
-                                      'max_weight': 14.0}}},
+                                      'max_weight': 14.0}},
+              'maximum': {'stocks_pct': 100,
+                          'slots': 25,
+                          'train': {'cagr': 18.7,
+                                    'max_dd': -27.9,
+                                    'sharpe': 1.02,
+                                    'holdings': 57,
+                                    'trims_per_year': 1.5,
+                                    'sells_per_year': 6.9,
+                                    'new_per_year': 14.0,
+                                    'max_weight': 18.7},
+                          'holdout': {'cagr': 19.7,
+                                      'max_dd': -9.4,
+                                      'sharpe': 1.41,
+                                      'holdings': 55,
+                                      'trims_per_year': 0.0,
+                                      'sells_per_year': 5.3,
+                                      'new_per_year': 20.0,
+                                      'max_weight': 10.8},
+                          'full': {'cagr': 25.8,
+                                   'max_dd': -27.9,
+                                   'sharpe': 1.3,
+                                   'holdings': 60,
+                                   'trims_per_year': 2.2,
+                                   'sells_per_year': 9.0,
+                                   'new_per_year': 14.1,
+                                   'max_weight': 18.7}}},
  'benchmark': {'train': {'cagr': 11.3, 'max_dd': -23.9, 'sharpe': 0.75},
                'holdout': {'cagr': 20.4, 'max_dd': -8.3, 'sharpe': 1.58},
                'full': {'cagr': 14.1, 'max_dd': -23.9, 'sharpe': 0.97}},
@@ -3574,7 +3600,15 @@ LONGTERM = {'rule': {'core': 'S&P 500 UCITS ETF',
                                                        'holdout': 18.5,
                                                        'full': 14.9}}}}
 
-LT_PROFILES = {"conservative": (0.20, 10), "balanced": (0.40, 20), "aggressive": (0.70, 25)}
+LT_PROFILES = {"conservative": (0.20, 10), "balanced": (0.40, 20), "aggressive": (0.70, 25),
+               # Maximum = 100 % akcie bez indexového jádra. Celé 2015-26 +25,8 %, ale v holdoutu
+               # 2023-26 jen ≈ index (+19,7 vs +20,4) a velký rozdíl proti indexu oběma směry.
+               "maximum": (1.00, 25)}
+
+
+def _lt_risk(r):
+    """Profil dlouhodobého plánu (má navíc „maximum"; krátkodobé signály ho nemají)."""
+    return r if r in LT_PROFILES else _risk(r)
 LT_BUFFER = 3
 LT_TRIM_X = 3                # po 36 m oříznout pozici nad 3× cílové váhy
 LT_CLEANUP_X = 0.5           # po 36 m prodat titul mimo plán menší než ½ cíle
@@ -3793,7 +3827,8 @@ def _value_holdings(holdings):
 def _build_plan(rows, risk, scan):
     """Cílové portfolio podle ověřených pravidel (sloty, limit sektoru, vítěze
     nechat běžet). Každé pozici doplní stav a případnou akci (ořez/prodej)."""
-    split, N = LT_PROFILES[_risk(risk)]
+    risk = _lt_risk(risk)
+    split, N = LT_PROFILES[risk]
     ranks, vms, smap, names, _m = _scan_maps(scan)
     by_t = {r["ticker"]: r for r in (scan.get("value") or [])}
     total = sum(r["value_czk"] for r in rows)
@@ -3868,8 +3903,8 @@ def _build_plan(rows, risk, scan):
                                "why": f"Malá pozice mimo plán. Úklid až od {r['tax_free_from']}, kdy je bez daně."}
         if r["action"] and r["action"]["type"] in ("trim", "sell"):
             actions.append({"ticker": r["ticker"], "name": r["name"], **r["action"]})
-    p = LONGTERM["profiles"][_risk(risk)]
-    return {"risk": _risk(risk), "stocks_pct": int(split * 100), "core_pct": int(round((1 - split) * 100)),
+    p = LONGTERM["profiles"][risk]
+    return {"risk": risk, "stocks_pct": int(split * 100), "core_pct": int(round((1 - split) * 100)),
             "slots": N, "slots_used": len(keep), "slot_pct": round(split / N * 100, 2), "new": new,
             "sector_skipped": skipped[:5], "actions": actions,
             "validation": {k: p[k] for k in ("train", "holdout", "full")},
@@ -4061,11 +4096,20 @@ def api_holdings():
         return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
     try:
         if request.method == "POST":
-            hs = _clean_holdings((request.get_json(silent=True) or {}).get("holdings"))
-            kv_set_json(f"holdings:{user}", {"updated": int(time.time()), "holdings": hs})
+            b = request.get_json(silent=True) or {}
+            hs = _clean_holdings(b.get("holdings"))
+            rec = {"updated": int(time.time()), "holdings": hs}
+            if b.get("risk") in LT_PROFILES:
+                rec["risk"] = b["risk"]
+            else:
+                old = (kv_get_json(f"holdings:{user}") or {}).get("risk")
+                if old:
+                    rec["risk"] = old
+            kv_set_json(f"holdings:{user}", rec)
             return jsonify({"ok": True, "count": len(hs)})
         rec = kv_get_json(f"holdings:{user}") or {}
-        return jsonify({"ok": True, "holdings": rec.get("holdings") or [], "updated": rec.get("updated")})
+        return jsonify({"ok": True, "holdings": rec.get("holdings") or [], "updated": rec.get("updated"),
+                        "risk": rec.get("risk")})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -4081,7 +4125,8 @@ def api_plan():
     user = _auth_user()
     if holdings is None and user:
         holdings = (kv_get_json(f"holdings:{user}") or {}).get("holdings") or []
-    risk = _risk(body.get("risk") or (_user_risk(user) if user else None))
+    saved = (kv_get_json(f"holdings:{user}") or {}).get("risk") if user else None
+    risk = _lt_risk(body.get("risk") or saved or (_user_risk(user) if user else None))
     try:
         rows, total, missing, scan = _value_holdings(holdings or [])
         plan = _build_plan(rows, risk, scan)
@@ -7142,13 +7187,14 @@ def _plan_email_html(email):
     """Sekce „Tvůj investiční plán" do sobotního e-mailu: hodnota v Kč a změna
     za týden, úkoly (ořez/úklid bez daně) a první víkend v měsíci připomínka
     pravidelného vkladu. Bez uložených pozic prázdné."""
-    lots = (kv_get_json(f"holdings:{email}") or {}).get("holdings") or []
+    hrec = kv_get_json(f"holdings:{email}") or {}
+    lots = hrec.get("holdings") or []
     if not lots:
         return ""
     rows, total, _missing, scan = _value_holdings(lots)
     if not total:
         return ""
-    plan = _build_plan(rows, _user_risk(email), scan)
+    plan = _build_plan(rows, hrec.get("risk") or _user_risk(email), scan)
     # Změna za týden jen z pohybu cen (v Kč) u toho, co držíš – nové vklady
     # by jinak vypadaly jako výdělek.
     last = kv_get_json(f"plan:last:{email}") or {}

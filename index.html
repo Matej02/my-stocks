@@ -1676,7 +1676,7 @@ html, body {max-width:100%;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.14·c</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.14·d</div>
 
 <div class="container">
   
@@ -6461,6 +6461,8 @@ let planLots = (() => { try { return JSON.parse(localStorage.getItem('ma_holding
 let planData = null, planLoading = false, planErr = '', planTs = 0;
 let planAmount = (() => { try { return localStorage.getItem('ma_plan_amount') || ''; } catch (e) { return ''; } })();
 let planShowDeposit = false;
+// Profil plánu = profil rizika appky, navíc „maximum" (jen pro dlouhodobý plán)
+let planRisk = (() => { try { return localStorage.getItem('ma_plan_risk') || investorRisk; } catch (e) { return investorRisk; } })();
 let planStress = null, planStressKey = '', planStressLoading = false;
 let planGoal = null, planGoalLoading = false;
 
@@ -6474,6 +6476,7 @@ const MP_RISK = {
     conservative: { label: 'Opatrný', desc: 'Jádro 80 % + 10 akcií po 2 %. Nejklidnější varianta, pořád s akciovým výběrem navíc.' },
     balanced: { label: 'Vyvážený', desc: 'Jádro 60 % + 20 akcií po 2 %. Doporučený střed: výběr akcií má váhu, index drží stabilitu.' },
     aggressive: { label: 'Odvážný', desc: 'Jádro 30 % + 25 akcií po 2,8 %. Nejvíc sázíš na výběr akcií – víc se odlišuješ od indexu, nahoru i dolů.' },
+    maximum: { label: 'Maximum', desc: '100 % akcie: 25 titulů po 4 %, žádné nové peníze do indexu. Historicky nejvyšší výnos (+25,8 % ročně 2015–2026), ale v nezávislém testu 2023–2026 jen na úrovni indexu. Portfolio se od indexu hodně liší – klidně i roky můžeš zaostávat. Jen pro pevné nervy a horizont 10+ let.' },
 };
 const mpKc = v => (v == null || isNaN(v)) ? '–' : Math.round(v).toLocaleString('cs-CZ') + ' Kč';
 const mpKcShort = v => {
@@ -6493,7 +6496,7 @@ function saveLots(sync = true) {
     try { localStorage.setItem('ma_holdings', JSON.stringify(planLots)); } catch (e) {}
     planStress = null; planStressKey = ''; planGoal = null;
     if (sync && authToken) {
-        fetch(`${BACKEND_URL}/api/holdings`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ holdings: planLots }) })
+        fetch(`${BACKEND_URL}/api/holdings`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ holdings: planLots, risk: planRisk }) })
             .catch(() => {});
     }
 }
@@ -6504,6 +6507,7 @@ async function syncLotsFromCloud() {
     try {
         const d = await (await fetch(`${BACKEND_URL}/api/holdings`, { headers: authHeaders() })).json();
         if (!d.ok) return;
+        if (d.risk && MP_RISK[d.risk] && d.risk !== planRisk) { planRisk = d.risk; try { localStorage.setItem('ma_plan_risk', planRisk); } catch (e) {} }
         if ((d.holdings || []).length) {
             planLots = d.holdings; saveLots(false); planData = null;
             if (activeTab === 'portfolio') planOpen();
@@ -6525,7 +6529,17 @@ function planOpen() {
 }
 
 function planOnRisk() {
-    if (planData || planLots.length) planRefresh();
+    planSetRisk(investorRisk, true);
+}
+
+function planSetRisk(r, fromApp) {
+    if (!MP_RISK[r]) return;
+    if (r !== 'maximum' && !fromApp && r !== investorRisk) { setRisk(r); return; }   // setRisk zavolá planOnRisk
+    planRisk = r;
+    try { localStorage.setItem('ma_plan_risk', r); } catch (e) {}
+    if (authToken && planLots.length) saveLots(true);
+    if (r === 'maximum' && !fromApp) showToast('Profil plánu: Maximum (100 % akcie)', 'up', 'ti-flame');
+    if (planData || planLots.length || planShowDeposit) planRefresh();
     else renderPlan();
 }
 
@@ -6533,7 +6547,7 @@ async function planRefresh() {
     planLoading = true; planErr = '';
     renderPlan();
     try {
-        const body = { holdings: planLots, risk: investorRisk };
+        const body = { holdings: planLots, risk: planRisk };
         const amt = parseFloat(String(planAmount).replace(/\s/g, '').replace(',', '.'));
         if (planShowDeposit && amt > 0) body.amount_czk = amt;
         const r = await fetch(`${BACKEND_URL}/api/plan`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
@@ -6568,8 +6582,8 @@ function renderPlan() {
     if (!root) return;
     const d = planData;
     const has = planLots.length > 0;
-    const riskPills = ['conservative', 'balanced', 'aggressive'].map(r =>
-        `<button class="risk-pill ${r === investorRisk ? 'active' : ''}" onclick="setRisk('${r}')">${MP_RISK[r].label}</button>`).join('');
+    const riskPills = ['conservative', 'balanced', 'aggressive', 'maximum'].map(r =>
+        `<button class="risk-pill ${r === planRisk ? 'active' : ''}" onclick="planSetRisk('${r}')">${r === 'maximum' ? '<i class="ti ti-flame"></i> ' : ''}${MP_RISK[r].label}</button>`).join('');
     let html = `<div class="mp-box">
       <div class="mp-head">
         <div>
@@ -6583,7 +6597,7 @@ function renderPlan() {
         </div>
       </div>
       <div class="mp-riskrow"><span class="lbl">Profil</span>${riskPills}</div>
-      <div class="mp-riskdesc">${MP_RISK[investorRisk] ? MP_RISK[investorRisk].desc : ''}</div>`;
+      <div class="mp-riskdesc">${MP_RISK[planRisk] ? MP_RISK[planRisk].desc : ''}</div>`;
 
     if (!has) {
         html += `<div class="mp-empty">
@@ -6662,7 +6676,7 @@ function planDepositHTML(d) {
             ${dep.split.new ? `<span><i class="mp-dot" style="background:#8FB0FF"></i> nové tituly <b>${mpKc(dep.split.new)}</b></span>` : ''}
           </div>`;
         if (dep.stocks_full && d.total_czk) {
-            html += `<div class="mp-note warn"><i class="ti ti-scale"></i><span><b>Akciová část je plná.</b> V jednotlivých akciích mimo plán máš ${mpPct(dep.legacy_pct, 0)} portfolia, profil ${MP_RISK[p.risk].label.toLowerCase()} chce akcie celkem ${p.stocks_pct} %. Proto jde vklad do jádra, dokud se poměr nesrovná.${p.risk !== 'aggressive' ? ' Chceš víc akcií? Přepni profil na Odvážný.' : ''}</span></div>`;
+            html += `<div class="mp-note warn"><i class="ti ti-scale"></i><span><b>Akciová část je plná.</b> V jednotlivých akciích mimo plán máš ${mpPct(dep.legacy_pct, 0)} portfolia, profil ${MP_RISK[p.risk].label.toLowerCase()} chce akcie celkem ${p.stocks_pct} %. Proto jde vklad do jádra, dokud se poměr nesrovná.${p.risk === 'maximum' ? '' : (p.risk === 'aggressive' ? ' Chceš víc akcií? Profil Maximum je 100 % akcie.' : ' Chceš víc akcií? Přepni profil na Odvážný nebo Maximum.')}</span></div>`;
         }
         html += `<div class="mp-lines" style="margin-top:10px">` + dep.lines.map(l => {
             const b = { core: ['core', 'Jádro'], topup: ['topup', 'Dokoupit'], new: ['new', 'Nový titul'] }[l.action] || ['hold', l.action];
