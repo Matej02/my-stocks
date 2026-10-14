@@ -660,6 +660,13 @@ html, body {max-width:100%;}
 .alloc-bar i {display:block; height:100%;}
 .alloc-bar .a {background:var(--accent);}
 .alloc-bar .c {background:rgba(255,255,255,0.18);}
+.alloc-bar .h {background:var(--amber);}
+.tr-prof {grid-column:1/-1; overflow-x:auto;}
+.tr-prof table {width:100%; border-collapse:collapse; font-size:13px;}
+.tr-prof th, .tr-prof td {padding:10px 8px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top;}
+.tr-prof th {color:var(--text2); font-weight:600; font-size:12px;}
+.tr-prof th span, .tr-prof td span {color:var(--text2); font-size:11px; font-weight:400;}
+.tr-prof p {font-size:12px; color:var(--text2); line-height:1.55; margin-top:12px;}
 .alloc-leg {display:flex; flex-wrap:wrap; gap:16px; margin-top:9px; font-size:12px; color:var(--text2);}
 .alloc-leg b {color:var(--text);}
 .alloc-dot {display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:6px;}
@@ -1298,11 +1305,11 @@ html, body {max-width:100%;}
 
     <div class="lp-hero">
       <h1>Vědět, <em>kdy koupit</em> — ne hádat.</h1>
-      <p class="lp-lead">Investiční asistent s ověřeným edge. Verdikt ze <b>6 datových pilířů</b> včetně oficiálních SEC podání — ne pocit. A transparentně ukazujeme i to, co nefunguje.</p>
+      <p class="lp-lead">Investiční asistent ověřený na 11 letech celého S&amp;P 500. Signál nákupu poklesu jen u akcií, které jsou <b>levné a zároveň mají momentum</b> — a poctivě ukazujeme i to, co nefunguje.</p>
       <div class="lp-proof">
-        <div class="c"><div class="v g">~65 %</div><div class="l">trefnost TOP signálu</div></div>
-        <div class="c"><div class="v">+2 %</div><div class="l">expectancy / obchod</div></div>
-        <div class="c"><div class="v">5 let</div><div class="l">backtest vč. 2022</div></div>
+        <div class="c"><div class="v g">~59 %</div><div class="l">trefnost signálu</div></div>
+        <div class="c"><div class="v">+2,1 %</div><div class="l">průměr na obchod</div></div>
+        <div class="c"><div class="v">½</div><div class="l">propad proti indexu (konzervativně)</div></div>
       </div>
       <button class="lp-bigcta" onclick="openProfile()"><i class="ti ti-rocket"></i> Vytvořit účet zdarma</button>
       <div class="lp-trust"><i class="ti ti-shield-check"></i> Obhajitelná čísla místo prázdných slibů · stop-loss u každého obchodu</div>
@@ -1310,27 +1317,28 @@ html, body {max-width:100%;}
 
     <div class="lp-sec">
       <div class="lp-tag">Jak to funguje</div>
-      <h2 class="lp-h2">Jeden verdikt ze šesti nezávislých pilířů</h2>
+      <h2 class="lp-h2">Jeden verdikt ze sedmi pilířů — dva ověřené nesou většinu váhy</h2>
       <div class="lp-grid4">
-        <div class="lp-card"><div class="ic" style="background:var(--accent-soft);color:var(--accent)"><i class="ti ti-chart-line"></i></div><h3>Technika</h3><p>Nákup poklesu v dlouhodobém uptrendu — ne chytání padajícího nože.</p><div class="w">váha 30 %</div></div>
-        <div class="lp-card"><div class="ic" style="background:var(--up-glow);color:var(--up)"><i class="ti ti-businessplan"></i></div><h3>Valuace</h3><p>Je akcie levná, nebo drahá vůči svým ziskům?</p><div class="w">váha 20 %</div></div>
-        <div class="lp-card"><div class="ic" style="background:rgba(79,163,255,0.14);color:#4fa3ff"><i class="ti ti-trending-up"></i></div><h3>Růst &amp; ziskovost</h3><p>Roste firma, má marže a reálně vydělává?</p><div class="w">váha 25 %</div></div>
-        <div class="lp-card"><div class="ic" style="background:var(--amber-soft);color:var(--amber)"><i class="ti ti-users-group"></i></div><h3>Analytici</h3><p>Konsenzus Wall Street a prostor k cílové ceně.</p><div class="w">váha 22 %</div></div>
-        <div class="lp-card"><div class="ic" style="background:rgba(171,71,188,0.14);color:#c58af9"><i class="ti ti-mood-smile"></i></div><h3>Nálada &amp; instituce</h3><p>Sentiment titulků, insider transakce, revize doporučení.</p><div class="w">váha 13 %</div></div>
-        <div class="lp-card"><div class="ic" style="background:rgba(0,230,118,0.10);color:var(--up)"><i class="ti ti-file-certificate"></i></div><h3>Oficiální podání SEC</h3><p>10-K/10-Q, materiální 8-K a insider Form 4 — data z první ruky.</p><div class="w">váha 10 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:var(--accent-soft);color:var(--accent)"><i class="ti ti-chart-line"></i></div><h3>Technika <small style="color:var(--up)">ověřeno</small></h3><p>Nákup poklesu v dlouhodobém uptrendu — ne chytání padajícího nože.</p><div class="w">váha 30 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:var(--up-glow);color:var(--up)"><i class="ti ti-diamond"></i></div><h3>Hodnota &amp; momentum <small style="color:var(--up)">ověřeno</small></h3><p>Levná podle zisků a cash flow a zároveň s ročním momentem — z oficiálních dat SEC.</p><div class="w">váha 25 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:rgba(79,163,255,0.14);color:#4fa3ff"><i class="ti ti-trending-up"></i></div><h3>Růst &amp; ziskovost</h3><p>Roste firma, má marže a reálně vydělává?</p><div class="w">váha 12 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:var(--amber-soft);color:var(--amber)"><i class="ti ti-users-group"></i></div><h3>Analytici</h3><p>Konsenzus Wall Street a prostor k cílové ceně.</p><div class="w">váha 12 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:var(--up-glow);color:var(--up)"><i class="ti ti-businessplan"></i></div><h3>Valuace</h3><p>PEG a P/E vůči vlastní historii a odvětví.</p><div class="w">váha 10 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:rgba(171,71,188,0.14);color:#c58af9"><i class="ti ti-mood-smile"></i></div><h3>Nálada &amp; instituce</h3><p>Sentiment titulků, insider transakce, revize doporučení.</p><div class="w">váha 7 %</div></div>
+        <div class="lp-card"><div class="ic" style="background:rgba(0,230,118,0.10);color:var(--up)"><i class="ti ti-file-certificate"></i></div><h3>Oficiální podání SEC</h3><p>10-K/10-Q, materiální 8-K a insider Form 4 — data z první ruky.</p><div class="w">váha 4 %</div></div>
       </div>
     </div>
 
     <div class="lp-sec">
       <div class="lp-tag">Důkaz, ne sliby</div>
-      <h2 class="lp-h2">Ověřeno na 5 letech dat — včetně propadu 2022</h2>
+      <h2 class="lp-h2">Ověřeno na 11 letech a 633 titulech — včetně těch, co z indexu vypadly</h2>
       <div class="lp-proof">
-        <div class="c"><div class="v g">~65 %</div><div class="l">trefnost TOP signálu</div></div>
-        <div class="c"><div class="v g">+2 %</div><div class="l">expectancy / obchod</div></div>
-        <div class="c"><div class="v">&gt;53 %</div><div class="l">každý rok vč. 2022</div></div>
-        <div class="c"><div class="v">6 417</div><div class="l">testovaných obchodů</div></div>
+        <div class="c"><div class="v g">58,6 %</div><div class="l">trefnost na datech, na kterých se nic neladilo (2023–2026)</div></div>
+        <div class="c"><div class="v g">+15,6 %</div><div class="l">ročně, vyvážený profil (index +13,9 %)</div></div>
+        <div class="c"><div class="v">−18 %</div><div class="l">nejhorší propad konzervativně (index −34 %)</div></div>
+        <div class="c"><div class="v">941</div><div class="l">obchodů modelu v testu</div></div>
       </div>
-      <p class="lp-fine">Bez nahlížení do budoucna. ~40 % obchodů přesto skončí v mínusu — proto u každého počítáme stop-loss. Historická výkonnost nezaručuje budoucí výsledky.</p>
+      <p class="lp-fine">Bez nahlížení do budoucna: historické složení indexu, ceny vč. dividend, fundamenty až po jejich zveřejnění. ~41 % obchodů skončí v mínusu — proto stop-loss u každého. V letech 2023–2026, kdy trh táhlo pár gigantů, model držel krok s indexem, ale neporazil ho. Historická výkonnost nezaručuje budoucí výsledky.</p>
     </div>
 
     <div class="lp-sec">
@@ -1454,7 +1462,7 @@ html, body {max-width:100%;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.09.14·j</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.14·a</div>
 
 <div class="container">
   
@@ -1504,7 +1512,7 @@ html, body {max-width:100%;}
         <p>Investiční asistent, který ti řekne <b>kdy koupit, kdy prodat a kolik</b>. Bez slibů — s čísly.</p>
         <ul class="onb-bul">
           <li><i class="ti ti-check"></i> <b>Top signál dne</b> – jeden konkrétní obchod, ne 50</li>
-          <li><i class="ti ti-check"></i> <b>Backtest 5 let</b> – ~65 % trefnost TOP signálu</li>
+          <li><i class="ti ti-check"></i> <b>Ověřeno na 11 letech S&amp;P 500</b> – ~59 % trefnost signálu</li>
           <li><i class="ti ti-check"></i> <b>Stop-loss u každého obchodu</b> – chráníme tě</li>
         </ul>
       </div>
@@ -1847,17 +1855,17 @@ html, body {max-width:100%;}
     <div class="profile-box" style="max-width:520px;">
       <button class="profile-close" onclick="closeSim()"><i class="ti ti-x"></i></button>
       <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-calculator" style="color:var(--accent)"></i> Kolik to může vydělat?</h2>
-      <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Kolik můžeš mít za rok — <b>sám vs s námi</b> (z historického průměru, ne slib).</div>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:16px;">Celé portfolio podle tvého rizikového profilu <b>vs. prosté držení indexu</b> — z ověřené historie 2015–2026, ne slib.</div>
       <div class="sim-row">
-        <label>Kapitál na 1 obchod</label>
-        <div class="sim-inwrap"><input id="sim-cap" type="number" min="10" value="1000" oninput="runSim()"><span>€</span></div>
+        <label>Kapitál</label>
+        <div class="sim-inwrap"><input id="sim-cap" type="number" min="100" value="100000" oninput="runSim()"><span>€</span></div>
       </div>
       <div class="sim-row">
-        <label>Počet TOP obchodů za rok</label>
-        <div class="sim-inwrap"><input id="sim-trades" type="number" min="1" max="200" value="20" oninput="runSim()"></div>
+        <label>Počet let</label>
+        <div class="sim-inwrap"><input id="sim-trades" type="number" min="1" max="30" value="10" oninput="runSim()"></div>
       </div>
       <div id="sim-out"></div>
-      <p class="method-disc" style="margin-top:14px;">Modelový odhad z minulé úspěšnosti (compounding průměrného výnosu na obchod). <b>Skutečnost se bude lišit</b> — část obchodů skončí v mínusu, výnosy nejsou zaručené a minulost ≠ budoucnost. Slouží jen pro představu, není to investiční doporučení.</p>
+      <p class="method-disc" style="margin-top:14px;">Modelový odhad z ověřené historie celého portfolia. <b>Skutečnost se bude lišit</b> — část obchodů skončí v mínusu, výnosy nejsou zaručené a minulost ≠ budoucnost. Slouží jen pro představu, není to investiční doporučení.</p>
     </div>
   </div>
 
@@ -2006,7 +2014,7 @@ html, body {max-width:100%;}
     <div class="dash-section" id="section-results" style="display:none;">
       <div class="ov-hero">
         <h1>Naše <em>výsledky</em> — bez příkras.</h1>
-        <div class="sub">5letý backtest verifikuje signál včetně medvědího 2022. Live track-record sleduje verdikty, které appka aktuálně vydala. Nic neretušujeme.</div>
+        <div class="sub">11 let celého S&amp;P 500 včetně titulů, které z indexu vypadly, a ověření na letech 2023–2026, na kterých se nic neladilo. Pod tím živý záznam modelu: každý denní signál se zapíše a vyhodnotí automaticky. Nic neretušujeme — ani roky, kdy model index neporazil.</div>
       </div>
 
       <!-- HLAVNÍ STATISTIKY -->
@@ -2016,17 +2024,17 @@ html, body {max-width:100%;}
 
       <!-- ROČNÍ ROZPAD -->
       <div class="ov-card" style="margin-top:18px;">
-        <h3><i class="ti ti-calendar-stats"></i> Roční rozpad — drží signál i v medvědích letech?</h3>
+        <h3><i class="ti ti-calendar-stats"></i> Celé portfolio podle profilu vs. index</h3>
         <div class="tr-year-grid" id="tr-year-grid">
           <div class="ov-load"><i class="ti ti-loader spin"></i> Načítám…</div>
         </div>
-        <div class="tr-fine">Každý sloupec = trefnost našeho TOP signálu v daném roce. Cíl: >50 % i v propadovém 2022. <a onclick="openMethod()" style="color:var(--accent); cursor:pointer">Jak hodnotíme?</a></div>
+        <div class="tr-fine">Max 5 pozic, max 2 na sektor, zbytek kapitálu v indexu, náklady 0,1 % za obchod. Sharpe = výnos na jednotku rizika (vyšší je lepší). <a onclick="openMethod()" style="color:var(--accent); cursor:pointer">Jak hodnotíme?</a></div>
       </div>
 
       <!-- LIVE TRACK RECORD -->
       <div class="ov-card" style="margin-top:18px;">
         <h3 style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <span><i class="ti ti-history"></i> Live track-record — verdikty, které appka aktuálně vydala</span>
+          <span><i class="ti ti-history"></i> Živý záznam modelu — každý denní signál automaticky</span>
           <span class="tr-live-meta" id="tr-live-meta"></span>
         </h3>
         <div id="tr-live-list">
@@ -2101,8 +2109,8 @@ html, body {max-width:100%;}
     <div class="opp-box" id="opp-box">
       <div class="opp-head">
         <div class="opp-title">
-          <i class="ti ti-target-arrow"></i> Příležitosti s potenciálem
-          <span class="opp-sub">Náš model hledá akcie s největším <b>prostorem vyrůst</b> — ne to, co už vystřelilo. U top titulů přidáme krátké zdůvodnění, proč.</span>
+          <i class="ti ti-target-arrow"></i> Podhodnocené s momentem
+          <span class="opp-sub">Akcie S&amp;P 500, které jsou <b>levné podle zisků a cash flow</b> a zároveň mají <b>roční momentum</b>. Samotná „levnost" ani samotný růst nefungovaly stabilně — jejich kombinace v testu 2015–2026 ano. Kupovat v nákupní zóně, ne naslepo.</span>
         </div>
         <div class="opp-actions">
           <span class="opp-updated" id="opp-updated"></span>
@@ -2110,10 +2118,7 @@ html, body {max-width:100%;}
         </div>
       </div>
       <div class="opp-filters" id="opp-filters">
-        <button class="opp-chip active" data-mode="all" onclick="setOppMode('all', this)">🌐 Vše</button>
-        <button class="opp-chip" data-mode="value" onclick="setOppMode('value', this)">💎 Podhodnocené</button>
-        <button class="opp-chip" data-mode="growth" onclick="setOppMode('growth', this)">🚀 Růstové tech</button>
-        <button class="opp-chip" data-mode="small" onclick="setOppMode('small', this)">🏢 Small-cap prostor</button>
+        <span style="font-size:12px;color:var(--text2)">💎 Nejlevnější akcie S&amp;P 500, které zároveň mají roční momentum — ověřená kombinace, ne jen „spadlé" tituly.</span>
       </div>
       <div class="opp-grid" id="opp-grid">
         <div class="opp-loading"><i class="ti ti-loader spin"></i> Hledám příležitosti s potenciálem...</div>
@@ -2786,8 +2791,8 @@ function switchTab(name) {
         if (!hasFeature('pro')) {
             document.getElementById('signals-grid').innerHTML = lockedCardHTML('Co koupit teď — ověřený signál', 'pro',
                 'Akcie, které právě teď splňují náš backtestem prověřený nákupní signál.');
-            document.getElementById('opp-grid').innerHTML = lockedCardHTML('Příležitosti s potenciálem', 'pro',
-                'Náš model akcií s největším prostorem vyrůst + krátké zdůvodnění.');
+            document.getElementById('opp-grid').innerHTML = lockedCardHTML('Podhodnocené s momentem', 'pro',
+                'Nejlevnější akcie S&amp;P 500, které zároveň mají roční momentum — ověřená kombinace.');
         } else {
             loadSignals();
             if (!oppData.length && !oppLoading) loadOpportunities();
@@ -2963,7 +2968,7 @@ async function loadBrief(date) {
     document.getElementById('brief-prev').disabled = briefIdx >= briefDates.length - 1;
     document.getElementById('brief-next').disabled = briefIdx <= 0;
     try {
-        const url = `${BACKEND_URL}/api/brief` + (date ? `?date=${encodeURIComponent(date)}` : '');
+        const url = `${BACKEND_URL}/api/brief?risk=${encodeURIComponent(investorRisk)}` + (date ? `&date=${encodeURIComponent(date)}` : '');
         const d = await (await fetch(url, { headers: authHeaders() })).json();
         renderBrief(d);
     } catch (e) {
@@ -3030,13 +3035,7 @@ function renderBrief(d) {
                     <span class="pos-ret" style="color:${col}">${(i.return_pct||0) >= 0 ? '+' : ''}${i.return_pct}%</span>
                 </div>`;
             }).join('');
-            const a = pos.allocation;
-            if (a) {
-                h += `<div class="alloc" style="margin-top:10px">
-                    <div class="alloc-bar"><i class="a" style="width:${a.active_pct}%"></i><i class="c" style="width:${a.core_pct}%"></i></div>
-                    <div class="alloc-leg"><span>Aktivní signály <b>${a.active_pct} %</b> (${a.slots_used}/${a.slots_max})</span>
-                    <span>Indexové jádro <b>${a.core_pct} %</b></span></div></div>`;
-            }
+            h += allocHTML(pos.allocation, false);
         } else {
             h += '<div class="alloc-note" style="margin:2px 0 6px">Žádná otevřená pozice — kapitál patří do indexového jádra.</div>';
         }
@@ -3090,11 +3089,32 @@ let overviewLoading = false;
    ale kontroluje se KAŽDÝ DEN proti aktuální ceně – to je podle backtestu ta
    funkční ochrana. Reagovat navíc na zeslábnutí skóre naopak škodí, proto to
    tady schválně není. */
+/* Pruh rozložení portfolia – JEDINÝ renderer pro kartu pozic i ranní přehled.
+   Segment hotovosti se ukáže jen u konzervativního profilu v rozkolísaném trhu. */
+function allocHTML(a, withNote) {
+    if (!a) return '';
+    const dot = c => `<span class="alloc-dot" style="background:${c}"></span>`;
+    const cash = a.cash_pct > 0;
+    return `<div class="alloc" style="margin-top:6px">
+        <div class="alloc-bar">
+          <i class="a" style="width:${a.active_pct}%"></i>
+          <i class="c" style="width:${a.core_pct}%"></i>
+          ${cash ? `<i class="h" style="width:${a.cash_pct}%"></i>` : ''}
+        </div>
+        <div class="alloc-leg">
+          <span>${dot('var(--accent)')}Signály <b>${a.active_pct} %</b> (${a.slots_used}/${a.slots_max} pozic po ${a.per_position_pct} %)</span>
+          <span>${dot('rgba(255,255,255,0.18)')}Indexové jádro <b>${a.core_pct} %</b></span>
+          ${cash ? `<span>${dot('var(--amber)')}Hotovost <b>${a.cash_pct} %</b></span>` : ''}
+        </div>
+        ${withNote && a.note ? `<div class="alloc-note">${escapeHtml(a.note)}</div>` : ''}
+      </div>`;
+}
+
 async function fetchOverviewPositions() {
     const wrap = document.getElementById('ov-positions-wrap');
     if (!wrap) return;
     try {
-        const r = await fetch(`${BACKEND_URL}/api/positions`, { headers: authHeaders() });
+        const r = await fetch(`${BACKEND_URL}/api/positions?risk=${encodeURIComponent(investorRisk)}`, { headers: authHeaders() });
         const d = await r.json();
         if (!d.ok) { wrap.style.display = 'none'; return; }
         const tag = {target:'Cíl', stop:'Stop', expired:'Horizont', open:'Drží se'};
@@ -3110,19 +3130,7 @@ async function fetchOverviewPositions() {
         document.getElementById('ov-pos-badge').textContent =
             d.action_count ? `${d.action_count} vyžaduje akci` : '';
         const a = d.allocation;
-        document.getElementById('ov-alloc').innerHTML = a ? `<div class="alloc">
-            <div class="alloc-bar">
-              <i class="a" style="width:${a.active_pct}%"></i>
-              <i class="c" style="width:${a.core_pct}%"></i>
-            </div>
-            <div class="alloc-leg">
-              <span><span class="alloc-dot" style="background:var(--accent)"></span>
-                Aktivní signály <b>${a.active_pct} %</b> (${a.slots_used}/${a.slots_max} pozic po ${a.per_position_pct} %)</span>
-              <span><span class="alloc-dot" style="background:rgba(255,255,255,0.18)"></span>
-                Indexové jádro <b>${a.core_pct} %</b></span>
-            </div>
-            <div class="alloc-note">${escapeHtml(a.note)}</div>
-          </div>` : '';
+        document.getElementById('ov-alloc').innerHTML = allocHTML(a, true);
         wrap.style.display = '';
     } catch (e) {
         wrap.style.display = 'none';
@@ -3315,7 +3323,7 @@ async function fetchOverviewOpps() {
         return;
     }
     try {
-        const d = await (await fetch(`${BACKEND_URL}/api/opportunities?mode=all`)).json();
+        const d = await (await fetch(`${BACKEND_URL}/api/opportunities`)).json();
         const list = (d && d.results) || [];
         if (!list.length) {
             box.innerHTML = '<div class="ov-empty">Skener zrovna nenašel žádné další příležitosti.</div>';
@@ -3329,7 +3337,7 @@ async function fetchOverviewOpps() {
                 </div>
                 <div class="r">
                     <span class="s">${o.score ?? '?'}</span>
-                    <span class="h">+${o.upside ?? '?'} %</span>
+                    <span class="h">#${o.vm_rank ?? '?'}${o.pe ? ' · P/E ' + o.pe : ''}</span>
                 </div>
             </div>`).join('')}</div>`;
     } catch(e) {
@@ -3495,60 +3503,28 @@ async function loadResultsBacktest() {
     const grid = document.getElementById('tr-year-grid');
     try {
         const d = await (await fetch(`${BACKEND_URL}/api/backtest`)).json();
-        const r = (d && d.result) || null;
-        if (!r) {
-            kpis.innerHTML = '<div class="ov-empty">Backtest zatím neproběhl. Admin: spusť ho v profilu.</div>';
-            grid.innerHTML = '<div class="ov-empty">Není data k zobrazení.</div>';
-            return;
-        }
-        const top = r.top || {};
-        const buy = r.buy || {};
-        const base = r.baseline || {};
-        const wrTop = (top.win_rate ?? buy.win_rate ?? 0);
-        const expTop = (top.avg_return ?? buy.avg_return ?? 0);
-        const alpha = (top.alpha ?? buy.alpha ?? 0);
-        const samples = top.count ?? buy.count ?? r.sample_count ?? 0;
-        const baseWr = base.win_rate;
+        const v = d && d.result && d.result.validation;
+        if (!v) { kpis.innerHTML = '<div class="ov-empty">Ověřená data nejsou k dispozici.</div>'; grid.innerHTML = ''; return; }
+        const h = v.signals.holdout, pf = v.profiles, spy = v.benchmark.spy;
         kpis.innerHTML = `
-            <div class="tr-kpi hero">
-                <div class="lbl">Trefnost TOP signálu</div>
-                <div class="val">${wrTop}%</div>
-                <div class="sub">${baseWr ? `Náhodný nákup: ${baseWr}% · edge ${(wrTop - baseWr).toFixed(1)} bodů` : '5letý backtest'}</div>
-            </div>
-            <div class="tr-kpi good">
-                <div class="lbl">Expectancy / obchod</div>
-                <div class="val">+${expTop}%</div>
-                <div class="sub">${r.horizon_days || 10}denní horizont</div>
-            </div>
-            <div class="tr-kpi">
-                <div class="lbl">Alpha vs. ${r.benchmark || 'SPY'}</div>
-                <div class="val" style="color:${alpha >= 0 ? 'var(--up)' : 'var(--down)'}">${alpha >= 0 ? '+' : ''}${alpha}%</div>
-                <div class="sub">Výnos navíc proti indexu</div>
-            </div>
-            <div class="tr-kpi">
-                <div class="lbl">Testovaných obchodů</div>
-                <div class="val">${samples.toLocaleString('cs-CZ')}</div>
-                <div class="sub">${r.period || '5 let'}</div>
-            </div>`;
-        const yrs = r.top_by_year || r.buy_by_year || {};
-        const ks = Object.keys(yrs).sort();
-        if (!ks.length) {
-            grid.innerHTML = '<div class="ov-empty">Roční rozpad není k dispozici.</div>';
-        } else {
-            grid.innerHTML = ks.map(y => {
-                const s = yrs[y] || {};
-                const wr = s.win_rate ?? 0;
-                const cn = s.count ?? 0;
-                const cls = wr >= 50 ? 'win' : 'loss';
-                return `<div class="tr-year ${cls}">
-                    <div class="yr">${y}</div>
-                    <div class="wr">${wr}%</div>
-                    <div class="cn">${cn} ${cn === 1 ? 'obchod' : (cn < 5 ? 'obchody' : 'obchodů')}</div>
-                </div>`;
-            }).join('');
-        }
-    } catch(e) {
-        kpis.innerHTML = '<div class="ov-empty" style="color:var(--down)">Backtest se nepodařilo načíst.</div>';
+            <div class="tr-kpi hero"><div class="lbl">Trefnost signálu</div><div class="val">${h.model.win_rate}%</div>
+                <div class="sub">2023–2026, na nich se nic neladilo · všechny poklesy ${h.all_dips.win_rate}%</div></div>
+            <div class="tr-kpi good"><div class="lbl">Průměr na obchod</div><div class="val">+${h.model.avg_return}%</div>
+                <div class="sub">cíl +${v.rule.target_pct} % / stop −${v.rule.stop_pct} % / max ${v.rule.max_days} dní</div></div>
+            <div class="tr-kpi"><div class="lbl">Vyvážený profil ročně</div><div class="val">+${pf.balanced.full.cagr}%</div>
+                <div class="sub">2015–2026 · index +${spy.full.cagr}%</div></div>
+            <div class="tr-kpi"><div class="lbl">Nejhorší propad (konzerv.)</div><div class="val" style="color:var(--up)">${pf.conservative.full.max_dd}%</div>
+                <div class="sub">index ${spy.full.max_dd}%</div></div>`;
+        const row = (lbl, x) => `<tr><td>${lbl}</td>${['train','holdout','full'].map(k =>
+            `<td><b>${x[k].cagr >= 0 ? '+' : ''}${x[k].cagr}%</b><br><span>${x[k].max_dd}% · Sharpe ${x[k].sharpe}</span></td>`).join('')}</tr>`;
+        grid.innerHTML = `<div class="tr-prof"><table>
+            <tr><th>ročně · nejhorší propad</th><th>2015–2022<br><span>ladění</span></th><th>2023–2026<br><span>čisté ověření</span></th><th>celé období</th></tr>
+            ${row('Index S&amp;P 500', spy)}${row('Konzervativní', pf.conservative)}${row('Vyvážený', pf.balanced)}${row('Agresivní', pf.aggressive)}
+          </table>
+          <p>Pokles u drahé akcie se slábnoucím momentem (skóre H+M pod 30) dal na čistém ověření ${h.rejected_low_vm.avg_return}% na obchod — proto ho model nekupuje.
+          Data: ${escapeHtml(v.data)}. Stav k ${escapeHtml(v.as_of)}.</p></div>`;
+    } catch (e) {
+        kpis.innerHTML = '<div class="ov-empty" style="color:var(--down)">Ověřená data se nepodařilo načíst.</div>';
         grid.innerHTML = '';
     }
 }
@@ -3558,13 +3534,18 @@ async function loadResultsLive() {
     const meta = document.getElementById('tr-live-meta');
     try {
         const d = await (await fetch(`${BACKEND_URL}/api/track-record`)).json();
-        const items = (d && d.items) || [];
-        const s = (d && d.stats) || {};
-        if (s.buy_win_rate != null) {
-            meta.textContent = `${s.buy_count} verdiktů · ${s.buy_win_rate}% trefnost`;
+        // Hlavní je ŽIVÝ ZÁZNAM MODELU (každý denní signál automaticky), ne to,
+        // co si kdo rozklikl – ten nejde vybrat zpětně, takže je to poctivý důkaz.
+        const md = (d && d.model) || {};
+        const items = (md.items && md.items.length) ? md.items.map(x => ({...x, verdict: 'Koupit', ts: null}))
+                                                     : ((d && d.items) || []);
+        const c = md.closed, al = md.all;
+        if (md.count) {
+            meta.textContent = `Model živě od ${md.since}: ${md.count} obchodů` +
+                (c ? ` · uzavřené ${c.count}× · trefnost ${c.win_rate}% · průměr ${c.avg_return >= 0 ? '+' : ''}${c.avg_return}%` : ' · zatím žádný uzavřený');
         }
         if (!items.length) {
-            list.innerHTML = '<div class="ov-empty">Zatím žádné live verdikty — appka začíná sbírat data.</div>';
+            list.innerHTML = '<div class="ov-empty">Živý záznam modelu se teprve plní — každý denní signál se sem automaticky zapíše a vyhodnotí podle plánu.</div>';
             return;
         }
         list.innerHTML = `<div class="tr-live-list">${items.map(v => {
@@ -3575,7 +3556,8 @@ async function loadResultsLive() {
             const retTxt = ret == null ? '—' : `${ret > 0 ? '+' : ''}${ret.toFixed(1)}%`;
             const vCls = (v.verdict || '').toLowerCase() === 'koupit' ? 'buy'
                 : (v.verdict || '').toLowerCase() === 'prodat' ? 'sell' : 'hold';
-            const when = v.ts ? new Date(v.ts * 1000).toLocaleDateString('cs-CZ', {day:'2-digit', month:'2-digit'}) : '';
+            const when = v.ts ? new Date(v.ts * 1000).toLocaleDateString('cs-CZ', {day:'2-digit', month:'2-digit'})
+                               : (v.date ? v.date.slice(8, 10) + '.' + v.date.slice(5, 7) + '.' : '');
             return `<div class="tr-live-row ${cls}" onclick="loadStockDetail('${v.ticker || ''}')">
                 <div>
                     <div class="tkr">${escapeHtml(v.ticker || '?')}</div>
@@ -3924,42 +3906,31 @@ function openMethod() { openAbout(); }
 function openSim() { document.getElementById('simModal').classList.add('open'); runSim(); }
 function closeSim() { document.getElementById('simModal').classList.remove('open'); }
 function runSim() {
+    // Ověřená PORTFOLIOVÁ výkonnost profilu (celé období 2015–2026, zbytek kapitálu
+    // v indexu, max 5 pozic, max 2 na sektor). Dřív se tu skládal průměrný výnos
+    // jednoho obchodu přes N obchodů s celým kapitálem – to dávalo fiktivní stovky %.
     const out = document.getElementById('sim-out');
     const cap = Math.max(0, parseFloat(document.getElementById('sim-cap').value) || 0);
-    const trades = Math.max(1, Math.min(parseInt(document.getElementById('sim-trades').value) || 1, 200));
-    const bp = btBest();
-    if (!bp || bp.avg_return == null) {
-        out.innerHTML = '<div style="color:var(--text2);font-size:13px;">Spusť nejdřív backtest (Admin), ať máme z čeho počítat.</div>';
-        return;
-    }
-    // S NÁMI = náš edge (TOP signál); BEZ NÁS = stejný počet obchodů, ale bez naší
-    // selekce (baseline = běžný/náhodný obchod z backtestu).
-    const eWith = bp.avg_return / 100;
-    const baseStat = (btProof && btProof.baseline && btProof.baseline.avg_return != null) ? btProof.baseline : null;
-    const eWithout = baseStat ? baseStat.avg_return / 100 : 0;
-    const withUs = cap * Math.pow(1 + eWith, trades);
-    const without = cap * Math.pow(1 + eWithout, trades);
-    const diff = withUs - without;
-    const money = v => Math.round(v).toLocaleString('cs-CZ') + ' €';
-    const delta = v => (v - cap >= 0 ? '+' : '') + Math.round(v - cap).toLocaleString('cs-CZ') + ' € (' + (v - cap >= 0 ? '+' : '') + ((v - cap) / cap * 100).toFixed(0) + ' %)';
-    const col = v => v >= cap ? 'var(--up)' : 'var(--down)';
+    const yrs = Math.max(1, Math.min(parseInt(document.getElementById('sim-trades').value) || 1, 30));
+    const v = btProof && btProof.validation;
+    if (!v) { out.innerHTML = '<div style="color:var(--text2);font-size:13px;">Ověřená data se načítají…</div>'; return; }
+    const prof = v.profiles[investorRisk] || v.profiles.balanced;
+    const spy = v.benchmark.spy.full, me = prof.full;
+    const grow = r => cap * Math.pow(1 + r / 100, yrs);
+    const money = x => Math.round(x).toLocaleString('cs-CZ') + ' €';
+    const label = ({conservative:'konzervativní', balanced:'vyvážený', aggressive:'agresivní'})[investorRisk] || 'vyvážený';
+    const a = grow(spy.cagr), b = grow(me.cagr);
     out.innerHTML = `
         <div class="sim-compare">
-            <div class="sim-side">
-                <div class="l">Sám, bez nás</div>
-                <div class="big" style="color:${col(without)}">${money(without)}</div>
-                <div class="d" style="color:${col(without)}">${delta(without)}</div>
-            </div>
+            <div class="sim-side"><div class="l">Jen index (S&amp;P 500)</div><div class="big">${money(a)}</div>
+                <div class="d">${spy.cagr} % ročně · nejhorší propad ${spy.max_dd} %</div></div>
             <div class="sim-vs">vs</div>
-            <div class="sim-side win">
-                <div class="l">S MY ADVANTAGE</div>
-                <div class="big" style="color:${col(withUs)}">${money(withUs)}</div>
-                <div class="d" style="color:${col(withUs)}">${delta(withUs)}</div>
-            </div>
+            <div class="sim-side win"><div class="l">Model, profil ${label}</div><div class="big">${money(b)}</div>
+                <div class="d">${me.cagr} % ročně · nejhorší propad ${me.max_dd} %</div></div>
         </div>
-        <div class="sim-diff">Rozdíl díky nám: <b>${diff >= 0 ? '+' : ''}${money(diff)}</b> za rok</div>
+        <div class="sim-diff">V nejhorší chvíli by portfolio bylo dočasně na <b>${money(cap * (1 + me.max_dd / 100))}</b> (index ${money(cap * (1 + spy.max_dd / 100))}).</div>
         <div style="font-size:12px;color:var(--text2);margin-top:10px;line-height:1.5;">
-            Z ${trades} obchodů a reinvestice. <b>S námi</b> = náš TOP signál (trefnost ${bp.win_rate}%, průměr ${bp.avg_return >= 0 ? '+' : ''}${bp.avg_return}%/obchod). <b>Bez nás</b> = stejný počet obchodů bez naší selekce${baseStat ? ` (běžný průměr ${baseStat.avg_return >= 0 ? '+' : ''}${baseStat.avg_return}%/obchod)` : ''}. Vše z 5letého backtestu.
+            Průměrné roční tempo z let 2015–2026 přenesené na ${yrs} ${yrs === 1 ? 'rok' : (yrs < 5 ? 'roky' : 'let')}. Na období 2023–2026, kdy trh táhlo pár gigantů, dal profil ${prof.holdout.cagr} % ročně vs index ${v.benchmark.spy.holdout.cagr} %. Skutečnost se bude lišit.
         </div>`;
 }
 
@@ -4221,9 +4192,10 @@ function setLevel(lvl) {
 }
 
 const RISK_DESC = {
-    conservative: 'Nejbezpečnější: index S&P 500 + stabilní dividendové firmy. Nižší výkyvy.',
-    balanced: 'Vyvážený mix napříč hlavními sektory. Rozumný poměr riziko/výnos.',
-    aggressive: 'Růstové tituly (tech, čipy). Vyšší potenciál, ale i vyšší výkyvy.',
+    // Čísla = VALIDATION v backendu (2015–2026, max 5 pozic, max 2 na sektor).
+    conservative: 'Pozice po 10 %, a když je trh rozkolísaný, část kapitálu v hotovosti. Historicky poloviční propady: −18 % místo −34 % u indexu, za cenu o něco nižšího výnosu.',
+    balanced: 'Pozice po 10 %, zbytek v indexu. Historicky +15,6 % ročně proti +13,9 % u indexu, propady podobné jako index.',
+    aggressive: 'Pozice po 20 %, v signálech až celý kapitál. Historicky nejvyšší výnos (+17 % ročně), ale v letech tažených pár giganty víc kolísá vůči indexu.',
 };
 
 function setRisk(r) {
@@ -4231,9 +4203,14 @@ function setRisk(r) {
     localStorage.setItem('mystocks_risk', r);
     renderRiskButtons();
     renderStarter();
-    // Při změně profilu znovu načti opportunities/signals (frontend filtruje)
-    if (typeof renderOpps === 'function' && oppData && oppData.length) renderOpps();
+    // Při změně profilu znovu načti, co na něm závisí. (Dřív se tu volalo
+    // neexistující renderOpps() – příležitosti se proto nikdy nepřekreslily.)
+    if (oppData && oppData.length) renderOpportunities();
     if (typeof signalsLoaded !== 'undefined' && signalsLoaded) loadSignals(true);
+    if (typeof fetchOverviewPositions === 'function') fetchOverviewPositions();
+    if (authToken) fetch(`${BACKEND_URL}/api/profile/risk`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ risk: r })
+    }).catch(() => {});
     showToast('Tolerance rizika: ' + ({conservative:'Konzervativní', balanced:'Vyvážená', aggressive:'Agresivní'})[r], 'up', 'ti-shield-half');
 }
 
@@ -4408,8 +4385,8 @@ const LEGAL_TEXTS = {
         <h4>Rizika investování</h4>
         <ul>
             <li>Investice do akcií nesou <b>riziko ztráty</b> vloženého kapitálu.</li>
-            <li><b>Historická výkonnost nezaručuje budoucí výsledky.</b> Backtest ~65 % trefnosti TOP signálu je poctivá historická statistika, ne příslib budoucích zisků.</li>
-            <li>Přibližně <b>~35 % obchodů podle našeho modelu končí v mínusu</b> — proto u každého signálu počítáme stop-loss.</li>
+            <li><b>Historická výkonnost nezaručuje budoucí výsledky.</b> Ověřená trefnost ~59 % je poctivá historická statistika, ne příslib budoucích zisků.</li>
+            <li>Přibližně <b>~41 % obchodů podle našeho modelu končí v mínusu</b> — proto u každého signálu počítáme stop-loss.</li>
             <li>Analýzy a signály jsou podklady k <b>tvému vlastnímu rozhodnutí</b>. Odpovědnost za obchodní rozhodnutí nese vždy uživatel.</li>
         </ul>
         <h4>Zdroje dat</h4>
@@ -4519,20 +4496,20 @@ async function renderSimpleBuy() {
     box.innerHTML = `<div class="simple-buy-box"><div class="simple-buy-head"><i class="ti ti-shopping-cart"></i> Co koupit teď</div>
         <div class="simple-buy-sub"><i class="ti ti-loader spin"></i> Hledám příležitosti...</div></div>`;
     try {
-        if (!oppData.length) {
-            const res = await fetch(`${BACKEND_URL}/api/opportunities?mode=all`);
-            const d = await res.json();
-            oppData = d.results || [];
-        }
-        const items = oppData.slice(0, 5).map(o => `
+        // „Co koupit teď" = jen OVĚŘENÝ nákupní signál (TOP pokles + hodnota&momentum).
+        // Dřív sem šel seznam podhodnocených – ten ale říká, co je levné, ne kdy koupit.
+        const d = await (await fetch(`${BACKEND_URL}/api/signals`)).json();
+        const sig = ((d && d.results) || []).filter(o => (o.sector_rank || 0) <= 2).slice(0, 5);
+        const items = sig.map(o => `
             <div class="sbuy-item" onclick="loadStockDetail('${o.ticker}')">
-                <span class="sbuy-up">+${(o.upside ?? 0).toFixed(0)}%</span>
-                <div><div class="sbuy-tkr">${o.ticker} <span style="font-size:11px;color:var(--text2)">${o.name || ''}</span></div>
-                <div class="sbuy-why">${o.why ? escapeHtml(o.why) : 'Potenciál ' + (o.upside ?? 0).toFixed(0) + '% k ročnímu maximu'}</div></div>
+                <span class="sbuy-up">${o.vm}/100</span>
+                <div><div class="sbuy-tkr">${o.ticker} <span style="font-size:11px;color:var(--text2)">${escapeHtml(o.name || '')}</span></div>
+                <div class="sbuy-why">Kup kolem ${o.price} ${o.currency || ''} · cíl ${o.target} · stop ${o.stop} · max 6 týdnů</div></div>
             </div>`).join('');
         box.innerHTML = `<div class="simple-buy-box">
             <div class="simple-buy-head"><i class="ti ti-shopping-cart"></i> Co koupit teď</div>
-            <div class="simple-buy-sub">Akcie s největším prostorem vyrůst. Klikni pro detail.</div>${items}</div>`;
+            <div class="simple-buy-sub">${sig.length ? 'Ověřené nákupní signály dne. Na jeden titul dej ~10 % portfolia, zbytek nech v indexu.'
+                : 'Dnes žádný ověřený nákupní signál. Nedělej nic — kapitál nech v indexovém fondu.'}</div>${items}</div>`;
     } catch (e) { box.innerHTML = ''; }
 }
 
@@ -4618,7 +4595,7 @@ const PLANS = [
         ['Neomezené sledování', 1], ['Grafy, Signal Score & technický budík', 1], ['Aktuální zprávy', 1],
         ['Cenová upozornění + sync', 1], ['Příležitosti & analytici', 0], ['Hloubková analýza', 0] ] },
     { id: 'pro', name: 'Pro', price: '10 €', period: '/ měsíc', featured: true, feats: [
-        ['Vše ze Start', 1], ['Příležitosti s potenciálem', 1], ['Doporučení analytiků & cílové ceny', 1],
+        ['Vše ze Start', 1], ['Podhodnocené s momentem', 1], ['Doporučení analytiků & cílové ceny', 1],
         ['Fundamenty (P/E, kapitalizace)', 1], ['Hloubková analýza (5/den)', 1],
         ['Asistent, přehled & track record', 0] ] },
     { id: 'elite', name: 'Elite', price: '15 €', period: '/ měsíc', feats: [
@@ -4752,12 +4729,10 @@ function renderAdmin(users, invites) {
         </div>
         <div id="email-test-result" style="font-size:12px; color:var(--text2); margin-bottom:18px;"></div>
 
-        <div class="admin-sub"><i class="ti ti-chart-histogram" style="color:var(--accent)"></i> <b>Backtest pravidel</b> <span style="font-size:11px;color:var(--text2)">(úspěšnost signálu na 5 letech vč. 2022, alfa vs index, bez look-ahead)</span></div>
+        <div class="admin-sub"><i class="ti ti-radar" style="color:var(--accent)"></i> <b>Denní sken S&amp;P 500</b> <span style="font-size:11px;color:var(--text2)">(běží sám v 5:00–5:40 UTC; ruční spuštění pokračuje tam, kde sken skončil)</span></div>
         <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap; align-items:center;">
-            <label style="font-size:12px;color:var(--text2)">Horizont (dny):</label>
-            <input id="bt-horizon" type="number" min="5" max="120" value="10" class="admin-input" style="width:90px;">
-            <button class="btn-primary admin-mk" onclick="adminBacktest()"><i class="ti ti-player-play"></i> Spustit backtest</button>
-            <span style="font-size:11px;color:var(--text2)">~5–15 s</span>
+            <button class="btn-primary admin-mk" onclick="adminScan()"><i class="ti ti-player-play"></i> Spustit sken</button>
+            <span style="font-size:11px;color:var(--text2)">~20–40 s</span>
         </div>
         <div id="bt-result" style="font-size:12px; color:var(--text2); margin-bottom:18px;"></div>
 
@@ -4818,73 +4793,22 @@ async function adminEmailTest() {
     }
 }
 
-async function adminBacktest() {
+async function adminScan(round) {
     const out = document.getElementById('bt-result');
-    const horizon = parseInt(document.getElementById('bt-horizon').value, 10) || 20;
-    out.innerHTML = '<i class="ti ti-loader spin"></i> Počítám backtest na historii… (může to pár sekund trvat)';
+    round = round || 1;
+    out.innerHTML = `<i class="ti ti-loader spin"></i> Skenuji S&amp;P 500… (krok ${round})`;
     try {
-        const r = await fetch(`${BACKEND_URL}/api/admin/backtest`, {
-            method: 'POST', headers: authHeaders(), body: JSON.stringify({ horizon })
-        });
+        const r = await fetch(`${BACKEND_URL}/api/admin/scan`, { method: 'POST', headers: authHeaders() });
         const d = await r.json();
         if (!d.ok) { out.innerHTML = `<span style="color:var(--down)">${escapeHtml(d.error || 'Nepodařilo se.')}</span>`; return; }
-        out.innerHTML = renderBacktest(d.result);
+        if (!d.done && round < 8) return adminScan(round + 1);
+        out.innerHTML = d.done
+            ? `<span style="color:var(--up)">Hotovo: ${d.scanned} titulů, ${d.signals} ${d.signals === 1 ? 'signál' : 'signálů'} (${escapeHtml(d.updated || '')}).</span>`
+            : 'Sken ještě běží – klikni znovu.';
+        signalsLoaded = false;
     } catch (e) {
         out.innerHTML = '<span style="color:var(--down)">Chyba spojení se serverem.</span>';
     }
-}
-
-function renderBacktest(res) {
-    if (!res) return '<span style="color:var(--text2)">Zatím nespuštěno.</span>';
-    const ap = v => (v == null) ? '—' : `${v >= 0 ? '+' : ''}${v}%`;
-    const row = (lbl, s, hl) => {
-        if (!s) return `<tr><td>${lbl}</td><td colspan="3" style="color:var(--text2)">—</td></tr>`;
-        const col = s.win_rate >= 55 ? 'var(--up)' : (s.win_rate >= 45 ? '#FFC400' : 'var(--down)');
-        return `<tr${hl ? ' style="font-weight:700"' : ''}>
-            <td>${lbl} <span style="color:var(--text2);font-weight:400">(${s.count})</span></td>
-            <td style="text-align:right;color:${col}">${s.win_rate}%</td>
-            <td style="text-align:right;color:${s.avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${ap(s.avg_return)}</td>
-            <td style="text-align:right;color:${(s.alpha || 0) >= 0 ? 'var(--up)' : 'var(--down)'}">${ap(s.alpha)}</td></tr>`;
-    };
-    // Rozpad „Koupit" podle roku (drží i v medvědím 2022?)
-    let byYearHtml = '';
-    if (res.buy_by_year && Object.keys(res.buy_by_year).length) {
-        const yrs = Object.keys(res.buy_by_year).sort();
-        byYearHtml = `<div style="margin-top:10px;font-size:11px;color:var(--text2)">Signál „Koupit" po letech (trefnost):</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">` +
-            yrs.map(y => {
-                const s = res.buy_by_year[y];
-                if (!s) return '';
-                const col = s.win_rate >= 55 ? 'var(--up)' : (s.win_rate >= 45 ? '#FFC400' : 'var(--down)');
-                return `<span style="font-size:11px;border:1px solid var(--border);border-radius:8px;padding:3px 8px">${y}: <b style="color:${col}">${s.win_rate}%</b> <span style="color:var(--text2)">(${s.count})</span></span>`;
-            }).join('') + `</div>`;
-    }
-    const b = res.buy, base = res.baseline;
-    let edgeMsg = '';
-    if (b && base) {
-        const dWin = (b.win_rate - base.win_rate).toFixed(1);
-        const dAlpha = (b.alpha != null && base.alpha != null) ? (b.alpha - base.alpha).toFixed(2) : null;
-        const ok = b.win_rate > base.win_rate && b.avg_return > base.avg_return;
-        edgeMsg = `<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:${ok ? 'var(--up-glow)' : 'var(--down-glow)'};color:${ok ? 'var(--up)' : 'var(--down)'};font-size:12px;">
-            ${ok ? '<i class="ti ti-circle-check"></i> Signál „Koupit" poráží baseline' : '<i class="ti ti-alert-triangle"></i> Signál „Koupit" zatím NEporáží baseline'}
-            (trefnost ${dWin >= 0 ? '+' : ''}${dWin} b.${dAlpha != null ? `, alfa ${dAlpha >= 0 ? '+' : ''}${dAlpha} b.` : ''})</div>`;
-    }
-    return `
-        <div style="font-size:11px;color:var(--text2);margin-bottom:6px">${res.ticker_count} titulů · ${res.sample_count} vzorků · horizont ${res.horizon_days} dní · ${escapeHtml(res.period || '')}</div>
-        <div class="table-scroll"><table class="admin-table" style="font-size:12px">
-            <thead><tr><th>Signál</th><th style="text-align:right">Trefnost</th><th style="text-align:right">Výnos</th><th style="text-align:right">Alfa</th></tr></thead>
-            <tbody>
-                ${row('⭐ TOP signál (≥80, klidný objem)', res.top, true)}
-                ${row('🟢 Koupit (≥70)', res.buy)}
-                ${row('🟡 Držet (45–69)', res.hold)}
-                ${row('🔴 Prodat (<45)', res.sell)}
-                ${row('⚪ Baseline (vše)', res.baseline)}
-            </tbody>
-        </table>
-        </div>
-        ${edgeMsg}
-        ${byYearHtml}
-        <div style="font-size:11px;color:var(--text2);margin-top:6px">${escapeHtml(res.note || '')}</div>`;
 }
 
 async function genInvites(type, count) {
@@ -5053,24 +4977,9 @@ async function handlePaidReturn() {
 }
 
 // ====================== SCANNER PŘÍLEŽITOSTÍ ======================
-let oppMode = 'all';
 let oppData = [];
 let oppLoading = false;
 
-function setOppMode(mode, el) {
-    oppMode = mode;
-    document.querySelectorAll('.opp-chip').forEach(c => c.classList.remove('active'));
-    if(el) el.classList.add('active');
-    loadOpportunities();
-}
-
-function fmtCap(c) {
-    if(c === null || c === undefined || isNaN(c)) return '—';
-    if(c >= 1e12) return (c/1e12).toFixed(2)+' bil.';
-    if(c >= 1e9)  return (c/1e9).toFixed(2)+' mld.';
-    if(c >= 1e6)  return (c/1e6).toFixed(0)+' mil.';
-    return c.toFixed(0);
-}
 
 let signalsLoaded = false;
 async function loadSignals(force) {
@@ -5085,10 +4994,12 @@ async function loadSignals(force) {
     try {
         const data = await (await fetch(`${BACKEND_URL}/api/signals`)).json();
         if (!data.ok) throw new Error();
+        if (data.scanning) { grid.innerHTML = '<div class="opp-loading" style="color:var(--text2)">První sken S&amp;P 500 ještě neproběhl — spustí se sám ráno v 7:00 našeho času, nebo ho admin pustí hned v Profilu → Admin → Spustit sken.</div>'; return; }
         signalsLoaded = true;
         document.getElementById('signals-updated').textContent = `${data.count} ${data.count === 1 ? 'signál' : (data.count < 5 ? 'signály' : 'signálů')} · ${data.updated}`;
         if (btProof && btProof.buy && btProof.buy.win_rate != null) {
-            document.getElementById('signals-proof').textContent = `Ověřeno backtestem: ${btProof.buy.win_rate} % trefnost.`;
+            document.getElementById('signals-proof').textContent =
+                `Ověřeno na 2023–2026: ${btProof.buy.win_rate} % trefnost, ${btProof.buy.avg_return >= 0 ? '+' : ''}${btProof.buy.avg_return} % na obchod.`;
         }
         renderSignals(data.results || []);
     } catch (e) {
@@ -5111,9 +5022,14 @@ function renderSignals(list) {
         const chgTxt = (chg || chg === 0) ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` : '';
         const chgCol = (chg >= 0) ? 'var(--up)' : 'var(--down)';
         const isTop = o.conviction === 'top';
+        const overCap = (o.sector_rank || 0) > 2;
+        const vmLine = o.vm != null
+            ? `<div class="opp-why" style="margin-top:8px"><i class="ti ti-diamond"></i> Hodnota+momentum <b>${o.vm}/100</b>${o.vm_rank ? ` (#${o.vm_rank} v S&amp;P 500)` : ''}${o.pe ? ` · P/E ${o.pe}` : ''}${o.mom_pct != null ? ` · momentum ${o.mom_pct >= 0 ? '+' : ''}${o.mom_pct} %` : ''}</div>` : '';
+        const capLine = overCap
+            ? `<div class="opp-why" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> ${o.sector_rank}. signál z odvětví ${escapeHtml(o.sector || '')} — model drží max 2 na sektor.</div>` : '';
         return `
-        <div class="opp-card${isTop ? ' moon' : ''}" onclick="loadStockDetail('${o.ticker}')">
-            <span class="opp-rank">${isTop ? '⭐ TOP' : '#' + (i + 1)}</span>
+        <div class="opp-card${isTop && !overCap ? ' moon' : ''}" onclick="loadStockDetail('${o.ticker}')" style="${overCap ? 'opacity:.6' : ''}">
+            <span class="opp-rank">${isTop && !overCap ? '⭐ TOP' : '#' + (i + 1)}</span>
             <div class="opp-c-top">
                 <div class="opp-score p-high">${o.score}<small>SIGNÁL</small></div>
                 <div class="opp-c-id">
@@ -5129,6 +5045,7 @@ function renderSignals(list) {
                 <span class="opp-c-price">${(o.price ?? 0).toFixed(2)} <span style="font-size:11px;color:var(--text2)">${o.currency || ''}</span></span>
                 <span style="font-size:12px;color:${chgCol}">${chgTxt} · RSI ${o.rsi ?? '—'}</span>
             </div>
+            ${vmLine}${capLine}
         </div>`;
     }).join('');
 }
@@ -5136,17 +5053,18 @@ function renderSignals(list) {
 async function loadOpportunities() {
     const grid = document.getElementById('opp-grid');
     if(!hasFeature('pro')) {
-        grid.innerHTML = lockedCardHTML('Příležitosti s potenciálem', 'pro',
-            'Náš model akcií s největším prostorem vyrůst + krátké zdůvodnění.');
+        grid.innerHTML = lockedCardHTML('Podhodnocené s momentem', 'pro',
+            'Nejlevnější akcie S&amp;P 500, které zároveň mají roční momentum — ověřená kombinace.');
         return;
     }
     if(oppLoading) return;
     oppLoading = true;
-    grid.innerHTML = '<div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh napříč burzami...</div>';
+    grid.innerHTML = '<div class="opp-loading"><i class="ti ti-loader spin"></i> Načítám dnešní sken S&amp;P 500…</div>';
     try {
-        const res = await fetch(`${BACKEND_URL}/api/opportunities?mode=${oppMode}`);
+        const res = await fetch(`${BACKEND_URL}/api/opportunities`);
         const data = await res.json();
         if(!data.ok) throw new Error();
+        if (data.scanning) { grid.innerHTML = '<div class="opp-loading" style="color:var(--text2)">První sken S&amp;P 500 ještě neproběhl — spustí se sám ráno v 7:00 našeho času, nebo ho admin pustí hned v Profilu → Admin → Spustit sken.</div>'; return; }
         oppData = data.results || [];
         document.getElementById('opp-updated').textContent = data.count
             ? `${data.count} kandidátů · ${data.updated}` : '';
@@ -5159,7 +5077,7 @@ async function loadOpportunities() {
 }
 
 function tierClass(tier) {
-    return ({ 'VYSOKÝ POTENCIÁL': 'p-high', 'SILNÝ': 'p-strong', 'ZAJÍMAVÝ': 'p-mid', 'SLEDOVAT': 'p-low' })[tier] || 'p-low';
+    return ({ 'TOP 2 %': 'p-high', 'TOP 5 %': 'p-strong', 'TOP 10 %': 'p-mid' })[tier] || 'p-low';
 }
 
 function renderOpportunities() {
@@ -5183,15 +5101,15 @@ function renderOpportunities() {
         <div class="opp-card" onclick="loadStockDetail('${o.ticker}')" title="${o.exchange || ''}">
             <span class="opp-rank">#${i+1}</span>
             <div class="opp-c-top">
-                <div class="opp-score ${tierClass(o.tier)}">${o.score}<small>POTENCIÁL</small></div>
+                <div class="opp-score ${tierClass(o.tier)}">${o.score}<small>HODN.+MOM.</small></div>
                 <div class="opp-c-id">
                     <div class="opp-c-tkr">${o.ticker}</div>
                     <div class="opp-c-name">${o.name || ''}</div>
                 </div>
             </div>
             <div class="opp-upside">
-                <span class="opp-up-val">+${(o.upside ?? 0).toFixed(0)}%</span>
-                <span class="opp-up-lbl">potenciál k ročnímu maximu</span>
+                <span class="opp-up-val">#${o.vm_rank ?? '—'}</span>
+                <span class="opp-up-lbl">pořadí v S&amp;P 500 · ${escapeHtml(o.sector || '')}</span>
             </div>
             <div class="opp-c-px">
                 <span class="opp-c-price">${(o.price ?? 0).toFixed(o.price < 10 ? 2 : 2)} <span style="font-size:11px;color:var(--text2)">${o.currency||''}</span></span>
@@ -5200,13 +5118,13 @@ function renderOpportunities() {
             ${why}
             <div class="opp-badges">${badges}</div>
             <div class="opp-c-stats">
-                <div class="opp-stat"><span class="l">Kapitalizace</span><span class="v">${fmtCap(o.market_cap)}</span></div>
-                <div class="opp-stat"><span class="l">Roční max</span><span class="v">${o.high52 ? o.high52.toFixed(2) : '—'}</span></div>
+                <div class="opp-stat"><span class="l">P/E</span><span class="v">${o.pe ?? '—'}</span></div>
+                <div class="opp-stat"><span class="l">Cash flow / cena</span><span class="v">${o.fcf_yield != null ? o.fcf_yield + ' %' : '—'}</span></div>
                 <div class="opp-stat"><span class="l">Za rok</span><span class="v" style="color:${(yr||0)>=0?'var(--up)':'var(--down)'}">${yrTxt}</span></div>
             </div>
         </div>`;
     }).join('') +
-    `<div class="opp-disclaimer" style="grid-column:1/-1;"><i class="ti ti-info-circle"></i> „Potenciál" = náš model odhadu prostoru k růstu (hlavně k ročnímu maximu). Není to investiční doporučení — vždy si udělej vlastní průzkum.</div>`;
+    `<div class="opp-disclaimer" style="grid-column:1/-1;"><i class="ti ti-info-circle"></i> Skóre hodnota+momentum = průměr pořadí v S&amp;P 500 podle zisku, účetní hodnoty a cash flow vůči ceně a ročního momenta (fundamenty z oficiálních dat SEC). Nejlepších 20 titulů v testu 2015–2026 porazilo průměrnou akcii indexu v obou obdobích. Kupuj je v nákupní zóně, ne naslepo. Není to investiční doporučení.</div>`;
 }
 
 // --- VYKRESLENÍ KARET: rozdělení na Moje pozice vs Sledované ---
@@ -5714,7 +5632,7 @@ async function loadTrackRecord() {
         let cards = '';
         const bp = btBest();
         if (bp && bp.win_rate != null) {
-            cards += `<div class="track-stat" style="border-color:rgba(0,230,118,0.4)"><div class="l">Spolehlivost TOP signálu (backtest)</div><div class="v" style="color:${wcol(bp.win_rate)}">${bp.win_rate}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">${btProof.period || '10 let'}, ${btProof.sample_count} obchodů</div></div>`;
+            cards += `<div class="track-stat" style="border-color:rgba(0,230,118,0.4)"><div class="l">Trefnost signálu (ověřeno 2023–2026)</div><div class="v" style="color:${wcol(bp.win_rate)}">${bp.win_rate}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">${btProof.period || '10 let'}, ${btProof.sample_count} obchodů</div></div>`;
             cards += `<div class="track-stat"><div class="l">Očekávaný výnos / obchod</div><div class="v" style="color:${bp.avg_return >= 0 ? 'var(--up)' : 'var(--down)'}">${bp.avg_return >= 0 ? '+' : ''}${bp.avg_return}%</div><div style="font-size:10px;color:var(--text2);margin-top:2px">do 6 týdnů</div></div>`;
         }
         if (enough) {
@@ -5980,7 +5898,7 @@ function renderDeepReport(d) {
     const proofHtml = (bp && bp.count) ? `
         <div class="deep-proof"><i class="ti ti-shield-check"></i>
             <span><b>Spolehlivost naší metody</b> (platí obecně, ne predikce tohoto titulu): ${bpLabel} měl <b>${bp.win_rate}%</b> úspěšnost na ${btProof.horizon_days} dní${expTxt}${alphaTxt}.
-            <span class="dp-sub">Ověřeno na historii — ${btProof.period ? btProof.period + ', ' : ''}${btProof.sample_count} obchodů, bez nahlížení do budoucna. ~40 % obchodů přesto skončí v mínusu — proto vždy se stop-lossem. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span></span>
+            <span class="dp-sub">Ověřeno na historii — ${btProof.period ? btProof.period + ', ' : ''}${btProof.sample_count} obchodů, bez nahlížení do budoucna. ${(100 - bp.win_rate).toFixed(0)} % obchodů přesto skončí v mínusu — proto vždy se stop-lossem. <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span></span>
         </div>` : '';
 
     // Živé signály / katalyzátory (doplňkové, nevstupují do verdiktu)

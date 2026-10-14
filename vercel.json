@@ -80,8 +80,16 @@
       "schedule": "0 7 * * *"
     },
     {
-      "path": "/api/cron/backtest",
-      "schedule": "0 7 * * 1"
+      "path": "/api/cron/scan",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/scan",
+      "schedule": "20 5 * * *"
+    },
+    {
+      "path": "/api/cron/scan",
+      "schedule": "40 5 * * *"
     },
     {
       "path": "/api/cron/weekly-digest",

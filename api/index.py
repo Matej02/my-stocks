@@ -206,6 +206,21 @@ def yahoo_chart(ticker, rng, interval):
     return res[0]
 
 
+def _prev_close(closes, meta=None):
+    """Včerejší zavírací cena z DENNÍCH svíček.
+
+    Pozor na Yahoo: `previousClose` v chart datech vůbec nechodí a
+    `chartPreviousClose` je cena PŘED začátkem grafu – u rozsahu 1y před rokem,
+    u 5d před pěti dny. Appka tak vydávala vícedenní výnos za denní změnu
+    (detail akcie, makro, sektorová heatmapa, skenery). Spolehlivá je jen
+    předposlední denní svíčka; u rozsahu 1d (jediná svíčka) je chartPreviousClose
+    opravdu včerejšek."""
+    cl = [c for c in (closes or []) if c is not None]
+    if len(cl) >= 2:
+        return cl[-2]
+    return (meta or {}).get("chartPreviousClose") or (cl[-1] if cl else None)
+
+
 # ---------------------------------------------------------------------------
 # Technické indikátory (čistý Python)
 # ---------------------------------------------------------------------------
@@ -418,7 +433,6 @@ EXIT_MAX_DAYS = 30
 # Nezapojená hotovost byla největší jednotlivá ztráta – 71,5 % kapitálu leželo
 # ladem a portfolio dělalo +3,8 % ročně místo +11,2 %.
 PORTFOLIO_SLOTS = 5
-HOLDOUT_FROM = "2023-01-01"
 # 30 obch. dní ≈ 6 kalendářních týdnů (většina obchodů skončí dřív na cíli/stopu).
 EXIT_HORIZON_LABEL = "do 6 týdnů"
 
@@ -1581,110 +1595,22 @@ def admin_invites():
 # ---------------------------------------------------------------------------
 # Scanner příležitostí ("crazy opportunities")
 # ---------------------------------------------------------------------------
-def _qf(node, key, default=None):
-    """Bezpečně vytáhne číslo ze screener quote (může být raw číslo nebo {'raw':...})."""
-    v = node.get(key)
-    if isinstance(v, dict):
-        v = v.get("raw")
-    return _clean(v, default)
-
-
-def yahoo_screener(scr_id, count=30):
-    url = "https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved"
-    r = requests.get(url, headers=HEADERS,
-                     params={"scrIds": scr_id, "count": count, "start": 0}, timeout=10)
-    res = ((r.json() or {}).get("finance") or {}).get("result") or []
-    if not res:
-        return []
-    return res[0].get("quotes", []) or []
-
-
-def potential_score(q):
-    """Vlastní 'Potenciál' 0-100 – kolik PROSTORU akcie má vyrůst (ne kolik už vyrostla).
-    Kombinuje upside k ročnímu maximu, zdravou pozici v pásmu, prostor dle velikosti,
-    rozumný roční trend a rostoucí zájem. Vrací (skóre, úroveň, odznaky, upside%, vol_ratio)."""
-    price = _qf(q, "regularMarketPrice", 0) or 0
-    vol = _qf(q, "regularMarketVolume", 0) or 0
-    avg = _qf(q, "averageDailyVolume3Month", 0) or _qf(q, "averageDailyVolume10Day", 0) or 0
-    yr = _qf(q, "fiftyTwoWeekChangePercent", 0) or 0
-    mcap = _qf(q, "marketCap", 0) or 0
-    hi52 = _qf(q, "fiftyTwoWeekHigh", 0) or 0
-    lo52 = _qf(q, "fiftyTwoWeekLow", 0) or 0
-
-    upside = ((hi52 - price) / price * 100) if (hi52 and price) else 0
-    pos = ((price - lo52) / (hi52 - lo52)) if (hi52 and lo52 and hi52 > lo52) else 0.5
-    vol_ratio = (vol / avg) if avg else 0
-    badges = []
-    score = 0.0
-
-    # 1) Upside k ročnímu maximu (hlavní, až 45 b.)
-    score += min(max(upside, 0), 120) / 120 * 45
-    if upside >= 80:
-        badges.append({"t": f"🎯 Potenciál +{upside:.0f}%", "k": "extreme"})
-    elif upside >= 35:
-        badges.append({"t": f"🎯 Potenciál +{upside:.0f}%", "k": "hot"})
-    elif upside >= 12:
-        badges.append({"t": f"🎯 Potenciál +{upside:.0f}%", "k": "up"})
-
-    # 2) Zdravá pozice (ne padající nůž) (až 20 b.)
-    if 0.2 <= pos <= 0.7:
-        score += 20; badges.append({"t": "✅ Zdravá zóna", "k": "up"})
-    elif 0.7 < pos <= 0.85:
-        score += 12
-    elif pos < 0.2:
-        score += 6; badges.append({"t": "⚠️ U dna – vyšší riziko", "k": "down"})
-
-    # 3) Prostor dle velikosti (až 15 b.)
-    if mcap and mcap < 2e9:
-        score += 15; badges.append({"t": "🏢 Small-cap prostor", "k": "gem"})
-    elif mcap and mcap < 10e9:
-        score += 10; badges.append({"t": "Mid-cap", "k": "neutral"})
-    elif mcap and mcap < 50e9:
-        score += 6
-    elif mcap:
-        score += 3; badges.append({"t": "Blue-chip", "k": "neutral"})
-
-    # 4) Rozumný roční trend (až 12 b.) – odměň stabilní, potrestej kolaps
-    if -25 <= yr <= 70:
-        score += 12
-    elif yr > 70:
-        score += 6
-    elif yr < -60:
-        score -= 6; badges.append({"t": f"📉 {yr:.0f}% za rok", "k": "down"})
-    else:
-        score += 8
-
-    # 5) Rostoucí zájem / objem (až 8 b.)
-    score += min(vol_ratio, 3) / 3 * 8
-    if vol_ratio >= 2:
-        badges.append({"t": f"🔥 Zvýšený objem {vol_ratio:.1f}×", "k": "hot"})
-
-    score = max(0, min(100, round(score)))
-    if score >= 75:
-        tier = "VYSOKÝ POTENCIÁL"
-    elif score >= 60:
-        tier = "SILNÝ"
-    elif score >= 45:
-        tier = "ZAJÍMAVÝ"
-    else:
-        tier = "SLEDOVAT"
-
-    return score, tier, badges, round(upside, 1), vol_ratio
-
-
 def opp_theses(top_items):
-    """Jedna AI věta 'proč může vyrůst' pro top tituly, kešováno na den (1 volání/den)."""
+    """Jedna věcná věta k top titulům podhodnocených s momentem, kešováno na den."""
     if not analysis_enabled() or not top_items:
         return {}
     date = _today()
     cache = kv_get_json(f"oppthesis:{date}") or {}
     missing = [it for it in top_items if it["ticker"] not in cache][:8]
     if missing:
-        lines = [f'{it["ticker"]} ({it.get("name","")}): cena {it["price"]} {it.get("currency","")}, '
-                 f'potenciál +{it.get("upside",0)}% k ročnímu maximu, roční změna {it.get("year_pct",0)}%'
+        lines = [f'{it["ticker"]} ({it.get("name","")}, {it.get("sector") or "?"}): P/E {it.get("pe") or "—"}, '
+                 f'cash flow {it.get("fcf_yield") or "—"} % ceny, momentum 12 měsíců {it.get("mom_pct") or "—"} %, '
+                 f'skóre hodnota+momentum {it.get("score")}/100 (#{it.get("vm_rank")} v S&P 500)'
                  for it in missing]
-        prompt = ("Jsi akciový analytik. Pro každou akcii napiš JEDNU údernou českou větu (max 16 slov), "
-                  "PROČ má potenciál výrazně vyrůst. Vrať POUZE validní JSON ve tvaru "
+        prompt = ("Jsi střízlivý akciový analytik. Pro každou akcii napiš JEDNU věcnou českou větu "
+                  "(max 18 slov), co ji v datech dělá zajímavou – jen z uvedených čísel a obecně známého "
+                  "byznysu firmy. ŽÁDNÉ předpovědi ceny, žádné „vyroste\", žádná procenta zisku. "
+                  "Vrať POUZE validní JSON ve tvaru "
                   '{"TICKER": "věta", ...}.\n\nAKCIE:\n' + "\n".join(lines))
         res = call_llm(prompt)
         if isinstance(res, dict):
@@ -1700,74 +1626,23 @@ def opp_theses(top_items):
 
 @app.route("/api/opportunities")
 def get_opportunities():
-    """Scanner PŘÍLEŽITOSTÍ – vlastní 'Potenciál' (kolik prostoru akcie má vyrůst)
-    z podhodnocených/růstových screenerů + AI věta proč u top titulů."""
-    mode = request.args.get("mode", "all")
-    screen_map = {
-        "value": ["undervalued_growth_stocks", "undervalued_large_caps"],
-        "growth": ["growth_technology_stocks"],
-        "small": ["aggressive_small_caps", "small_cap_gainers"],
-        "all": ["undervalued_growth_stocks", "growth_technology_stocks",
-                "undervalued_large_caps", "aggressive_small_caps"],
-    }
-    scr_ids = screen_map.get(mode, screen_map["all"])
-
-    seen = {}
-    for scr in scr_ids:
-        try:
-            for q in yahoo_screener(scr, 40):
-                sym = q.get("symbol")
-                if not sym or sym in seen:
-                    continue
-                price = _qf(q, "regularMarketPrice", 0) or 0
-                yr = _qf(q, "fiftyTwoWeekChangePercent", 0) or 0
-                hi52 = _qf(q, "fiftyTwoWeekHigh", 0) or 0
-                upside = ((hi52 - price) / price * 100) if (hi52 and price) else 0
-                # Filtr kvality: žádné penny-junk, musí být prostor, ne totální kolaps
-                if price < 1.5 or upside < 8 or yr < -85:
-                    continue
-                score, tier, badges, up, vol_ratio = potential_score(q)
-                seen[sym] = {
-                    "ticker": sym,
-                    "name": q.get("shortName") or q.get("displayName") or q.get("longName") or sym,
-                    "price": _round(price, 4),
-                    "change_pct": _round(_qf(q, "regularMarketChangePercent", 0), 2, 0),
-                    "currency": q.get("currency", "USD"),
-                    "market_cap": _qf(q, "marketCap", None),
-                    "volume": int(_qf(q, "regularMarketVolume", 0) or 0),
-                    "vol_ratio": _round(vol_ratio, 1, 0),
-                    "year_pct": _round(yr, 1, 0),
-                    "upside": up,
-                    "high52": _round(hi52, 4),
-                    "low52": _round(_qf(q, "fiftyTwoWeekLow", None), 4),
-                    "exchange": q.get("fullExchangeName") or q.get("exchange") or "",
-                    "score": score,
-                    "tier": tier,
-                    "badges": badges,
-                    "source": scr,
-                }
-        except Exception:
-            continue
-
-    items = sorted(seen.values(), key=lambda x: x["score"], reverse=True)[:40]
-
-    # AI věta 'proč' pro top tituly (kešováno na den)
+    """Podhodnocené s momentem: nejvyšší skóre HODNOTA & MOMENTUM v S&P 500.
+    Ověřeno: nejlepších 20 titulů porazilo průměrnou akcii indexu v obou
+    obdobích (+1,7 / +7,2 bodu ročně). Nahrazuje dřívější „Potenciál", který
+    bodoval vzdálenost od ročního maxima a nic nepředpovídal."""
+    s = market_scan(allow_step=False)
+    if not s:
+        return jsonify({"ok": True, "count": 0, "results": [], "scanning": True, "updated": ""})
+    items = [dict(x) for x in (s.get("value") or [])]
     try:
         theses = opp_theses(items[:8])
         for it in items[:8]:
-            w = theses.get(it["ticker"])
-            if w:
-                it["why"] = w
+            if theses.get(it["ticker"]):
+                it["why"] = theses[it["ticker"]]
     except Exception:
         pass
-
-    return jsonify({
-        "ok": True,
-        "count": len(items),
-        "ai": analysis_enabled(),
-        "updated": datetime.now(timezone.utc).strftime("%H:%M:%S UTC"),
-        "results": items,
-    })
+    return jsonify({"ok": True, "count": len(items), "results": items, "ai": analysis_enabled(),
+                    "updated": s.get("updated"), "date": s.get("date"), "stale": bool(s.get("stale"))})
 
 
 # ---------------------------------------------------------------------------
@@ -1823,7 +1698,7 @@ def get_watchlist():
             price = meta.get("regularMarketPrice")
             if price is None:
                 continue
-            prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
+            prev = _prev_close([], meta) or price
             change_pct = ((price - prev) / prev) * 100 if prev else 0
             results.append({
                 "ticker": ticker,
@@ -2061,6 +1936,7 @@ def gather_facts(ticker):
         "vol_ratio": ind.get("vol_ratio"),
         "signal_score": score, "signal_label": score_label, "setup_score": setup,
         "setup_note": _setup_note(setup), "setup_top": is_top_signal(setup, ind),
+        "vm_pct": _vm_for(ticker),
         "tech_rating": tr["label"], "tech_votes": {"buy": tr["buy"], "sell": tr["sell"], "neutral": tr["neutral"]},
     }
     # Výkonnost v čase + pozice v 52T pásmu + vzdálenost od klouzavých průměrů
@@ -2425,6 +2301,13 @@ def compute_verdict_model(facts):
         pillars.append({"key": "technical", "label": "Technika", "weight": 0.30,
                         "score": int(round(tech)), "note": tech_note})
 
+    # 2) HODNOTA & MOMENTUM – jediný fundamentální pilíř OVĚŘENÝ na historii
+    #    (skóre 0-100 z denního skenu S&P 500; mimo index chybí a váhy se přepočtou).
+    vm = facts.get("vm_pct")
+    if isinstance(vm, (int, float)):
+        pillars.append({"key": "vm", "label": "Hodnota & momentum", "weight": 0.25,
+                        "score": int(vm), "note": f"skóre {int(vm)}/100 v rámci S&P 500"})
+
     # 2) VALUACE – preferuj PEG, pak forward P/E, pak trailing P/E
     val = facts.get("valuation") or {}
     peg, fpe, pe = val.get("peg"), val.get("forward_pe"), val.get("pe")
@@ -2439,7 +2322,7 @@ def compute_verdict_model(facts):
         vscore = 80 if pe <= 12 else 65 if pe <= 18 else 50 if pe <= 25 else 38 if pe <= 40 else 22
         vnote = f"P/E {pe:.1f}"
     if vscore is not None:
-        pillars.append({"key": "valuation", "label": "Valuace", "weight": 0.20,
+        pillars.append({"key": "valuation", "label": "Valuace", "weight": 0.10,
                         "score": int(vscore), "note": vnote})
 
     # 3) RŮST & ZISKOVOST – průměr dostupných ukazatelů
@@ -2458,7 +2341,7 @@ def compute_verdict_model(facts):
             bits.append(f"marže {fin['profit_margin_pct']:.0f}%")
         if isinstance(fin.get("roe_pct"), (int, float)):
             bits.append(f"ROE {fin['roe_pct']:.0f}%")
-        pillars.append({"key": "growth", "label": "Růst & ziskovost", "weight": 0.25,
+        pillars.append({"key": "growth", "label": "Růst & ziskovost", "weight": 0.12,
                         "score": int(round(sum(subs) / len(subs))), "note": ", ".join(bits)})
 
     # 4) ANALYTICI – konsenzus (počty doporučení / rec key) + upside k cíli
@@ -2485,7 +2368,7 @@ def compute_verdict_model(facts):
     elif cscore is not None:
         ascore = round(cscore)
     if ascore is not None:
-        pillars.append({"key": "analysts", "label": "Analytici", "weight": 0.22,
+        pillars.append({"key": "analysts", "label": "Analytici", "weight": 0.12,
                         "score": int(ascore), "note": cnote or ""})
 
     # 5) NÁLADA & INSTITUCE – sentiment titulků + insider obchody + revize analytiků.
@@ -2509,23 +2392,35 @@ def compute_verdict_model(facts):
         sub_scores.append(ar[0]); sub_notes.append(ar[1])
     if sub_scores:
         sentiment_score = int(round(sum(sub_scores) / len(sub_scores)))
-        pillars.append({"key": "sentiment", "label": "Nálada & instituce", "weight": 0.13,
+        pillars.append({"key": "sentiment", "label": "Nálada & instituce", "weight": 0.07,
                         "score": sentiment_score, "note": " · ".join(sub_notes)})
 
     # 6) SEC PODÁNÍ – oficiální americká data (Form 4 insider, 8-K materiální události).
     #    Nejsilnější first-hand signál, ale jen pro US akcie. Neamerické tituly ho nemají.
     sec_res = _sec_pillar_score(facts.get("ticker"))
     if sec_res:
-        pillars.append({"key": "sec", "label": "Podání SEC", "weight": 0.10,
+        pillars.append({"key": "sec", "label": "Podání SEC", "weight": 0.04,
                         "score": sec_res[0], "note": sec_res[1]})
 
-    # Sníží váhy ostatních pilířů proporčně, aby suma byla pořád ~1
-    # (já volil 0.30/0.20/0.25/0.22/0.13 = 1.10; přepočet níže)
+    # Váhy: ověřené pilíře (technika 0.30, hodnota&momentum 0.25) nesou víc než
+    # polovinu; neověřené (valuace, růst, analytici, nálada, SEC) zbytek.
+    # Chybějící pilíř se nepočítá – váhy se přepočtou na dostupná data.
 
     # Kompozitní skóre – váhy přepočítané podle dostupných pilířů
     wsum = sum(p["weight"] for p in pillars)
     composite = round(sum(p["score"] * p["weight"] for p in pillars) / wsum) if wsum else 50
     verdict = "Koupit" if composite >= VERDICT_BUY else ("Prodat" if composite < VERDICT_SELL else "Držet")
+
+    # Ověřená pravidla mají přednost před vahami: splněný signál modelu
+    # (TOP setup + skóre hodnota&momentum ≥ 65/100) = Koupit; pokles u drahého
+    # titulu se slábnoucím momentem (VM < 30) dával v holdoutu -0,59 % na obchod,
+    # takže nikdy Koupit.
+    rule = None
+    if isinstance(vm, (int, float)) and facts.get("setup_score") is not None:
+        if facts.get("setup_top") and vm >= VM_MIN * 100:
+            verdict, composite, rule = "Koupit", max(composite, VERDICT_BUY), "signal"
+        elif verdict == "Koupit" and facts["setup_score"] >= VERDICT_BUY and vm < 30:
+            verdict, composite, rule = "Držet", min(composite, VERDICT_BUY - 1), "low_vm"
 
     # Jistota: pokrytí daty (0.4) + shoda pilířů (0.35) + odstup od neutrálu (0.25)
     scores = [p["score"] for p in pillars]
@@ -2544,7 +2439,7 @@ def compute_verdict_model(facts):
 
     return {
         "score": composite, "verdict": verdict, "confidence": confidence,
-        "coverage_pct": round(wsum * 100), "earnings_in": earnings_in,
+        "coverage_pct": round(wsum * 100), "earnings_in": earnings_in, "rule": rule,
         "pillars": [{**p, "weight": round(p["weight"], 2)} for p in pillars],
     }
 
@@ -2700,22 +2595,65 @@ def deep_analysis(ticker):
         return jsonify({"ok": False, "error": f"Chyba analýzy: {e}"}), 500
 
 
-def _price_paths(tickers):
+def _price_paths(tickers, rng="1y"):
     """Pro každý ticker vrátí (aktuální cena, dráha [(ts, close)]). Bereme CELOU
     dráhu, ne jen dnešní cenu – jinak by obchod, který zasáhl cíl a pak spadl,
     vyšel jako ztráta, tedy jinak, než co měří backtest a co podle plánu nastalo."""
-    prices, paths = {}, {}
-    for t in tickers:
+    def one(t):
         try:
-            res = yahoo_chart(t, "6mo", "1d")
-            prices[t] = (res.get("meta") or {}).get("regularMarketPrice")
+            res = yahoo_chart(t, rng, "1d")
             ts_ = res.get("timestamp") or []
             cl_ = ((res.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
-            paths[t] = [(tt, c) for tt, c in zip(ts_, cl_) if c is not None]
+            return t, (res.get("meta") or {}).get("regularMarketPrice"), \
+                [(tt, c) for tt, c in zip(ts_, cl_) if c is not None]
         except Exception:
-            prices[t] = None
-            paths[t] = []
+            return t, None, []
+    from concurrent.futures import ThreadPoolExecutor
+    prices, paths = {}, {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for t, pr, path in ex.map(one, [t for t in tickers if t]):
+            prices[t], paths[t] = pr, path
     return prices, paths
+
+
+def _agg_returns(rs):
+    return {"count": len(rs), "avg_return": round(sum(rs) / len(rs), 2),
+            "win_rate": round(sum(1 for r in rs if r > 0) / len(rs) * 100, 1)} if rs else None
+
+
+def _model_record(limit=300):
+    """Živý záznam modelu: všechny papírové obchody z denních signálů, přehrané
+    proti skutečným cenám stejnou logikou jako pozice uživatele. Kešováno hodinu."""
+    if not cloud_enabled():
+        return {"count": 0}
+    try:
+        c = kv_get_json("paper:summary")
+        if c and time.time() - c.get("ts", 0) < 3600:
+            return c
+        trades = kv_lrange("paper:trades", -limit, -1)
+    except Exception:
+        return {"count": 0}
+    if not trades:
+        return {"count": 0}
+    prices, paths = _price_paths({t.get("ticker") for t in trades})
+    items, closed, every = [], [], []
+    for t in trades:
+        ret, st, lbl = _replay_trade(t, paths.get(t.get("ticker")) or [], prices.get(t.get("ticker")))
+        if ret is None:
+            continue
+        every.append(ret)
+        if st != "open":
+            closed.append(ret)
+        items.append({"ticker": t.get("ticker"), "date": t.get("date"), "price": t.get("price"),
+                      "vm": t.get("vm"), "return_pct": _round(ret, 2),
+                      "exit_status": st, "exit_label": lbl})
+    out = {"ts": int(time.time()), "count": len(items), "since": trades[0].get("date"),
+           "closed": _agg_returns(closed), "all": _agg_returns(every), "items": items[-40:][::-1]}
+    try:
+        kv_set_json("paper:summary", out)
+    except Exception:
+        pass
+    return out
 
 
 def _replay_trade(v, path, cur, now=None):
@@ -2744,18 +2682,19 @@ def _replay_trade(v, path, cur, now=None):
     return ret_, "open", "Drží se (do cíle/stopu/horizontu)"
 
 
-def _positions_for(user, limit=12):
+def _positions_for(user, limit=12, risk=None):
     """Otevřené nákupní verdikty uživatele, přehrané proti ŽIVÉ ceně.
     Tohle je ta „živá" složka: plán se nastaví jednou, ale cíl/stop se
     kontrolují každý den – přesně to, co podle backtestu funguje
     (reagovat na zeslábnutí technického skóre naopak měřitelně škodí)."""
+    risk = _risk(risk) if risk else _user_risk(user)
     try:
         mine = [v for v in (kv_lrange("verdicts", -200, -1) or [])
                 if v.get("user") == user and v.get("verdict") == "Koupit"][-limit:]
     except Exception:
-        return {"count": 0, "action_count": 0, "items": [], "allocation": _allocation(0)}
+        return {"count": 0, "action_count": 0, "items": [], "allocation": _allocation(0, risk)}
     if not mine:
-        return {"count": 0, "action_count": 0, "items": [], "allocation": _allocation(0)}
+        return {"count": 0, "action_count": 0, "items": [], "allocation": _allocation(0, risk)}
     prices, paths = _price_paths({v.get("ticker") for v in mine if v.get("ticker")})
     now = int(time.time())
     items = []
@@ -2777,26 +2716,39 @@ def _positions_for(user, limit=12):
     items.sort(key=lambda x: (order.get(x["status"], 9), -(x["ts"] or 0)))
     return {"count": len(items), "items": items,
             "action_count": sum(1 for i in items if i["status"] != "open"),
-            "allocation": _allocation(sum(1 for i in items if i["status"] == "open"))}
+            "allocation": _allocation(sum(1 for i in items if i["status"] == "open"), risk)}
 
 
-def _allocation(open_positions):
-    """Rozložení portfolia: aktivní signály vs indexové jádro.
-
-    Portfoliová simulace ukázala, že největší jednotlivá ztráta nebyla ve výběru
-    akcií, ale v LEŽÍCÍM KAPITÁLU – signálů je málo, takže ~71 % peněz nedělalo
-    nic a portfolio vyneslo +3,8 % ročně místo +11,2 %. Každá aktivní pozice má
-    proto pevnou váhu 1/PORTFOLIO_SLOTS a zbytek patří do širokého indexu."""
+def _allocation(open_positions, risk="balanced"):
+    """Rozložení portfolia podle rizikového profilu – každá varianta ověřená
+    na historii (viz VALIDATION["profiles"]):
+      konzervativní = pozice po 10 % + cílení volatility 15 % (propad -17,5 %)
+      vyvážený      = pozice po 10 %, satelit max 50 %, zbytek indexové jádro
+      agresivní     = pozice po 20 %, satelit až 100 %
+    Hotovost bez důvodu je nejdražší chyba (dřív ~70 % kapitálu leželo ladem);
+    jediná výjimka je konzervativní profil v rozkolísaném trhu – tam je
+    hotovost záměr, který propady na historii skoro půlil."""
+    risk = _risk(risk)
+    w = POSITION_WEIGHT[risk]
     used = max(0, min(open_positions, PORTFOLIO_SLOTS))
-    per = 100.0 / PORTFOLIO_SLOTS
-    return {
-        "slots_max": PORTFOLIO_SLOTS, "slots_used": used,
-        "per_position_pct": round(per, 1),
-        "active_pct": round(used * per, 1),
-        "core_pct": round(100 - used * per, 1),
-        "note": ("Každý signál dostane stejný díl, zbytek drží široký indexový "
-                 "fond. Volná hotovost je nejdražší chyba – nevydělává nic."),
-    }
+    expo, vol = 100, None
+    if risk in VOL_TARGET:
+        mr = _market_risk()
+        vol = mr.get("spy_vol")
+        expo = mr.get(f"exposure_{risk}") or 100
+    per = round(w * expo, 1)
+    active = round(used * per, 1)
+    cash = round(100.0 - expo, 1)
+    core = round(max(0.0, 100.0 - cash - active), 1)
+    if cash > 0:
+        note = (f"Trh je rozkolísaný (volatilita {vol} % ročně), konzervativní profil proto drží "
+                f"{cash:.0f} % v hotovosti nebo krátkodobých dluhopisech. Až se trh uklidní, vrátí se do akcií.")
+    else:
+        note = ("Každý signál dostane stejný díl, zbytek drží široký indexový fond. "
+                "Hotovost bez důvodu nevydělává nic.")
+    return {"risk": risk, "slots_max": PORTFOLIO_SLOTS, "slots_used": used,
+            "per_position_pct": per, "active_pct": active, "core_pct": core,
+            "cash_pct": cash, "exposure_pct": expo, "spy_vol": vol, "note": note}
 
 
 @app.route("/api/positions")
@@ -2808,7 +2760,7 @@ def my_positions():
     if not _rate_ok("positions", 40, 60):
         return jsonify({"ok": True, "count": 0, "action_count": 0, "items": []})
     try:
-        return jsonify({"ok": True, **_positions_for(user)})
+        return jsonify({"ok": True, **_positions_for(user, risk=request.args.get("risk"))})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -2817,9 +2769,10 @@ def my_positions():
 def track_record():
     """Agregovaná úspěšnost dosavadních verdiktů (re-fetch aktuálních cen)."""
     try:
+        model = _model_record()
         verdicts = kv_lrange("verdicts", -200, -1)
         if not verdicts:
-            return jsonify({"ok": True, "count": 0, "items": [], "stats": {}})
+            return jsonify({"ok": True, "count": 0, "items": [], "stats": {}, "model": model})
         # Aktuální ceny (unikátní tickery)
         prices, paths = _price_paths({v.get("ticker") for v in verdicts if v.get("ticker")})
 
@@ -2844,13 +2797,6 @@ def track_record():
                           "exit_status": exit_status, "exit_label": exit_label})
         items = items[-60:][::-1]
 
-        def _agg(rs):
-            return {
-                "count": len(rs),
-                "avg_return": round(sum(rs) / len(rs), 2),
-                "win_rate": round(sum(1 for r in rs if r > 0) / len(rs) * 100, 1),
-            } if rs else None
-
         stats = {}
         if buy_rets:
             stats = {
@@ -2859,279 +2805,678 @@ def track_record():
                 "buy_avg_return": round(sum(buy_rets) / len(buy_rets), 2),
                 "buy_win_rate": round(sum(1 for r in buy_rets if r > 0) / len(buy_rets) * 100, 1),
                 # rozpad podle jistoty
-                "buy_all": _agg(buy_rets),
-                "buy_high": _agg(buy_high_rets),
+                "buy_all": _agg_returns(buy_rets),
+                "buy_high": _agg_returns(buy_high_rets),
                 "high_conf_threshold": HIGH_CONF,
             }
-        return jsonify({"ok": True, "count": len(verdicts), "items": items, "stats": stats})
+        return jsonify({"ok": True, "count": len(verdicts), "items": items, "stats": stats,
+                        "model": model})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ---------------------------------------------------------------------------
-# BACKTEST – poctivé ověření techniky na historii (5 let, vč. medvědího 2022).
-# Backtestuje se technické setup skóre (máme historické ceny). Fundamenty se
-# zpětně (point-in-time) zdarma získat nedají, takže je do backtestu netaháme.
-# Žádný look-ahead: na každém dni počítáme skóre jen z dat DO toho dne a měříme
-# následný výnos za 'horizon' obchodních dní. Měříme i ALFU = výnos navíc proti
-# indexu (SPY), což se nedá ošálit býčím trhem.
+# STRATEGIE v2 (2026-10) – celé S&P 500 + HODNOTA & MOMENTUM + rizikové profily
+#
+# Ověřeno offline walk-forward testem (čísla ve VALIDATION níže): historické
+# složení S&P 500 včetně vyřazených titulů (žádní „budoucí vítězové"), ceny
+# včetně dividend, fundamenty z SEC až 120 dní po konci fiskálního roku,
+# ladění 2015-2022, ověření na nedotčeném období 2023-2026.
+#
+# Co se změnilo proti v1 a proč – každý bod změřený, ne odhadnutý:
+#  * universum 45 titulů → celé S&P 500. Ze 45 titulů vycházel signál zřídka
+#    a většina kapitálu ležela ladem; S&P 500 dá ~10 kandidátů denně.
+#  * nákupní signál = TOP setup (≥80 + klidný objem) A skóre hodnota&momentum
+#    (VM) ≥ 65/100 (≈ nejlepší pětina S&P 500), řazeno podle VM. VM je PRŮMĚR
+#    percentilů šesti složek, ne samo percentil – proto „65" ≠ „top 35 %".
+#    Zisk na obchod +2,07 % / +2,13 %
+#    (trénink/holdout) proti +2,03 % / +1,53 % u samotného TOP. Práh 65 je
+#    střed stabilního plató 60-70 (0,50-0,55 výrazně horší) – ne vyladěná špička.
+#  * pokles u DRAHÉHO titulu se SLÁBNOUCÍM momentem (VM < 30) dával v holdoutu
+#    -0,59 % na obchod – takové poklesy model nekupuje.
+#  * „podhodnocené" = nejvyšší VM. Dřívější „Potenciál" (45 % skóre tvořila
+#    vzdálenost od ročního maxima) neměl žádnou předpovědní hodnotu
+#    (Q5-Q1 +0,03 %/měsíc, t ≈ 0).
+#  * konzervativní profil = cílení volatility 15 % (propad -17,5 % místo -33,7 %
+#    u indexu). Trendový filtr „pod 200denním průměrem prodat" zamítnut:
+#    v holdoutu stál 7 bodů ročně (prodal na dně celního propadu 2025).
+#  * vstup o den později (signál ráno, nákup další den) stojí jen ~0,04 bodu
+#    na obchod – strategie jde reálně obchodovat podle ranního přehledu.
+#  * max 2 pozice na sektor (viz SECTOR_CAP) – diverzifikace skoro zadarmo.
 # ---------------------------------------------------------------------------
-# Široký, sektorově/velikostně rozmanitý US basket (ne jen mega-cap v býčím trhu),
-# aby byl backtest reprezentativní.
-BACKTEST_BASKET = [
-    # Záměrně NEJEN dnešní vítězové. Původní basket 31 mega-capů nafukoval
-    # výsledek (survivorship bias): „nákup poklesu" vyjde skvěle na titulech,
-    # které od té doby jen rostly. Půlka seznamu jsou proto dlouhodobí zaostávající.
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "AMD",
-    "JPM", "BAC", "V", "GS", "JNJ", "PFE", "UNH", "MRK",
-    "WMT", "PG", "KO", "MCD", "NKE", "COST", "HD",
-    "XOM", "CVX", "CAT", "BA", "DIS", "T", "INTC", "PLTR",
-    # zaostávající / cyklické / padlé – bez nich čísla lžou nahoru
-    "VZ", "MMM", "F", "PYPL", "WBD", "PARA", "CVS", "MRNA",
-    "BIIB", "VTRS", "KHC", "MO", "LUV", "M",
-]
+VM_MIN = 0.65
+POSITION_WEIGHT = {"conservative": 0.10, "balanced": 0.10, "aggressive": 0.20}
+VOL_TARGET = {"conservative": 0.15}
+RISK_PROFILES = ("conservative", "balanced", "aggressive")
+# Max 2 pozice z jednoho sektoru. Na historii stojí ~0,2 bodu ročně (trénink
+# -0,7, holdout +1,5) – prakticky zdarma pojištění proti šoku v jednom odvětví,
+# který backtest nemusí zachytit (např. 5 custody bank = jedna sázka pětkrát).
+SECTOR_CAP = 2
+# Sken běží po dávkách a průběh ukládá do KV, takže doběhne při JAKÉMKOLI
+# limitu běhu funkce (další volání pokračuje tam, kde předchozí skončilo).
+SCAN_BUDGET_S = float(os.environ.get("SCAN_BUDGET_S") or 40)
+SCAN_WORKERS = 10
+SP500_CSV_URL = ("https://raw.githubusercontent.com/datasets/"
+                 "s-and-p-500-companies/main/data/constituents.csv")
+
+SP500_FALLBACK = (
+    "MMM:66740 AOS:91142 ABT:1800 ABBV:1551152 ACN:1467373 ADBE:796343 AMD:2488 AES:874761 AFL:4977 "
+    "A:1090872 APD:2969 ABNB:1559720 AKAM:1086222 ALB:915913 ARE:1035443 ALGN:1097149 ALLE:1579241 "
+    "LNT:352541 ALL:899051 GOOGL:1652044 GOOG:1652044 MO:764180 AMZN:1018724 AMCR:1748790 AEE:1002910 "
+    "AEP:4904 AXP:4962 AIG:5272 AMT:1053507 AWK:1410636 AMP:820027 AME:1037868 AMGN:318154 APH:820313 "
+    "ADI:6281 AON:315293 APA:1841666 APO:1858681 AAPL:320193 AMAT:6951 APP:1751008 APTV:1521332 "
+    "ACGL:947484 ADM:7084 ARES:1176948 ANET:1596532 AJG:354190 AIZ:1267238 T:732717 ATO:731802 "
+    "ADSK:769397 ADP:8670 AZO:866787 AVY:8818 AXON:1069183 BKR:1701605 BALL:9389 BAC:70858 BAX:10456 "
+    "BDX:10795 BRK.B:1067983 BBY:764478 TECH:842023 BIIB:875045 BLK:2012383 BX:1393818 XYZ:1512673 "
+    "BE:1664703 BNY:1390777 BA:12927 BKNG:1075531 BSX:885725 BMY:14272 AVGO:1730168 BR:1383312 "
+    "BRO:79282 BF.B:14693 BG:1996862 BXP:1037540 CHRW:1043277 CDNS:813672 CPT:906345 COF:927628 "
+    "CAH:721371 CCL:815097 CARR:1783180 CVNA:1690820 CASY:726958 CAT:18230 CBOE:1374310 CBRE:1138118 "
+    "CDW:1402057 COR:1140859 CNC:1071739 CNP:1130310 CF:1324404 CRL:1100682 SCHW:316709 CHTR:1091667 "
+    "CVX:93410 CMG:1058090 CB:896159 CHD:313927 CIEN:936395 CI:1739940 CINF:20286 CTAS:723254 "
+    "CSCO:858877 C:831001 CFG:759944 CLX:21076 CME:1156375 CMS:811156 KO:21344 CTSH:1058290 "
+    "COHR:820318 COIN:1679788 CL:21665 CMCSA:1166691 FIX:1035983 COP:1163165 ED:1047862 STZ:16918 "
+    "CEG:1868275 COO:711404 CPRT:900075 GLW:24741 CPAY:1175454 CSGP:1057352 COST:909832 CRH:849395 "
+    "CRWD:1535527 CCI:1051470 CSX:277948 CMI:26172 CVS:64803 DHR:313616 DRI:940944 DDOG:1561550 "
+    "DVA:927066 DECK:910521 DE:315189 DELL:1571996 DAL:27904 DVN:1090012 DXCM:1093557 FANG:1539838 "
+    "DLR:1297996 DG:29534 DLTR:935703 D:715957 DPZ:1286681 DASH:1792789 DOV:29905 DOW:1751788 "
+    "DHI:882184 DTE:936340 DUK:1326160 DD:1666700 ETN:1551182 EBAY:1065088 ECHO:1415404 ECL:31462 "
+    "EIX:827052 EW:1099800 ELV:1156039 EME:105634 EMR:32604 ETR:65984 EOG:821189 EQT:33213 EFX:33185 "
+    "EQIX:1101239 ERIE:922621 ESS:920522 EL:1001250 EG:1095073 EVRG:1711269 P:1474432 ES:72741 "
+    "EXC:1109357 EXE:895126 EXPE:1324424 EXPD:746515 EXR:1289490 XOM:2115436 FFIV:1048695 FDS:1013237 "
+    "FICO:814547 FAST:815556 FRT:34903 FDX:1048911 FDXF:2082247 FERG:2011641 FIS:1136893 FITB:35527 "
+    "FSLR:1274494 FE:1031296 FISV:798354 FLEX:866374 F:37996 FTNT:1262039 FTV:1659166 FOXA:1754301 "
+    "FOX:1754301 BEN:38777 FCX:831259 GRMN:1121788 IT:749251 GE:40545 GEHC:1932393 GEV:1996810 "
+    "GEN:849399 GNRC:1474735 GD:40533 GIS:40704 GM:1467858 GPC:40987 GILD:882095 GPN:1123360 "
+    "GL:320335 GDDY:1609711 GS:886982 HAL:45012 HIG:874766 HAS:46080 HCA:860730 DOC:765880 "
+    "HSIC:1000228 HSY:47111 HPE:1645590 HLT:1585689 HD:354950 HONA:2089271 HON:773840 HRL:48465 "
+    "HST:1070750 HWM:4281 HPQ:47217 HUBB:48898 HUM:49071 HBAN:49196 HII:1501585 IBM:51143 IEX:832101 "
+    "IDXX:874716 ITW:49826 ILMN:1110803 INCY:879169 IR:1699150 PODD:1145197 INTC:50863 IBKR:1381197 "
+    "ICE:1571949 IFF:51253 IP:51434 INTU:896878 ISRG:1035267 IVZ:914208 INVH:1687229 IQV:1478242 "
+    "IRM:1020569 JBHT:728535 JBL:898293 JKHY:779152 J:52988 JNJ:200406 JCI:833444 JPM:19617 "
+    "KVUE:1944048 KDP:1418135 KEY:91576 KEYS:1601046 KMB:55785 KIM:879101 KMI:1506307 KKR:1404912 "
+    "KLAC:319201 KHC:1637459 KR:56873 LHX:202058 LH:920148 LRCX:707549 LVS:1300514 LDOS:1336920 "
+    "LEN:920760 LII:1069202 LLY:59478 LIN:1707925 LYV:1335258 LMT:936468 L:60086 LOW:60667 "
+    "LULU:1397187 LITE:1633978 LYB:1489393 MTB:36270 MPC:1510295 MAR:1048286 MRSH:62709 MLM:916076 "
+    "MRVL:1835632 MAS:62996 MA:1141391 MKC:63754 MCD:63908 MCK:927653 MDT:1613103 MRK:310158 "
+    "META:1326801 MET:1099219 MTD:1037646 MGM:789570 MCHP:827054 MU:723125 MSFT:789019 MAA:912595 "
+    "MRNA:1682852 MDLZ:1103982 MPWR:1280452 MNST:865752 MCO:1059556 MS:895421 MOS:1285785 MSI:68505 "
+    "MSCI:1408198 NDAQ:1120193 NTAP:1002047 NFLX:1065280 NEM:1164727 NWSA:1564708 NWS:1564708 "
+    "NEE:753308 NKE:320187 NI:1111711 NDSN:72331 NSC:702165 NTRS:73124 NOC:1133421 NCLH:1513761 "
+    "NRG:1013871 NUE:73309 NVDA:1045810 NVR:906163 NXPI:1413447 ORLY:898173 OXY:797468 ODFL:878927 "
+    "OMC:29989 ON:1097864 OKE:1039684 ORCL:1341439 OTIS:1781335 PCAR:75362 PKG:75677 PLTR:1321655 "
+    "PANW:1327567 PH:76334 PAYX:723531 PYPL:1633917 PNR:77360 PEP:77476 PFE:78003 PCG:1004980 "
+    "PM:1413329 PSX:1534701 PNW:764622 PNC:713676 PPG:79879 PPL:922224 PFG:1126328 PG:80424 PGR:80661 "
+    "PLD:1045609 PRU:1137774 PEG:788784 PTC:857005 PSA:1393311 PHM:822416 PWR:1050915 QCOM:804328 "
+    "DGX:1022079 Q:2058873 RL:1037038 RJF:720005 RDDT:1713445 RTX:101829 O:726728 REG:910606 "
+    "REGN:872589 RF:1281761 RSG:1060391 RMD:943819 RVTY:31791 HOOD:1783879 ROK:1024478 ROL:84839 "
+    "ROP:882835 ROST:745732 RCL:884887 SPGI:64040 CRM:1108524 SNDK:2023554 SBAC:1034054 SLB:87347 "
+    "STX:1137789 SRE:1032208 NOW:1373715 SHW:89800 SPG:1063761 SKYD:2041610 SWKS:4127 SJM:91419 "
+    "SW:2005951 SNA:91440 SOLV:1964738 SO:92122 LUV:92380 SWK:93556 SBUX:829224 STT:93751 "
+    "STLD:1022671 STE:1757898 SYK:310764 SMCI:1375365 SYF:1601712 SNPS:883241 SYY:96021 TMUS:1283699 "
+    "TROW:1113169 TTWO:946581 TPR:1116132 TRGP:1389170 TGT:27419 TEL:1385157 TDY:1094285 TER:97210 "
+    "TSLA:1318605 TXN:97476 TPL:1811074 TXT:217346 TMO:97745 TJX:109198 TKO:1973266 TSCO:916365 "
+    "TT:1466258 TDG:1260221 TRV:86312 TRMB:864749 TFC:92230 TWLO:1447669 TYL:860731 TSN:100493 "
+    "USB:36104 UBER:1543151 UDR:74208 ULTA:1403568 UNP:100885 UAL:100517 UPS:1090727 URI:1067701 "
+    "UNH:731766 UHS:352915 VLO:1035002 VEEV:1393052 VTR:740260 VLTO:1967680 VRSN:1014473 VRSK:1442145 "
+    "VZ:732712 VRTX:875320 VRT:1674101 VTRS:1792044 VICI:1705696 V:1403161 VST:1692819 VMRK:906107 "
+    "VMC:1396009 VYLR:2128626 WRB:11544 GWW:277135 WAB:943452 WMT:104169 DIS:1744489 WM:823768 "
+    "WAT:1000697 WEC:783325 WFC:72971 WELL:766704 WST:105770 WDC:106040 WY:106535 WSM:719955 "
+    "WMB:107263 WTW:1140536 WDAY:1327811 WYNN:1174922 XEL:72903 XYL:1524472 YUM:1041061 ZBRA:877212 "
+    "ZBH:1136869 ZTS:1555280 "
+)
+
+VALIDATION = {'as_of': '2026-10-14',
+ 'data': '2015-01 .. 2026-09, historické složení S&P 500 (633 titulů vč. 131 vyřazených), ceny vč. '
+         'dividend, fundamenty z SEC s 120denním zpožděním',
+ 'rule': {'setup_min': 80,
+          'vol_ratio_max': 1.15,
+          'vm_min_pct': 65,
+          'target_pct': 15,
+          'stop_pct': 10,
+          'max_days': 30,
+          'slots': 5,
+          'sector_cap': 2},
+ 'profiles': {'conservative': {'weight_pct': 10,
+                               'vol_target_pct': 15,
+                               'train': {'cagr': 10.7,
+                                         'max_dd': -18.2,
+                                         'sharpe': 0.83,
+                                         'trades': 215,
+                                         'win_rate': 62.8},
+                               'holdout': {'cagr': 19.3,
+                                           'max_dd': -14.8,
+                                           'sharpe': 1.49,
+                                           'trades': 128,
+                                           'win_rate': 61.7},
+                               'full': {'cagr': 13.2,
+                                        'max_dd': -18.2,
+                                        'sharpe': 1.01,
+                                        'trades': 347,
+                                        'win_rate': 62.5}},
+              'balanced': {'weight_pct': 10,
+                           'vol_target_pct': None,
+                           'train': {'cagr': 12.9,
+                                     'max_dd': -33.6,
+                                     'sharpe': 0.74,
+                                     'trades': 215,
+                                     'win_rate': 62.8},
+                           'holdout': {'cagr': 21.9,
+                                       'max_dd': -19.0,
+                                       'sharpe': 1.47,
+                                       'trades': 128,
+                                       'win_rate': 61.7},
+                           'full': {'cagr': 15.6,
+                                    'max_dd': -33.6,
+                                    'sharpe': 0.91,
+                                    'trades': 347,
+                                    'win_rate': 62.5}},
+              'aggressive': {'weight_pct': 20,
+                             'vol_target_pct': None,
+                             'train': {'cagr': 15.5,
+                                       'max_dd': -34.8,
+                                       'sharpe': 0.81,
+                                       'trades': 215,
+                                       'win_rate': 62.8},
+                             'holdout': {'cagr': 21.2,
+                                         'max_dd': -21.0,
+                                         'sharpe': 1.28,
+                                         'trades': 128,
+                                         'win_rate': 61.7},
+                             'full': {'cagr': 17.0,
+                                      'max_dd': -34.8,
+                                      'sharpe': 0.92,
+                                      'trades': 347,
+                                      'win_rate': 62.5}}},
+ 'benchmark': {'spy': {'train': {'cagr': 10.1, 'max_dd': -33.7, 'sharpe': 0.61},
+                       'holdout': {'cagr': 22.3, 'max_dd': -18.8, 'sharpe': 1.43},
+                       'full': {'cagr': 13.9, 'max_dd': -33.7, 'sharpe': 0.83}},
+               'spy_voltarget': {'train': {'cagr': 8.6, 'max_dd': -18.7, 'sharpe': 0.7},
+                                 'holdout': {'cagr': 19.6, 'max_dd': -14.7, 'sharpe': 1.46},
+                                 'full': {'cagr': 11.9, 'max_dd': -18.7, 'sharpe': 0.94}}},
+ 'signals': {'train': {'model': {'count': 562, 'win_rate': 59.8, 'avg_return': 2.07, 'ci95': 0.61},
+                       'old_top': {'count': 1648,
+                                   'win_rate': 61.0,
+                                   'avg_return': 2.03,
+                                   'ci95': 0.37},
+                       'all_dips': {'count': 18026,
+                                    'win_rate': 57.2,
+                                    'avg_return': 1.52,
+                                    'ci95': 0.12},
+                       'rejected_low_vm': {'count': 738,
+                                           'win_rate': 54.6,
+                                           'avg_return': 1.21,
+                                           'ci95': 0.61}},
+             'holdout': {'model': {'count': 379,
+                                   'win_rate': 58.6,
+                                   'avg_return': 2.13,
+                                   'ci95': 0.82},
+                         'old_top': {'count': 1138,
+                                     'win_rate': 56.4,
+                                     'avg_return': 1.53,
+                                     'ci95': 0.47},
+                         'all_dips': {'count': 10569,
+                                      'win_rate': 53.9,
+                                      'avg_return': 1.23,
+                                      'ci95': 0.16},
+                         'rejected_low_vm': {'count': 442,
+                                             'win_rate': 44.1,
+                                             'avg_return': -0.59,
+                                             'ci95': 0.79}},
+             'full': {'model': {'count': 941, 'win_rate': 59.3, 'avg_return': 2.09, 'ci95': 0.49},
+                      'old_top': {'count': 2786,
+                                  'win_rate': 59.2,
+                                  'avg_return': 1.83,
+                                  'ci95': 0.29},
+                      'all_dips': {'count': 28595,
+                                   'win_rate': 56.0,
+                                   'avg_return': 1.41,
+                                   'ci95': 0.09},
+                      'rejected_low_vm': {'count': 1180,
+                                          'win_rate': 50.7,
+                                          'avg_return': 0.53,
+                                          'ci95': 0.49}}}}
 
 
-def _fetch_series(ticker, rng="5y"):
-    """(dates, closes, vols) z denních dat – dates jako 'YYYY-MM-DD' kvůli zarovnání
-    s indexem. Objem zarovnaný s cenou (jen dny, kde je cena)."""
-    d = yahoo_chart(ticker, rng, "1d")
-    ts = d.get("timestamp") or []
-    q = ((d.get("indicators") or {}).get("quote") or [{}])[0]
-    cl = q.get("close") or []
-    vl = q.get("volume") or []
-    dates, closes, vols = [], [], []
-    for idx, (t, c) in enumerate(zip(ts, cl)):
-        if c is not None:
-            dates.append(datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d"))
-            closes.append(c)
-            v = vl[idx] if idx < len(vl) else None
-            vols.append(v if v is not None else 0)
-    return dates, closes, vols
 
-
-def _exit_trade(closes, i, max_days=None):
-    """Projde den po dni od vstupu a vrátí (výnos, počet dní) podle plánu:
-    stop -EXIT_SL, cíl +EXIT_TP, jinak po EXIT_MAX_DAYS dnech. Pořadí kontroly
-    je chronologické (nejdřív stop) – žádné nakukování do budoucna."""
-    md = max_days or EXIT_MAX_DAYS
-    entry = closes[i]
-    for j in range(1, md + 1):
-        if i + j >= len(closes):
-            break
-        r = closes[i + j] / entry - 1
-        if r <= -EXIT_SL:
-            return -EXIT_SL, j
-        if r >= EXIT_TP:
-            return EXIT_TP, j
-    last = min(i + md, len(closes) - 1)
-    return closes[last] / entry - 1, last - i
-
-
-# Okno historie pro indikátory. Dřív se počítalo z celé série od začátku, takže
-# první vzorek měl jinak dlouhou historii než poslední (RSI/volatilita nesrovnatelné).
-BT_WINDOW = 400
-
-
-def _backtest_ticker(ticker, spy=None, step=None, max_days=2600):
-    """Vrací list (score, výnos%, excess vs SPY% | None, rok, is_top).
-
-    Metodika (opraveno 2026-09):
-      * NEPŘEKRÝVAJÍCÍ vzorky – krok = délka obchodu, takže 1 obchod = 1 nezávislý
-        vzorek. Dřív krok 5 dní při horizontu 10 => 50% překryv => nafouknutá jistota.
-      * KONSTANTNÍ okno historie (BT_WINDOW) pro indikátory.
-      * Výnos podle skutečného obchodního plánu (cíl/stop/max dní), ne podle
-        fixního horizontu – měří se tedy přesně to, co appka uživateli radí.
-    """
-    out = []
+def _vm_for(ticker):
+    """Percentil hodnota&momentum z posledního skenu S&P 500 (None mimo index)."""
     try:
-        dates, closes, vols = _fetch_series(ticker, "10y")
+        return ((kv_get_json("scan:last") or {}).get("vm_map") or {}).get((ticker or "").upper())
     except Exception:
-        return out
-    n = len(closes)
-    if n < BT_WINDOW + EXIT_MAX_DAYS:
-        return out
-    # Krok 10 dní: při kroku = 30 (dokonale nezávislé vzorky) zbylo za 10 let
-    # jen ~36 TOP signálů, z čehož se nedá nic tvrdit. Vzorkujeme proto hustěji
-    # a překryv přiznáváme v `n_eff` (viz _bt_stats) místo abychom ho schovali.
-    step = step or 10
-    i = max(BT_WINDOW, n - max_days)
-    while i + EXIT_MAX_DAYS < n:
-        ind = compute_indicators(closes[i + 1 - BT_WINDOW:i + 1], vols[i + 1 - BT_WINDOW:i + 1])
-        score = tech_setup_score(closes[i], ind)
-        if score is not None:
-            ret, held = _exit_trade(closes, i)
-            exc = None
-            d0 = dates[i]
-            dH = dates[min(i + held, len(dates) - 1)]
-            if spy and d0 in spy and dH in spy and spy[d0]:
-                exc = (ret - (spy[dH] / spy[d0] - 1)) * 100
-            out.append((score, ret * 100, exc, d0[:4], is_top_signal(score, ind), d0))
-        i += step
+        return None
+
+
+def _risk(r):
+    return r if r in RISK_PROFILES else "balanced"
+
+
+def _user_risk(user):
+    try:
+        return _risk((kv_get_json(f"user:{user}") or {}).get("risk"))
+    except Exception:
+        return "balanced"
+
+
+def _sp500_universe():
+    """[(symbol, cik, sektor)] – živě z veřejného seznamu (kešováno týden),
+    při výpadku vestavěná záloha. Složení se mění jen o pár titulů za kvartál."""
+    try:
+        c = kv_get_json("sp500:list")
+        if c and time.time() - c.get("ts", 0) < 7 * 86400 and len(c.get("items") or []) > 400:
+            return [tuple(x) for x in c["items"]]
+    except Exception:
+        pass
+    items = []
+    try:
+        import csv as _csv
+        import io as _io
+        r = requests.get(SP500_CSV_URL, headers={"User-Agent": UA}, timeout=10)
+        for row in _csv.DictReader(_io.StringIO(r.text)):
+            sym = (row.get("Symbol") or "").strip().upper()
+            cik = (row.get("CIK") or "").strip()
+            if sym:
+                items.append((sym, int(cik) if cik.isdigit() else None,
+                              (row.get("GICS Sector") or "").strip()))
+    except Exception:
+        items = []
+    if len(items) < 400:
+        items = [(p.split(":")[0], int(p.split(":")[1]), "") for p in SP500_FALLBACK.split()]
+    else:
+        try:
+            kv_set_json("sp500:list", {"ts": time.time(), "items": items})
+        except Exception:
+            pass
+    return items
+
+
+# (taxonomie, koncept, jednotka, okamžikový stav?, klíč)
+_SEC_FUND_CONCEPTS = [
+    ("us-gaap", "EarningsPerShareDiluted", "USD-per-shares", False, "eps"),
+    ("us-gaap", "NetCashProvidedByUsedInOperatingActivities", "USD", False, "cfo"),
+    ("us-gaap", "WeightedAverageNumberOfDilutedSharesOutstanding", "shares", False, "sh2"),
+    ("us-gaap", "StockholdersEquity", "USD", True, "eq"),
+    ("dei", "EntityCommonStockSharesOutstanding", "shares", True, "sh"),
+]
+SEC_LAG_DAYS = 120       # roční čísla jsou „známá" až 120 dní po konci FY
+SEC_MAX_AGE_DAYS = 550   # starší čísla už nepoužívat
+
+
+def _sec_fundamentals(ciks=None):
+    """{cik: {eps, cfo, eq, sh}} – poslední ROČNÍ čísla, která už v daný den
+    byla veřejně známá (konec FY + 120 dní). Stejné pravidlo jako ve výzkumu,
+    takže živé skóre počítá přesně to, co bylo ověřeno. Zdroj: SEC XBRL
+    frames (všechny firmy za období jedním dotazem). Kešováno 3 dny."""
+    try:
+        c = kv_get_json("sec:fund:v2")
+        if c and time.time() - c.get("ts", 0) < 3 * 86400 and c.get("data"):
+            return {int(k): v for k, v in c["data"].items()}
+    except Exception:
+        pass
+    today = datetime.now(timezone.utc).date()
+    jobs = []
+    for y in (today.year, today.year - 1, today.year - 2):
+        for tax, concept, unit, inst, key in _SEC_FUND_CONCEPTS:
+            jobs.append((tax, concept, unit, f"CY{y}Q4I" if inst else f"CY{y}", key))
+
+    def fetch(job):
+        tax, concept, unit, per, key = job
+        try:
+            r = requests.get(f"https://data.sec.gov/api/xbrl/frames/{tax}/{concept}/{unit}/{per}.json",
+                             headers=SEC_HEADERS, timeout=20)
+            return key, (r.json().get("data") or []) if r.status_code == 200 else []
+        except Exception:
+            return key, []
+
+    from concurrent.futures import ThreadPoolExecutor
+    best = {}
+    with ThreadPoolExecutor(max_workers=5) as ex:      # SEC povoluje max 10 dotazů/s
+        for key, rows in ex.map(fetch, jobs):
+            for d in rows:
+                cik = d.get("cik")
+                if ciks is not None and cik not in ciks:
+                    continue
+                try:
+                    end = datetime.strptime(d["end"], "%Y-%m-%d").date()
+                except Exception:
+                    continue
+                age = (today - end).days
+                if age < SEC_LAG_DAYS or age > SEC_MAX_AGE_DAYS:
+                    continue
+                k = (int(cik), key)
+                if k not in best or end > best[k][0]:
+                    best[k] = (end, d.get("val"))
+    out = {}
+    for (cik, key), (_end, val) in best.items():
+        out.setdefault(cik, {})[key] = val
+    for v in out.values():
+        if not v.get("sh") and v.get("sh2"):
+            v["sh"] = v["sh2"]
+        v.pop("sh2", None)
+    if out:
+        try:
+            kv_set_json("sec:fund:v2", {"ts": time.time(),
+                                        "data": {str(k): v for k, v in out.items()}})
+        except Exception:
+            pass
     return out
 
 
-def _bt_stats(rows):
-    """rows = list (fwd, exc). Vrací trefnost, prům. výnos a alfu (vs index)."""
-    if not rows:
-        return None
-    fwd = [r[0] for r in rows]
-    exc = [r[1] for r in rows if r[1] is not None]
-    wins = [x for x in fwd if x > 0]
-    losses = [x for x in fwd if x <= 0]
-    # Obchod trvá až EXIT_MAX_DAYS, ale vzorkuje se po 10 dnech → jeden obchod
-    # může zasahovat do ~3 vzorků. `n_eff` je počet skutečně nezávislých vzorků
-    # a `ci` je z něj spočítaný interval spolehlivosti (95 %). Bez toho by
-    # trefnost vypadala jistější, než jaká doopravdy je.
-    n_eff = max(1, int(len(fwd) / (EXIT_MAX_DAYS / 10)))
-    _wr = sum(1 for r in fwd if r > 0) / len(fwd) * 100
-    s = {"count": len(fwd), "n_eff": n_eff,
-         "ci": round(1.96 * ((_wr * (100 - _wr) / n_eff) ** 0.5), 1),
-         "win_rate": round(_wr, 1),
-         "avg_return": round(sum(fwd) / len(fwd), 2),
-         "avg_win": round(sum(wins) / len(wins), 2) if wins else 0,
-         "avg_loss": round(sum(losses) / len(losses), 2) if losses else 0}
-    if exc:
-        s["alpha"] = round(sum(exc) / len(exc), 2)
-        s["beat_index_rate"] = round(sum(1 for e in exc if e > 0) / len(exc) * 100, 1)
-    return s
-
-
-def run_backtest(tickers):
-    try:
-        sd, sc, _ = _fetch_series("SPY", "10y")
-        spy = dict(zip(sd, sc))
-    except Exception:
-        spy = {}
-    samples, used = [], []
-    for t in tickers:
-        s = _backtest_ticker(t, spy)
-        if s:
-            samples += s
-            used.append(t)
-    if not samples:
-        return None
-
-    def pick(rows, cond):
-        return [(r[1], r[2]) for r in rows if cond(r)]
-
-    is_buy = lambda r: r[0] >= VERDICT_BUY          # noqa: E731
-    is_top = lambda r: r[4]                          # noqa: E731
-
-    # Ověřovací (holdout) období – na těchto datech se NIC neladilo, takže jen
-    # ono vypovídá o tom, jak systém funguje na datech, která nikdy neviděl.
-    holdout_from = HOLDOUT_FROM
-    hold_rows = [r for r in samples if r[5] >= holdout_from]
-
-    by_year, top_year = {}, {}
-    for r in samples:
-        if is_buy(r):
-            by_year.setdefault(r[3], []).append((r[1], r[2]))
-        if is_top(r):
-            top_year.setdefault(r[3], []).append((r[1], r[2]))
-
+def _scan_one(item):
+    """Denní metriky jednoho titulu ze 2 let dat. Vstupy identické s výzkumem:
+    technické skóre z 400 posledních dní, momentum 12-1 z cen vč. dividend."""
+    sym = item[0]
+    d = None
+    for attempt in range(2):
+        try:
+            d = yahoo_chart(sym.replace(".", "-"), "2y", "1d")
+            break
+        except Exception:
+            time.sleep(0.8)
+    if not d:
+        return {"err": 1}
+    meta = d.get("meta") or {}
+    ind_ = d.get("indicators") or {}
+    q = (ind_.get("quote") or [{}])[0]
+    adjs = (ind_.get("adjclose") or [{}])[0].get("adjclose") or []
+    cl_raw, vl_raw = q.get("close") or [], q.get("volume") or []
+    closes, vols, adj = [], [], []
+    for k, c in enumerate(cl_raw):
+        if c is None:
+            continue
+        a = adjs[k] if k < len(adjs) and adjs[k] is not None else c
+        closes.append(c)
+        adj.append(a)
+        v = vl_raw[k] if k < len(vl_raw) else None
+        vols.append(v if v is not None else 0)
+    if len(closes) < 260:
+        return {"err": 1}
+    ind = compute_indicators(closes[-400:], vols[-400:])
+    price = meta.get("regularMarketPrice") or closes[-1]
+    score = tech_setup_score(price, ind)
+    prev = _prev_close(closes, meta)
+    mom = (adj[-22] / adj[-253] - 1) if (len(adj) >= 253 and adj[-253]) else None
     return {
-        "horizon_days": EXIT_MAX_DAYS, "period": "10 let (vč. propadu 2022)",
-        "benchmark": "SPY" if spy else None,
-        "tickers": used, "ticker_count": len(used), "sample_count": len(samples),
-        "buy": _bt_stats(pick(samples, is_buy)), "top": _bt_stats(pick(samples, is_top)),
-        "hold": _bt_stats(pick(samples, lambda r: VERDICT_SELL <= r[0] < VERDICT_BUY)),
-        "sell": _bt_stats(pick(samples, lambda r: r[0] < VERDICT_SELL)),
-        "baseline": _bt_stats([(r[1], r[2]) for r in samples]),
-        "buy_by_year": {y: _bt_stats(v) for y, v in sorted(by_year.items())},
-        "top_by_year": {y: _bt_stats(v) for y, v in sorted(top_year.items())},
-        "top_threshold": VERDICT_TOP,
-        # ---- holdout: totéž, ale jen na datech, na kterých se neladilo -------
-        "holdout": {
-            "from": holdout_from,
-            "sample_count": len(hold_rows),
-            "baseline": _bt_stats([(r[1], r[2]) for r in hold_rows]),
-            "buy": _bt_stats(pick(hold_rows, is_buy)),
-            "top": _bt_stats(pick(hold_rows, is_top)),
-        },
-        "plan": {"target_pct": round(EXIT_TP * 100, 1), "stop_pct": round(EXIT_SL * 100, 1),
-                 "max_days": EXIT_MAX_DAYS},
-        "generated": int(time.time()),
-        "note": f"Náš nákupní signál (MA Skóre), 10 let, žádný look-ahead, "
-                f"nepřekrývající se vzorky. Koupit = skóre ≥{VERDICT_BUY}, "
-                f"Prodat = <{VERDICT_SELL}. TOP = silný setup + klidný objem. "
-                f"Výnos měřen podle skutečného plánu: cíl +{EXIT_TP*100:.0f} %, "
-                f"stop −{EXIT_SL*100:.0f} %, max {EXIT_MAX_DAYS} obch. dní. "
-                f"Alfa = výnos navíc proti indexu (SPY). Klíč „holdout“ = stejná "
-                f"čísla jen na období od {holdout_from}, na kterém se nic neladilo.",
+        "name": meta.get("shortName") or meta.get("longName") or sym,
+        "price": round(price, 4), "close": round(closes[-1], 4),
+        "chg": round((price - prev) / prev * 100, 2) if prev else 0,
+        "cur": meta.get("currency", "USD"),
+        "score": score, "top": bool(is_top_signal(score, ind)),
+        "rsi": ind.get("rsi"), "vol": ind.get("volatility"), "vr": ind.get("vol_ratio"),
+        "mom": round(mom, 4) if mom is not None else None,
+        "y1": round((adj[-1] / adj[-253] - 1) * 100, 1) if len(adj) >= 253 else None,
     }
 
 
-@app.route("/api/admin/backtest", methods=["POST"])
-def admin_backtest():
-    if not _auth_admin():
-        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
-    body = request.get_json(silent=True) or {}
-    # Horizont už není parametr – obchod končí podle plánu (cíl/stop/max dní).
-    tickers = body.get("tickers") if isinstance(body.get("tickers"), list) else None
-    tickers = [t.strip().upper() for t in (tickers or BACKTEST_BASKET) if str(t).strip()][:60]
+def _pct_ranks(vals):
+    idx = sorted([i for i, v in enumerate(vals) if v is not None], key=lambda i: vals[i])
+    out, n = [None] * len(vals), len(idx)
+    for k, i in enumerate(idx):
+        out[i] = k / (n - 1) if n > 1 else 0.5
+    return out
+
+
+def _vm_scores(recs):
+    """HODNOTA & MOMENTUM = průměr percentilů E/P, B/P, CF/P a 3× momenta 12-1
+    v rámci S&P 500 (momentum váží stejně jako celá hodnotová trojice). Hodnota
+    a momentum jsou záporně korelované, proto je kombinace stabilní tam, kde
+    každá složka zvlášť selhávala. Titul potřebuje aspoň 3 ze 6 složek."""
+    keys = ["ep", "bp", "cfp", "mom", "mom", "mom"]
+    ranks = [_pct_ranks([r.get(k) for r in recs]) for k in keys]
+    out = []
+    for i in range(len(recs)):
+        v = [rk[i] for rk in ranks if rk[i] is not None]
+        out.append(sum(v) / len(v) if len(v) >= 3 else None)
+    return out
+
+
+def _signal_item(r):
+    lv = compute_levels({"price": r["price"]}) or {}
+    ep = r.get("ep")
+    return {
+        "ticker": r["ticker"], "name": r.get("name") or r["ticker"],
+        "price": _round(r["price"], 2), "change_pct": r.get("chg"), "currency": r.get("cur", "USD"),
+        "score": r.get("score"), "rsi": _round(r.get("rsi"), 1), "note": _setup_note(r.get("score")),
+        "conviction": "top", "vm": int(round((r.get("vm") or 0) * 100)), "vm_rank": r.get("vm_rank"),
+        "mom_pct": round(r["mom"] * 100, 1) if r.get("mom") is not None else None,
+        "pe": round(1 / ep, 1) if (ep and ep > 0) else None,
+        "volatility_pct": r.get("vol"), "market_cap": r.get("mcap"), "sector": r.get("sector"),
+        "target": lv.get("target_price"), "stop": lv.get("stop_loss"),
+        "reward_pct": lv.get("reward_pct"), "risk_pct": lv.get("risk_pct"), "rr": lv.get("rr"),
+    }
+
+
+def _value_item(r):
+    """Položka pro „Podhodnocené s momentem" – data, ne slogany."""
+    vm = int(round(r["vm"] * 100))
+    ep, bp, cfp, mom = r.get("ep"), r.get("bp"), r.get("cfp"), r.get("mom")
+    pe = (1 / ep) if (ep and ep > 0) else None
+    badges = []
+    if pe and pe < 15:
+        badges.append({"t": f"Levná · P/E {pe:.0f}", "k": "up"})
+    if cfp and cfp >= 0.08:
+        badges.append({"t": f"Cash flow {cfp * 100:.0f} % ceny", "k": "gem"})
+    if mom is not None and mom >= 0.25:
+        badges.append({"t": f"Momentum +{mom * 100:.0f} %", "k": "hot"})
+    if r.get("top"):
+        badges.append({"t": "Teď v nákupní zóně", "k": "extreme"})
+    has_fund = any(r.get(k) is not None for k in ("ep", "bp", "cfp"))
+    if not has_fund:
+        badges.append({"t": "Jen momentum – chybí data SEC", "k": "down"})
+    return {
+        "ticker": r["ticker"], "name": r.get("name") or r["ticker"],
+        "price": _round(r["price"], 2), "change_pct": r.get("chg"), "currency": r.get("cur", "USD"),
+        "market_cap": r.get("mcap"), "sector": r.get("sector"), "volatility_pct": r.get("vol"),
+        "score": vm, "vm_rank": r.get("vm_rank"),
+        "tier": ("TOP 2 %" if r.get("vm_rank", 999) <= 10 else
+                 "TOP 5 %" if r.get("vm_rank", 999) <= 25 else "TOP 10 %"),
+        "badges": badges, "year_pct": r.get("y1"),
+        "pe": round(pe, 1) if pe else None, "pb": round(1 / bp, 2) if (bp and bp > 0) else None,
+        "fcf_yield": round(cfp * 100, 1) if cfp is not None else None,
+        "mom_pct": round(mom * 100, 1) if mom is not None else None,
+        "in_signal": bool(r.get("top") and r["vm"] >= VM_MIN), "has_fundamentals": has_fund,
+    }
+
+
+def _scan_finalize(date, uni, rows):
+    ciks = {c for _s, c, _x in uni if c}
+    fund = _sec_fundamentals(ciks)
+    recs = []
+    for sym, cik, sector in uni:
+        r = rows.get(sym)
+        if not r or r.get("err"):
+            continue
+        r = dict(r, ticker=sym, sector=sector)
+        f = fund.get(cik) or {}
+        px = r.get("close")
+        mcap = (f["sh"] * px) if (f.get("sh") and px) else None
+        r["mcap"] = mcap
+        r["ep"] = (f["eps"] / px) if (f.get("eps") is not None and px) else None
+        r["bp"] = (f["eq"] / mcap) if (f.get("eq") and mcap and f["eq"] > 0) else None
+        r["cfp"] = (f["cfo"] / mcap) if (f.get("cfo") is not None and mcap) else None
+        recs.append(r)
+    for r, v in zip(recs, _vm_scores(recs)):
+        r["vm"] = round(v, 4) if v is not None else None
+    ranked = sorted([r for r in recs if r["vm"] is not None], key=lambda r: -r["vm"])
+    for i, r in enumerate(ranked, 1):
+        r["vm_rank"] = i
+    n_ranked = len(ranked)
+    sig = sorted([r for r in recs if r.get("top") and (r.get("vm") or 0) >= VM_MIN],
+                 key=lambda r: -r["vm"])
+    per_sector = {}
+    for r in sig:
+        per_sector[r.get("sector") or "?"] = per_sector.get(r.get("sector") or "?", 0) + 1
+        r["sector_rank"] = per_sector[r.get("sector") or "?"]
+    rejected = [r for r in recs if r.get("top") and r.get("vm") is not None and r["vm"] < VM_MIN]
+    value = sorted([r for r in recs if r.get("vm") is not None], key=lambda r: -r["vm"])[:30]
+    out = {
+        "date": date, "updated": datetime.now(timezone.utc).strftime("%H:%M UTC"),
+        "universe": len(uni), "scanned": len(recs), "ranked": n_ranked,
+        "with_fundamentals": sum(1 for r in recs if r.get("ep") is not None),
+        "signals": [dict(_signal_item(r), sector_rank=r["sector_rank"]) for r in sig],
+        "rejected": [{"ticker": r["ticker"], "vm": int(round(r["vm"] * 100))} for r in rejected],
+        "value": [_value_item(r) for r in value],
+        "vm_map": {r["ticker"]: int(round(r["vm"] * 100)) for r in recs if r.get("vm") is not None},
+        "sector_map": {r["ticker"]: r.get("sector") or "" for r in recs},
+        "rule": {"vm_min": int(VM_MIN * 100), "setup_min": VERDICT_TOP, "sector_cap": SECTOR_CAP},
+    }
     try:
-        res = run_backtest(tickers)
-        if not res:
-            return jsonify({"ok": False, "error": "Backtest nevrátil data (zkus jiné tickery)."}), 502
-        kv_set_json("backtest:latest", res)
-        return jsonify({"ok": True, "result": res})
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Chyba backtestu: {e}"}), 500
+        kv_set_json(f"scan:{date}", out)
+        kv_set_json("scan:last", out)
+    except Exception:
+        pass
+    _paper_record(date, out["signals"])
+    return out
+
+
+def _scan_step(budget_s=None, local=None):
+    """Jeden krok denního skenu S&P 500. Zpracovává dávky, dokud nevyprší časový
+    rozpočet, a průběh průběžně ukládá do KV – další volání pokračuje tam, kde
+    tohle skončilo. Vrací hotový sken, nebo None (ještě nedoběhl)."""
+    date = _today_iso()
+    try:
+        done = kv_get_json(f"scan:{date}")
+        if done:
+            return done
+    except Exception:
+        pass
+    budget = budget_s or SCAN_BUDGET_S
+    uni = _sp500_universe()
+    hkey = _pk(f"scanrows:{date}")
+    have = {}
+    if cloud_enabled():
+        try:
+            raw = _kv_cmd("HGETALL", hkey) or []
+            for i in range(0, len(raw) - 1, 2):
+                have[raw[i]] = json.loads(raw[i + 1])
+        except Exception:
+            pass
+    if local is not None:
+        have.update(local)
+    todo = [u for u in uni if u[0] not in have]
+    t0 = time.time()
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=SCAN_WORKERS) as ex:
+        while todo and time.time() - t0 < budget:
+            batch, todo = todo[:50], todo[50:]
+            args = []
+            for (sym, _c, _s), row in zip(batch, ex.map(_scan_one, batch)):
+                have[sym] = row
+                args += [sym, json.dumps(row)]
+                if local is not None:
+                    local[sym] = row
+            if cloud_enabled():
+                try:
+                    _kv_cmd("HSET", hkey, *args)
+                    _kv_cmd("EXPIRE", hkey, 3 * 86400)
+                except Exception:
+                    pass
+    if todo:
+        return None
+    return _scan_finalize(date, uni, have)
+
+
+def market_scan(allow_step=True, budget_s=None):
+    """Dnešní hotový sken; když ještě není, poslední hotový (a případně krok
+    skenu). Uživatelský požadavek nikdy nečeká na celý sken, pokud existuje
+    nějaký předchozí – ten těžký běh dělají ranní crony."""
+    date = _today_iso()
+    try:
+        s = kv_get_json(f"scan:{date}")
+        if s:
+            return s
+        last = kv_get_json("scan:last")
+    except Exception:
+        last = None
+    if last and not allow_step:
+        return dict(last, stale=True)
+    s = _scan_step(budget_s)
+    if s:
+        return s
+    return dict(last, stale=True) if last else None
+
+
+def _market_risk():
+    """Živé riziko trhu: realizovaná volatilita SPY za 20 dní a z ní doporučená
+    expozice pro profily s cílením volatility. Kešováno hodinu."""
+    try:
+        c = kv_get_json("risk:spy")
+        if c and time.time() - c.get("ts", 0) < 3600:
+            return c
+    except Exception:
+        pass
+    try:
+        d = yahoo_chart("SPY", "3mo", "1d")
+        cl = [c for c in (((d.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []) if c]
+        rets = [cl[i] / cl[i - 1] - 1 for i in range(len(cl) - 20, len(cl))]
+        mu = sum(rets) / len(rets)
+        vol = math.sqrt(sum((x - mu) ** 2 for x in rets) / (len(rets) - 1)) * math.sqrt(252)
+        out = {"ts": int(time.time()), "spy_vol": round(vol * 100, 1)}
+        for prof, tgt in VOL_TARGET.items():
+            out[f"exposure_{prof}"] = int(round(min(1.0, tgt / vol) * 100)) if vol else 100
+        try:
+            kv_set_json("risk:spy", out)
+        except Exception:
+            pass
+        return out
+    except Exception:
+        return {"spy_vol": None}
+
+
+def _paper_record(date, signals):
+    """ŽIVÝ ZÁZNAM MODELU: každý denní signál se zapíše jako papírový obchod
+    (vstup za tehdejší cenu, plán cíl/stop/max dní) a vyhodnotí se automaticky
+    – nezávisle na tom, co kdo v appce rozklikl. Backtest je jen minulost;
+    tohle je jediný poctivý důkaz do budoucna."""
+    if not signals or not cloud_enabled():
+        return
+    try:
+        if kv_get_json(f"paper:day:{date}"):
+            return
+        recent = kv_lrange("paper:trades", -400, -1)
+        cutoff = time.time() - 7 * 86400      # stejný titul nejdřív po týdnu (jako ve výzkumu)
+        seen = {t.get("ticker") for t in recent if (t.get("ts") or 0) > cutoff}
+        for s in signals:
+            if s["ticker"] in seen:
+                continue
+            kv_rpush("paper:trades", {
+                "ticker": s["ticker"], "date": date, "ts": int(time.time()),
+                "price": s["price"], "target": s["target"], "stop": s["stop"],
+                "horizon_days": EXIT_MAX_DAYS, "vm": s["vm"], "score": s["score"],
+                "verdict": "Koupit"})
+        kv_set_json(f"paper:day:{date}", {"n": len(signals)})
+    except Exception:
+        pass
+
+
+@app.route("/api/signals")
+def get_signals():
+    """Dnešní nákupní signály ověřeného modelu (celé S&P 500)."""
+    s = market_scan(allow_step=False)
+    if not s:
+        return jsonify({"ok": True, "count": 0, "results": [], "scanning": True,
+                        "updated": "", "universe": 0})
+    sig = s.get("signals") or []
+    return jsonify({"ok": True, "count": len(sig), "results": sig, "date": s.get("date"),
+                    "updated": s.get("updated"), "stale": bool(s.get("stale")),
+                    "universe": s.get("scanned"), "rejected": s.get("rejected") or [],
+                    "rule": s.get("rule")})
 
 
 @app.route("/api/backtest")
 def get_backtest():
-    """Veřejně dostupný poslední backtest (důkaz úspěšnosti). Cachováno v KV."""
-    try:
-        return jsonify({"ok": True, "result": kv_get_json("backtest:latest")})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-def _scan_signals():
-    """Projede universum a vrátí akcie, které PRÁVĚ TEĎ splňují nákupní signál
-    (setup skóre ≥ práh). Stejné skóre i úrovně jako hloubková analýza."""
-    items = []
-    for t in BACKTEST_BASKET:
-        try:
-            daily = yahoo_chart(t, "1y", "1d")
-            meta = daily.get("meta", {})
-            q = ((daily.get("indicators") or {}).get("quote") or [{}])[0]
-            raw_cl = q.get("close") or []
-            raw_vl = q.get("volume") or []
-            closes, vols = [], []
-            for k, c in enumerate(raw_cl):
-                if c is not None:
-                    closes.append(c)
-                    v = raw_vl[k] if k < len(raw_vl) else None
-                    vols.append(v if v is not None else 0)
-            if len(closes) < 210:
-                continue
-            ind = compute_indicators(closes, vols)
-            price = meta.get("regularMarketPrice") or closes[-1]
-            score = tech_setup_score(price, ind)
-            if score is None or score < VERDICT_BUY:  # jen aktuální nákupní signály
-                continue
-            lv = compute_levels({"price": price, "volatility_pct": ind.get("volatility")}, 10) or {}
-            prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
-            items.append({
-                "ticker": t,
-                "name": meta.get("shortName") or meta.get("longName") or t,
-                "price": _round(price, 2),
-                "change_pct": _round(((price - prev) / prev * 100) if prev else 0, 2, 0),
-                "currency": meta.get("currency", "USD"),
-                "score": score, "rsi": _round(ind.get("rsi"), 1), "note": _setup_note(score),
-                "conviction": "top" if is_top_signal(score, ind) else "buy",
-                "target": lv.get("target_price"), "stop": lv.get("stop_loss"),
-                "reward_pct": lv.get("reward_pct"), "risk_pct": lv.get("risk_pct"), "rr": lv.get("rr"),
-            })
-        except Exception:
-            continue
-    items.sort(key=lambda x: x["score"], reverse=True)
-    return {"count": len(items), "results": items, "universe": len(BACKTEST_BASKET),
-            "horizon_days": 10, "buy_threshold": VERDICT_BUY,
-            "updated": datetime.now(timezone.utc).strftime("%H:%M UTC"), "date": _today()}
+    """Ověřené výsledky strategie (offline walk-forward test, viz VALIDATION).
+    Tvar zůstává kompatibilní s tím, co čte frontend (top/buy/baseline…);
+    hlavní čísla jsou z NEDOTČENÉHO období 2023-2026."""
+    v = VALIDATION
+    h = v["signals"]["holdout"]
+    return jsonify({"ok": True, "result": {
+        "top": h["model"], "buy": h["model"], "baseline": h["all_dips"],
+        "period": "2015–2026, ověřeno na 2023–2026", "sample_count": h["model"]["count"],
+        "ticker_count": 633, "horizon_days": EXIT_MAX_DAYS, "plan": {
+            "target_pct": v["rule"]["target_pct"], "stop_pct": v["rule"]["stop_pct"],
+            "max_days": v["rule"]["max_days"]},
+        "validation": v,
+    }})
 
 
 # ---------------------------------------------------------------------------
@@ -3156,7 +3501,7 @@ def _fetch_macro_one(ticker):
         if not closes:
             return None
         price = meta.get("regularMarketPrice") or closes[-1]
-        prev = meta.get("chartPreviousClose") or (closes[-2] if len(closes) >= 2 else price)
+        prev = _prev_close(closes, meta)
         chg_pct = ((price - prev) / prev * 100.0) if prev else 0.0
         return {"price": float(price), "chg_pct": round(chg_pct, 2)}
     except Exception:
@@ -3325,7 +3670,7 @@ def _compare_one(ticker):
         if not closes:
             return None
         price = meta.get("regularMarketPrice") or closes[-1]
-        prev = meta.get("previousClose") or meta.get("chartPreviousClose") or (closes[-2] if len(closes) >= 2 else price)
+        prev = _prev_close(closes, meta)
         chg = ((price - prev) / prev * 100.0) if prev else 0
         out = {
             "ticker": ticker,
@@ -4141,21 +4486,6 @@ def api_sec(ticker):
                     "updated": now.strftime("%H:%M UTC")})
 
 
-@app.route("/api/signals")
-def get_signals():
-    """Živé nákupní signály podle BACKTESTEM OVĚŘENÉHO modelu. Kešováno 1×/den."""
-    date = _today()
-    cached = kv_get_json(f"signals:{date}")
-    if cached:
-        return jsonify({"ok": True, "cached": True, **cached})
-    out = _scan_signals()
-    try:
-        kv_set_json(f"signals:{date}", out)
-    except Exception:
-        pass
-    return jsonify({"ok": True, "cached": False, **out})
-
-
 @app.route("/api/exit-signals")
 def exit_signals():
     """„Co prodávat teď" – projde zadané (watchlist) tituly a označí ty, které
@@ -4192,7 +4522,7 @@ def exit_signals():
                 level, reason = "weak", "Překoupeno – zvaž výběr zisku"
             else:
                 continue  # v pořádku → nezobrazovat
-            prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
+            prev = _prev_close(closes, meta) or price
             items.append({
                 "ticker": t, "name": meta.get("shortName") or meta.get("longName") or t,
                 "price": _round(price, 2), "currency": meta.get("currency", "USD"),
@@ -4304,7 +4634,7 @@ def _render_seo_stock(ticker):
         meta = d.get("meta", {}) or {}
         name = meta.get("shortName") or meta.get("longName") or ticker
         price = meta.get("regularMarketPrice")
-        prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
+        prev = _prev_close([], meta) or price
         chg_pct = ((price - prev) / prev * 100.0) if (price and prev) else 0
         currency = meta.get("currency", "USD")
     except Exception:
@@ -4920,15 +5250,24 @@ def get_stock_detail(ticker):
             sma20 = sma50 = sma200 = [None] * len(closes_for_sma)
 
         # Indikátory z 1 roku denních dat
+        daily_closes = None
         try:
             daily = yahoo_chart(ticker, "1y", "1d")
             dq = ((daily.get("indicators") or {}).get("quote") or [{}])[0]
-            indicators = compute_indicators(dq.get("close") or [], dq.get("volume") or [])
+            daily_closes = dq.get("close") or []
+            indicators = compute_indicators(daily_closes, dq.get("volume") or [])
         except Exception:
             indicators = compute_indicators(closes_for_sma, vols)
 
         price = _round(meta.get("regularMarketPrice", closes_for_sma[-1]), 3)
-        prev = _round(meta.get("previousClose") or meta.get("chartPreviousClose") or price, 3)
+        # Denní změna VŽDY z denní řady – graf může být 5minutový i roční.
+        if daily_closes:
+            prev = _prev_close(daily_closes)
+        elif period == "1d" or not is_intraday:
+            prev = _prev_close(closes_for_sma if not is_intraday else [], meta)
+        else:
+            prev = None
+        prev = _round(prev or price, 3)
         change_pct = ((price - prev) / prev) * 100 if prev else 0
         high52 = _round(meta.get("fiftyTwoWeekHigh", price), 3) or price
         low52 = _round(meta.get("fiftyTwoWeekLow", price), 3) or price
@@ -4998,21 +5337,40 @@ def get_stock_detail(ticker):
 # Ranní souhrn e-mailem (Vercel Cron volá /api/cron/morning)
 # ---------------------------------------------------------------------------
 def _top_opps_for_summary(n=3):
-    out = []
+    """Nejvyšší hodnota & momentum z posledního skenu (pro e-maily)."""
     try:
-        for q in yahoo_screener("undervalued_growth_stocks", 25):
-            price = _qf(q, "regularMarketPrice", 0) or 0
-            hi52 = _qf(q, "fiftyTwoWeekHigh", 0) or 0
-            up = ((hi52 - price) / price * 100) if (hi52 and price) else 0
-            if price < 1.5 or up < 8:
-                continue
-            score, tier, badges, upside, vr = potential_score(q)
-            out.append((score, q.get("symbol"), q.get("shortName") or q.get("symbol"), upside,
-                        q.get("currency", "USD"), _round(price, 2)))
-        out.sort(reverse=True)
+        return ((market_scan(allow_step=False) or {}).get("value") or [])[:n]
     except Exception:
-        pass
-    return out[:n]
+        return []
+
+
+def _signals_email_rows(signals, n=4):
+    """Společné řádky nákupních signálů pro ranní i týdenní e-mail. Jen tituly,
+    které nepřekročí limit 2 na sektor – stejně jako „Co koupit teď" v appce."""
+    rows = []
+    for s in [x for x in signals if (x.get("sector_rank") or 1) <= SECTOR_CAP][:n]:
+        vm = f"hodnota+momentum {s['vm']}/100 · " if s.get("vm") is not None else ""
+        rows.append(f"<div style='padding:8px 0;border-top:1px solid #23262f'>"
+                    f"<b style='color:#00C853'>Koupit</b> &nbsp;<b>{_html_escape(s.get('ticker') or '')}</b> "
+                    f"<span style='color:#9ba1b0'>{_html_escape(s.get('name') or '')}</span><br>"
+                    f"<span style='color:#9ba1b0;font-size:12px'>{vm}cíl {s.get('target')} (+{s.get('reward_pct')} %) · "
+                    f"stop {s.get('stop')} (−{s.get('risk_pct')} %) · {EXIT_HORIZON_LABEL}</span></div>")
+    return "".join(rows)
+
+
+def _opps_email_rows(top_opps):
+    """Společné řádky „podhodnocené s momentem" pro ranní i týdenní e-mail."""
+    rows = []
+    for o in top_opps:
+        bits = [f"hodnota+momentum {o.get('score')}/100 (#{o.get('vm_rank')})"]
+        if o.get("pe"):
+            bits.append(f"P/E {o['pe']:.0f}")
+        if o.get("mom_pct") is not None:
+            bits.append(f"momentum {o['mom_pct']:+.0f} %")
+        rows.append(f"<div style='padding:8px 0;border-top:1px solid #23262f'>"
+                    f"<b>{_html_escape(o['ticker'])}</b> <span style='color:#9ba1b0'>"
+                    f"{_html_escape(o.get('name') or '')} · {' · '.join(bits)}</span></div>")
+    return "".join(rows)
 
 
 def _market_brief():
@@ -5121,14 +5479,18 @@ def _is_market_news(title):
     return any(w in t for w in _MARKET_WORDS)
 
 
-def _todays_action(email, top_signals):
+def _todays_action(email, top_signals, risk=None):
     """Jedna věta: co dnes udělat. Tohle je ta část „nechci to řešit"."""
     try:
-        pos = _positions_for(email)
+        pos = _positions_for(email, risk=risk)
     except Exception:
         return None
     act = [i for i in pos["items"] if i["status"] != "open"]
-    alloc = pos.get("allocation") or _allocation(0)
+    alloc = pos.get("allocation") or _allocation(0, risk)
+    lead = ""
+    if alloc.get("cash_pct"):
+        lead = (f"Trh je rozkolísaný (volatilita {alloc.get('spy_vol')} %) – drž {alloc['exposure_pct']} % "
+                f"v akciích a {alloc['cash_pct']:.0f} % v hotovosti. ")
     if act:
         parts = []
         for i in act[:3]:
@@ -5138,19 +5500,35 @@ def _todays_action(email, top_signals):
                 parts.append(f"ukonči {i['ticker']} na stopu")
             else:
                 parts.append(f"přehodnoť {i['ticker']} (vypršel horizont)")
-        return "Dnes: " + ", ".join(parts) + "."
+        return "Dnes: " + lead + cap(", ".join(parts)) + "."
     free = alloc["slots_max"] - alloc["slots_used"]
+    # Za „Trh je rozkolísaný… ." pokračuje nová věta → velké písmeno.
+    cap = (lambda t: t[:1].upper() + t[1:]) if lead else (lambda t: t)
+    slots = (f"{free} volnou pozici" if free == 1 else f"{free} volné pozice" if 2 <= free <= 4
+             else f"{free} volných pozic")
+    if top_signals:
+        smap = ((market_scan(allow_step=False) or {}).get("sector_map") or {})
+        held = {}
+        for i in pos["items"]:
+            if i["status"] == "open":
+                sct = smap.get(i["ticker"]) or "?"
+                held[sct] = held.get(sct, 0) + 1
+        mine = {i["ticker"] for i in pos["items"] if i["status"] == "open"}
+        top_signals = [x for x in top_signals if x["ticker"] not in mine
+                       and held.get(x.get("sector") or "?", 0) < SECTOR_CAP]
     if free and top_signals:
-        return (f"Dnes: máš {free} volných pozic z {alloc['slots_max']}. Nejsilnější "
-                f"signál je {top_signals[0].get('ticker')} (váha {alloc['per_position_pct']} %). "
+        s0 = top_signals[0]
+        vm = f"hodnota+momentum {s0['vm']}/100, " if s0.get("vm") is not None else ""
+        return (f"Dnes: {lead}{cap('máš')} {slots} z {alloc['slots_max']}. Nejsilnější "
+                f"signál je {s0.get('ticker')} ({vm}váha {alloc['per_position_pct']} %). "
                 f"Zbytek drží indexové jádro.")
     if free:
-        return ("Dnes: žádný nový signál. Nech kapitál v indexovém jádru – "
-                "volná hotovost je ta nejdražší chyba.")
-    return f"Dnes: nic. Všech {alloc['slots_max']} pozic běží podle plánu."
+        return (f"Dnes: {lead}{cap('žádný')} nový signál. Nech kapitál v indexovém jádru – "
+                "hotovost bez důvodu nevydělává.")
+    return f"Dnes: {lead}{cap('nic')}. Všech {alloc['slots_max']} pozic běží podle plánu."
 
 
-def _brief_payload(user=None, date=None):
+def _brief_payload(user=None, date=None, risk=None):
     """Strukturovaná data ranního přehledu – JEDEN zdroj pro web i e-mail.
 
     Tržní část se archivuje pod `brief:<datum>`, takže si jde rozkliknout i
@@ -5177,10 +5555,12 @@ def _brief_payload(user=None, date=None):
 
     out = {"ok": True, "date": date, "is_today": date == today,
            "market": market, "signals": signals}
+    if date == today:
+        out["risk"] = _market_risk()
     if user and date == today:
-        pos = _positions_for(user)
+        pos = _positions_for(user, risk=risk)
         out["positions"] = pos
-        out["action"] = _todays_action(user, signals)
+        out["action"] = _todays_action(user, signals, risk)
         # „Proč" k pohybům – stejný zdroj jako e-mail, jen jako data pro web.
         # Form 4 (insider) vynechán: podává se pořád a pohyb nevysvětluje.
         try:
@@ -5211,7 +5591,7 @@ def api_brief():
     if date and not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
         return jsonify({"ok": False, "error": "Špatný formát data."}), 400
     try:
-        return jsonify(_brief_payload(_auth_user(), date or None))
+        return jsonify(_brief_payload(_auth_user(), date or None, request.args.get("risk")))
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -5270,7 +5650,7 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
             res = yahoo_chart(t, "1d", "1d")
             meta = res.get("meta", {})
             price = meta.get("regularMarketPrice")
-            prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
+            prev = _prev_close([], meta) or price
             chg = ((price - prev) / prev * 100) if prev else 0
             col = "#00C853" if chg >= 0 else "#FF3D00"
             rows += (f"<tr><td style='padding:6px 0'><b>{t}</b></td>"
@@ -5282,21 +5662,12 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
                   f"<table style='width:100%;border-collapse:collapse;font-size:14px'>{rows}</table>") if rows else ""
     opp_html = ""
     if top_opps:
-        items = "".join(
-            f"<div style='padding:8px 0;border-top:1px solid #23262f'><b style='color:#00C853'>+{up:.0f}%</b> "
-            f"&nbsp;<b>{sym}</b> <span style='color:#9ba1b0'>{name}</span></div>"
-            for (sc, sym, name, up, cur, pr) in top_opps)
-        opp_html = f"<h3 style='font-size:16px;margin:22px 0 8px'>🎯 Příležitosti s potenciálem</h3>{items}"
+        opp_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>💎 Podhodnocené s momentem</h3>"
+                    + _opps_email_rows(top_opps))
     sig_html = ""
     if top_signals:
-        sitems = "".join(
-            f"<div style='padding:8px 0;border-top:1px solid #23262f'>"
-            f"<b style='color:#00C853'>Koupit</b> &nbsp;<b>{s.get('ticker')}</b> "
-            f"<span style='color:#9ba1b0'>{s.get('name','')}</span><br>"
-            f"<span style='color:#9ba1b0;font-size:12px'>skóre {s.get('score')} · cíl +{s.get('reward_pct')}% / stop −{s.get('risk_pct')}% · {EXIT_HORIZON_LABEL}</span></div>"
-            for s in top_signals[:4])
-        sig_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>✅ Dnešní signály „Sleva v trendu“"
-                    "</h3>" + sitems)
+        sig_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>✅ Dnešní nákupní signály</h3>"
+                    + _signals_email_rows(top_signals))
     # Otevřené pozice – co dnes vyžaduje akci podle plánu (cíl/stop/horizont).
     # Celý stav portfolia, ne jen to, co křičí. Uživatel chce ráno vidět,
     # co se s jeho penězi děje – i když se zrovna nic dělat nemá.
@@ -5434,14 +5805,8 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
     # Top signály týdne
     sig_html = ""
     if top_signals:
-        sitems = "".join(
-            f"<div style='padding:10px 0;border-top:1px solid #23262f'>"
-            f"<b style='color:#00C853'>Koupit</b> &nbsp;<b>{s.get('ticker')}</b> "
-            f"<span style='color:#9ba1b0'>{s.get('name','')}</span><br>"
-            f"<span style='color:#9ba1b0;font-size:12px'>MA skóre {s.get('score')} · "
-            f"cíl +{s.get('reward_pct')}% / stop −{s.get('risk_pct')}% · {EXIT_HORIZON_LABEL}</span></div>"
-            for s in top_signals[:4])
-        sig_html = "<h3 style='font-size:16px;margin:22px 0 10px'>🎯 Nejlepší signály týdne</h3>" + sitems
+        sig_html = ("<h3 style='font-size:16px;margin:22px 0 10px'>🎯 Nákupní signály</h3>"
+                    + _signals_email_rows(top_signals))
 
     # Klíčové události u sledovaných akcií (last 7 days)
     events_html = ""
@@ -5464,11 +5829,8 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
     # Příležitosti
     opp_html = ""
     if top_opps:
-        items = "".join(
-            f"<div style='padding:8px 0;border-top:1px solid #23262f'><b style='color:#00C853'>+{up:.0f}%</b> "
-            f"&nbsp;<b>{sym}</b> <span style='color:#9ba1b0'>{name}</span></div>"
-            for (sc, sym, name, up, cur, pr) in top_opps)
-        opp_html = "<h3 style='font-size:16px;margin:22px 0 10px'>🚀 Příležitosti k prozkoumání</h3>" + items
+        opp_html = ("<h3 style='font-size:16px;margin:22px 0 10px'>💎 Podhodnocené s momentem</h3>"
+                    + _opps_email_rows(top_opps))
 
     intro = ("<p style='line-height:1.6'>Hezký víkend! Tady je tvé <b>shrnutí týdne</b> " +
              "— jak si vedla tvá watchlist, nejlepší signály z modelu a klíčové události.</p>")
@@ -5522,16 +5884,13 @@ def _cron_auth():
     return None
 
 
-def _todays_signals():
-    """Dnešní signály z denní cache, jinak dopočítá a uloží. Fail-open."""
-    sig = kv_get_json(f"signals:{_today()}")
-    if not sig:
-        try:
-            sig = _scan_signals()
-            kv_set_json(f"signals:{_today()}", sig)
-        except Exception:
-            sig = {}
-    return (sig or {}).get("results") or []
+def _todays_signals(allow_step=False):
+    """Dnešní signály ze skenu S&P 500. Krok skenu smí udělat jen cron
+    (allow_step=True) – uživatelský požadavek dostane poslední hotový sken."""
+    try:
+        return (market_scan(allow_step=allow_step) or {}).get("signals") or []
+    except Exception:
+        return []
 
 
 def digest_sending_enabled():
@@ -5595,22 +5954,54 @@ def admin_weekly_test():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-@app.route("/api/cron/backtest")
-def cron_backtest():
-    """Týdně obnoví backtest a uloží do cache (`backtest:latest`), aby banner
-    'Ověřeno backtestem' u zákazníků zůstal aktuální bez ruční obsluhy.
-    Chráněno CRON_SECRET (fail-closed)."""
+@app.route("/api/cron/scan")
+def cron_scan():
+    """Ranní sken celého S&P 500. Běží v několika spuštěních (5:00, 5:20, 5:40 UTC);
+    každé pokračuje tam, kde předchozí skončilo. Chráněno CRON_SECRET."""
     err = _cron_auth()
     if err:
         return err
-    if not cloud_enabled():
-        return jsonify({"ok": False, "error": "Chybí úložiště."}), 503
     try:
-        res = run_backtest(BACKTEST_BASKET)
-        if not res:
-            return jsonify({"ok": False, "error": "Backtest nevrátil data."}), 502
-        kv_set_json("backtest:latest", res)
-        return jsonify({"ok": True, "buy": res.get("buy"), "horizon_days": res.get("horizon_days")})
+        s = _scan_step()
+        if s:
+            return jsonify({"ok": True, "done": True, "scanned": s.get("scanned"),
+                            "signals": len(s.get("signals") or [])})
+        return jsonify({"ok": True, "done": False})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/scan", methods=["POST"])
+def admin_scan():
+    """Ruční krok skenu (Admin). Když nedoběhne najednou, další klik pokračuje."""
+    if not _auth_admin():
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    try:
+        s = _scan_step()
+        if s:
+            return jsonify({"ok": True, "done": True, "scanned": s.get("scanned"),
+                            "signals": len(s.get("signals") or []), "updated": s.get("updated")})
+        return jsonify({"ok": True, "done": False})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/profile/risk", methods=["POST"])
+def save_risk_profile():
+    """Uloží rizikový profil k účtu – ranní e-mail ho pak umí použít i bez prohlížeče."""
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    r = (request.get_json(silent=True) or {}).get("risk")
+    if r not in RISK_PROFILES:
+        return jsonify({"ok": False, "error": "Neznámý profil."}), 400
+    try:
+        rec = kv_get_json(f"user:{user}")
+        if not rec:
+            return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
+        rec["risk"] = r
+        kv_set_json(f"user:{user}", rec)
+        return jsonify({"ok": True, "risk": r})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -5642,8 +6033,8 @@ def cron_morning():
     if not (cloud_enabled() and email_enabled()):
         return jsonify({"ok": False, "error": "Chybí úložiště nebo e-mail."}), 503
     try:
+        top_signals = _todays_signals(allow_step=True)
         top_opps = _top_opps_for_summary(3)
-        top_signals = _todays_signals()
         # Archiv vzniká VŽDY, i když se nerozesílá – jinak by v historii na webu
         # zely díry za dny, kdy bylo posílání vypnuté.
         try:
