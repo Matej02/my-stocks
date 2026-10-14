@@ -1414,6 +1414,51 @@ html, body {max-width:100%;}
   .mp-rv > :nth-child(5) {grid-column:3;}
   .mp-input input {width:110px;}
 }
+/* ===================== DENNÍ BRIEFING ===================== */
+.dg-facts {display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin:4px 0 8px;}
+.dg-fact {background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:9px 11px; min-width:0;}
+.dg-fact .l {font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.dg-fact .v {font-family:var(--fh); font-weight:700; font-size:16px; margin-top:2px;}
+.dg-fact .c {font-size:12px; font-weight:600;}
+.dg-sec {font-size:12.5px; color:var(--text2); margin-bottom:12px;}
+.dg-sec b {color:var(--text);}
+.dg-headline {font-family:var(--fh); font-size:17px; font-weight:600; line-height:1.4; padding:12px 14px; border-radius:14px; background:var(--accent-soft); border:1px solid var(--border-accent); margin:6px 0 14px;}
+.dg-headline.sm {font-size:14px; padding:10px 12px; margin:0 0 10px;}
+.dg-h {font-family:var(--fh); font-size:15px; font-weight:700; margin:18px 0 10px; display:flex; align-items:center; gap:8px;}
+.dg-h i {color:var(--accent);}
+.dg-ev {background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:14px; padding:12px 14px; margin-bottom:10px;}
+.dg-ev-h {display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:15px;}
+.dg-imp {font-size:10.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:3px 8px; border-radius:7px; white-space:nowrap;}
+.dg-imp.up {background:var(--up-glow); color:var(--up);} .dg-imp.down {background:var(--down-glow); color:var(--down);} .dg-imp.mix {background:var(--amber-soft); color:var(--amber);}
+.dg-row {display:grid; grid-template-columns:130px 1fr; gap:10px; font-size:13px; line-height:1.5; padding:3px 0; color:var(--text);}
+.dg-row .k {color:var(--text2); font-size:12px;}
+.dg-row.me {margin-top:4px; padding:8px 10px; border-radius:10px; background:var(--surface); border:1px solid var(--border);}
+.dg-row.me b {color:var(--accent);}
+.dg-chips {display:flex; flex-wrap:wrap; gap:5px;}
+.dg-chip {font-size:11.5px; padding:2px 8px; border-radius:20px; background:var(--elev2); color:var(--text2);}
+.dg-chip.t {font-family:var(--fh); font-weight:600;}
+.dg-chip.mine {background:var(--accent-soft); color:var(--accent); font-weight:700;}
+.dg-src {font-size:11.5px; color:var(--text3); margin-top:6px;}
+.dg-src a {color:var(--text2); text-decoration:none;} .dg-src a:hover {color:var(--accent);}
+.dg-note {font-size:13px; color:var(--text2); line-height:1.5; margin:8px 0;}
+.dg-note.warn i {color:var(--amber);}
+.dg-hl {display:block; padding:9px 0; border-top:1px solid var(--border); text-decoration:none; color:var(--text); font-size:13px; line-height:1.45;}
+.dg-hl span {display:block; color:var(--text2); font-size:12.5px; margin-top:2px;}
+.dg-hl small {display:block; color:var(--text3); font-size:11px; margin-top:2px;}
+.dg-hl:hover b {color:var(--accent);}
+.dg-lt {display:flex; gap:10px; padding:12px 14px; border-radius:14px; background:var(--surface); border:1px solid var(--border); font-size:13px; line-height:1.55; color:var(--text2); margin:16px 0 8px;}
+.dg-lt i {color:var(--accent); font-size:18px;}
+.dg-lt b {color:var(--text);}
+.dg-all summary {cursor:pointer; font-size:13px; color:var(--text2); margin:10px 0 4px;}
+.dg-upd {font-size:11px; color:var(--text3); margin-top:12px;}
+.dg-mini {display:flex; gap:10px; padding:8px 0; border-top:1px solid var(--border); cursor:pointer; font-size:13px; line-height:1.45;}
+.dg-mini .w {color:var(--text2); font-size:12.5px; margin-top:2px;}
+.dg-dot {width:8px; height:8px; border-radius:50%; margin-top:6px; flex:none;}
+.dg-dot.up {background:var(--up);} .dg-dot.down {background:var(--down);} .dg-dot.mix {background:var(--amber);}
+@media (max-width:640px) {
+  .dg-facts {grid-template-columns:repeat(2, 1fr);}
+  .dg-row {grid-template-columns:1fr; gap:1px;}
+}
 </style>
 </head>
 <body>
@@ -1631,7 +1676,7 @@ html, body {max-width:100%;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.14·b</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.14·c</div>
 
 <div class="container">
   
@@ -2072,10 +2117,10 @@ html, body {max-width:100%;}
   </div>
 
   <div class="pl-modal" id="newsModal">
-    <div class="profile-box" style="max-width:560px;">
+    <div class="profile-box" style="max-width:720px;">
       <button class="profile-close" onclick="closeNews()"><i class="ti ti-x"></i></button>
-      <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-news" style="color:var(--accent)"></i> Novinky z trhu</h2>
-      <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Co se právě děje na trzích — proč rostou nebo padají.</div>
+      <h2 style="font-family:var(--fh);font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px;"><i class="ti ti-news" style="color:var(--accent)"></i> Co se dnes děje</h2>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Krátce a k věci: co se stalo, proč je to důležité, koho se to týká a co s tím. Bez dlouhých článků.</div>
       <div id="market-status" class="market-status"></div>
       <div id="market-news-list" style="margin-top:14px;"></div>
     </div>
@@ -3203,7 +3248,11 @@ function renderBrief(d) {
     // Pořadí musí sedět s ranním e-mailem: trh → co se píše → TVÉ PORTFOLIO
     // (+ proč) → co dnes udělat → zbytek. Dřív tu portfolio chybělo úplně
     // a akce byla vražená mezi trh a zprávy.
-    if ((m.news || []).length) {
+    if (d.digest && d.digest.ai && (d.digest.events || []).length) {
+        h += '<div class="brief-h">Co se děje a proč</div>' +
+             (d.digest.headline ? `<div class="dg-headline sm">${escapeHtml(d.digest.headline)}</div>` : '') +
+             d.digest.events.map(e => dgEventHTML(e)).join('');
+    } else if ((m.news || []).length) {
         h += '<div class="brief-h">Co se k tomu píše</div><div class="brief-news">' +
              m.news.map(n => `<a href="${escapeHtml(n.link)}" target="_blank" rel="noopener">
                 <span class="bn-title">${escapeHtml(n.title)}</span>
@@ -3254,26 +3303,6 @@ function renderBrief(d) {
 
 function openNews() { _hideGate(); document.getElementById('newsModal').classList.add('open'); loadMarketNews(); }
 function closeNews() { document.getElementById('newsModal').classList.remove('open'); refreshGate(); }
-async function loadMarketNews() {
-    const st = document.getElementById('market-status');
-    const list = document.getElementById('market-news-list');
-    st.innerHTML = ''; st.className = 'market-status';
-    list.innerHTML = '<div style="color:var(--text2);font-size:13px;"><i class="ti ti-loader spin"></i> Načítám novinky z trhu…</div>';
-    try {
-        const d = await (await fetch(`${BACKEND_URL}/api/market-news`)).json();
-        if (d.market) {
-            st.className = 'market-status ' + (d.market.open ? 'open' : 'closed');
-            st.innerHTML = `<i class="ti ti-${d.market.open ? 'point-filled' : 'moon'}"></i> ${escapeHtml(d.market.label)}`;
-        }
-        if (!d.results || !d.results.length) { list.innerHTML = '<div style="color:var(--text2);font-size:13px;">Žádné aktuální novinky.</div>'; return; }
-        list.innerHTML = d.results.map(n => {
-            const when = formatNewsTime(n.time);
-            const link = n.link ? `href="${n.link}" target="_blank" rel="noopener noreferrer"` : '';
-            return `<a class="news-item" ${link}><div class="news-title">${escapeHtml(n.title)}</div><div class="news-meta"><i class="ti ti-building-broadcast-tower"></i> ${escapeHtml(n.publisher)}${when ? ' • ' + when : ''}</div></a>`;
-        }).join('');
-    } catch (e) { list.innerHTML = '<div style="color:var(--down);font-size:13px;">Novinky se nepodařilo načíst.</div>'; }
-}
-
 // ====================== PŘEHLED (uvítací dashboard) ======================
 let overviewLoaded = false;
 let overviewLoading = false;
@@ -3479,31 +3508,6 @@ async function renderOverviewEvents() {
         }).join('');
     } catch(e) {
         box.innerHTML = '<div class="ov-empty">Kalendář teď nelze načíst.</div>';
-    }
-}
-
-async function fetchOverviewNews() {
-    const box = document.getElementById('ov-news');
-    if (!box) return;
-    try {
-        // Sjednocený feed napříč všemi zdroji (Yahoo + RSS)
-        const d = await (await fetch(`${BACKEND_URL}/api/news-feed?limit=8`)).json();
-        const list = (d && d.items) || [];
-        if (!list.length) {
-            box.innerHTML = '<div class="ov-empty">Žádné aktuální novinky.</div>';
-            return;
-        }
-        box.innerHTML = list.slice(0, 6).map(n => {
-            const when = n.ts ? formatNewsTime(n.ts) : '';
-            const link = n.link ? `onclick="window.open('${n.link.replace(/'/g, "\\'")}', '_blank', 'noopener')"` : '';
-            const dom = n.source_domain ? `<span class="news-src-tag">z: ${escapeHtml(n.source_domain)}</span>` : '';
-            return `<div class="ov-news-row" ${link}>
-                <div class="meta">${when}</div>
-                <div class="txt">${escapeHtml(n.title)}${dom}</div>
-            </div>`;
-        }).join('');
-    } catch(e) {
-        box.innerHTML = '<div class="ov-empty">Novinky teď nelze načíst.</div>';
     }
 }
 
@@ -7210,6 +7214,182 @@ function lotDelete() {
     planLots = planLots.filter(l => l.ticker !== t);
     saveLots(); closeLot();
     planRefresh();
+}
+
+// ====================== DENNÍ BRIEFING („Co se děje") ======================
+// Ne seznam odkazů, ale: co se stalo → proč je to důležité → koho se to týká
+// → co s tím. „Co s tím" neříká AI – plyne z dlouhodobého plánu (zprávy ho nemění).
+let digestData = null, digestTs = 0, digestMine = null, digestMineKey = '';
+const DG_IMPACT = { 'pozitivní': ['up', 'Pozitivní'], 'negativní': ['down', 'Negativní'], 'smíšené': ['mix', 'Smíšené'] };
+
+async function loadDigest(force) {
+    if (!force && digestData && Date.now() - digestTs < 10 * 60 * 1000) return digestData;
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/news/digest`)).json();
+        if (d.ok) { digestData = d; digestTs = Date.now(); }
+    } catch (e) {}
+    return digestData;
+}
+
+// Moje pozice pro briefing: titul, sektor (česky), váha. Jádro = „celý trh".
+function dgMyHoldings() {
+    const rows = (planData && planData.rows) || [];
+    return rows.map(r => ({
+        ticker: r.ticker, base: mpBase(r.ticker).replace('-', '.'), name: r.name, weight: r.weight,
+        status: r.status, sector: r.status === 'core' ? 'celý trh' : (MP_SECTOR_CZ[r.sector] || ''),
+    }));
+}
+
+async function loadDigestMine() {
+    const mine = dgMyHoldings().filter(h => h.status !== 'core').sort((a, b) => b.weight - a.weight).slice(0, 8);
+    if (!mine.length) { digestMine = null; return null; }
+    const key = mine.map(h => h.ticker).join(',');
+    if (digestMine && digestMineKey === key) return digestMine;
+    try {
+        const names = {}; mine.forEach(h => { names[h.ticker] = h.name; });
+        const d = await (await fetch(`${BACKEND_URL}/api/news/mine`, { method: 'POST', headers: authHeaders(),
+            body: JSON.stringify({ tickers: mine.map(h => h.ticker), names }) })).json();
+        if (d.ok) { digestMine = d; digestMineKey = key; }
+    } catch (e) {}
+    return digestMine;
+}
+
+// Komu z mého portfolia se událost týká + co s tím (z plánu, ne z AI)
+function dgForMe(ev) {
+    const my = dgMyHoldings();
+    if (!my.length) return null;
+    const tick = new Set((ev.tickers || []).map(t => t.toUpperCase().replace('-', '.')));
+    const secs = new Set(ev.sectors || []);
+    const hit = my.filter(h => tick.has(h.base.toUpperCase()) || (h.sector && secs.has(h.sector)));
+    if (!hit.length) return { hit: [], text: 'Tvého portfolia se to přímo netýká.' };
+    const w = hit.reduce((s, h) => s + h.weight, 0);
+    const names = hit.filter(h => h.status !== 'core').map(h => mpBase(h.ticker));
+    const core = hit.some(h => h.status === 'core');
+    let who = [];
+    if (names.length) who.push(names.slice(0, 5).join(', ') + (names.length > 5 ? ' a další' : ''));
+    if (core) who.push('tvé indexové jádro');
+    let act;
+    if (ev.impact === 'negativní') {
+        act = hit.some(h => h.status === 'plan' || h.status === 'core')
+            ? 'Nic neprodávej – plán se kvůli zprávám nemění. Kdyby cena spadla, další měsíční vklad nakoupí levněji.'
+            : 'Nic neprodávej v panice. Tyhle tituly stejně nedokupuješ; o prodeji rozhoduje jen pravidlo po 3 letech.';
+    } else if (ev.impact === 'pozitivní') {
+        act = 'Nic nedokupuj navíc kvůli titulku – vklady jdou dál podle plánu tam, kde chybí do cíle.';
+    } else {
+        act = 'Nic dělat nemusíš – sleduje se to, ale plán to nemění.';
+    }
+    return { hit, text: `Týká se: <b>${mpEsc(who.join(' + '))}</b> (≈ ${mpPct(w, 0)} portfolia). ${act}` };
+}
+
+function dgFactsHTML(mk) {
+    if (!mk || !(mk.facts || []).length) return '';
+    const badUp = { '^VIX': 1, '^TNX': 1 };   // u strachu a výnosů je růst spíš špatná zpráva
+    return `<div class="dg-facts">` + mk.facts.map(f => {
+        const good = badUp[f.key] ? f.chg <= 0 : f.chg >= 0;
+        const col = Math.abs(f.chg) < 0.05 ? 'var(--text2)' : (good ? 'var(--up)' : 'var(--down)');
+        return `<div class="dg-fact"><div class="l">${mpEsc(f.label)}</div><div class="v">${Number(f.price).toLocaleString('cs-CZ', { maximumFractionDigits: 2 })}${mpEsc(f.unit || '')}</div>
+            <div class="c" style="color:${col}">${f.chg >= 0 ? '+' : '−'}${mpPct(Math.abs(f.chg), 2)}</div></div>`;
+    }).join('') + `</div>` + (mk.best && mk.worst ? `<div class="dg-sec">Nejvíc roste <b>${mpEsc(mk.best.label)}</b> <span style="color:var(--up)">+${mpPct(mk.best.chg, 1)}</span> · nejvíc klesá <b>${mpEsc(mk.worst.label)}</b> <span style="color:var(--down)">−${mpPct(Math.abs(mk.worst.chg), 1)}</span></div>` : '');
+}
+
+function dgEventHTML(ev, compact) {
+    const im = DG_IMPACT[ev.impact] || DG_IMPACT['smíšené'];
+    const me = compact ? null : dgForMe(ev);
+    const myBases = new Set(((me && me.hit) || []).map(h => h.base.toUpperCase()));
+    const mySecs = new Set(((me && me.hit) || []).map(h => h.sector));
+    const chips = (ev.sectors || []).map(s => `<span class="dg-chip ${mySecs.has(s) ? 'mine' : ''}">${mpEsc(s)}</span>`).join('') +
+        (ev.tickers || []).map(t => `<span class="dg-chip t ${myBases.has(t.toUpperCase().replace('-', '.')) ? 'mine' : ''}">${mpEsc(t)}</span>`).join('');
+    if (compact) {
+        return `<div class="dg-mini" onclick="openNews()"><span class="dg-dot ${im[0]}"></span><div><b>${mpEsc(ev.title)}</b><div class="w">${mpEsc(ev.why || ev.what)}</div></div></div>`;
+    }
+    const src = (ev.sources || []).filter((s, i, a) => a.findIndex(x => x.src === s.src) === i).map(s => `<a href="${mpEsc(s.link)}" target="_blank" rel="noopener noreferrer">${mpEsc(s.src)}</a>`).join(' · ');
+    return `<div class="dg-ev">
+      <div class="dg-ev-h"><span class="dg-imp ${im[0]}">${im[1]}</span><b>${mpEsc(ev.title)}</b></div>
+      <div class="dg-row"><span class="k">Co se stalo</span><span>${mpEsc(ev.what)}</span></div>
+      ${ev.why ? `<div class="dg-row"><span class="k">Proč je to důležité</span><span>${mpEsc(ev.why)}</span></div>` : ''}
+      ${chips ? `<div class="dg-row"><span class="k">Koho se to týká</span><span class="dg-chips">${chips}</span></div>` : ''}
+      ${me ? `<div class="dg-row me"><span class="k">Pro tebe</span><span>${me.text}</span></div>` : ''}
+      ${src ? `<div class="dg-src">Zdroj: ${src}</div>` : ''}
+    </div>`;
+}
+
+function dgMineHTML() {
+    const m = digestMine;
+    if (!m) return '';
+    let body = '';
+    if (m.ai && (m.items || []).length) {
+        body = m.items.map(it => {
+            const im = DG_IMPACT[it.impact] || DG_IMPACT['smíšené'];
+            const src = (it.sources || []).map(s => `<a href="${mpEsc(s.link)}" target="_blank" rel="noopener noreferrer">${mpEsc(s.src)}</a>`).join(' · ');
+            return `<div class="dg-ev"><div class="dg-ev-h"><span class="dg-imp ${im[0]}">${im[1]}</span><b>${mpEsc(mpBase(it.ticker))}</b></div>
+              <div class="dg-row"><span class="k">Co se stalo</span><span>${mpEsc(it.what)}</span></div>
+              ${it.why ? `<div class="dg-row"><span class="k">Proč je to důležité</span><span>${mpEsc(it.why)}</span></div>` : ''}
+              ${src ? `<div class="dg-src">Zdroj: ${src}</div>` : ''}</div>`;
+        }).join('');
+    } else if (m.ai) {
+        body = `<div class="dg-note">U tvých akcií za poslední 3 dny nic podstatného – žádné výsledky, akvizice ani velké zprávy.</div>`;
+    } else if ((m.headlines || []).length) {
+        body = m.headlines.slice(0, 8).map(h => `<a class="dg-hl" href="${mpEsc(h.link)}" target="_blank" rel="noopener noreferrer"><b>${mpEsc(mpBase(h.ticker))}</b> ${mpEsc(h.title)}</a>`).join('');
+    } else {
+        body = `<div class="dg-note">U tvých akcií za poslední 3 dny žádné zprávy.</div>`;
+    }
+    return `<div class="dg-h"><i class="ti ti-briefcase"></i> Tvoje akcie ve zprávách</div>${body}`;
+}
+
+function renderDigestModal() {
+    const list = document.getElementById('market-news-list');
+    if (!list) return;
+    const d = digestData;
+    if (!d) { list.innerHTML = '<div class="dg-note">Briefing se teď nepodařilo načíst.</div>'; return; }
+    let h = dgFactsHTML(d.market);
+    if (d.ai) {
+        if (d.headline) h += `<div class="dg-headline">${mpEsc(d.headline)}</div>`;
+        h += `<div class="dg-h"><i class="ti ti-bolt"></i> Co se dnes děje</div>` + d.events.map(e => dgEventHTML(e)).join('');
+    } else {
+        h += `<div class="dg-note warn"><i class="ti ti-info-circle"></i> AI shrnutí teď není k dispozici – níže jsou nejdůležitější titulky s perexem.</div>` +
+            (d.headlines || []).slice(0, 8).map(n => `<a class="dg-hl" href="${mpEsc(n.link)}" target="_blank" rel="noopener noreferrer"><b>${mpEsc(n.title)}</b>${n.text ? `<span>${mpEsc(n.text)}</span>` : ''}<small>${mpEsc(n.src)}</small></a>`).join('');
+    }
+    h += dgMineHTML();
+    h += `<div class="dg-lt"><i class="ti ti-compass"></i><div><b>Pro dlouhodobý plán:</b> ${d.long_term ? mpEsc(d.long_term) + ' ' : ''}Zprávy jsou kontext, ne signál. Plán nakupuje jednou měsíčně podle hodnoty a momenta – kvůli dnešním titulkům nic neměň.</div></div>`;
+    if (d.ai && (d.headlines || []).length) {
+        h += `<details class="dg-all"><summary>Všechny titulky (${d.headlines.length})</summary>` +
+            d.headlines.map(n => `<a class="dg-hl" href="${mpEsc(n.link)}" target="_blank" rel="noopener noreferrer"><b>${mpEsc(n.title)}</b><small>${mpEsc(n.src)}</small></a>`).join('') + `</details>`;
+    }
+    if (d.generated) h += `<div class="dg-upd">Aktualizováno ${new Date(d.generated * 1000).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })} · obnovuje se každé 3 hodiny</div>`;
+    list.innerHTML = h;
+}
+
+async function loadMarketNews() {
+    const st = document.getElementById('market-status');
+    const list = document.getElementById('market-news-list');
+    list.innerHTML = '<div class="dg-note"><i class="ti ti-loader spin"></i> Připravuji briefing – čtu zprávy a počítám, koho se týkají…</div>';
+    // stav burzy (rychlý, nezávislý)
+    fetch(`${BACKEND_URL}/api/market-news`).then(r => r.json()).then(d => {
+        if (d.market && st) {
+            st.className = 'market-status ' + (d.market.open ? 'open' : 'closed');
+            st.innerHTML = `<i class="ti ti-${d.market.open ? 'point-filled' : 'moon'}"></i> ${escapeHtml(d.market.label)}`;
+        }
+    }).catch(() => {});
+    if (planLots.length && !planData && !planLoading) { try { await planRefresh(); } catch (e) {} }
+    await Promise.all([loadDigest(), loadDigestMine()]);
+    renderDigestModal();
+}
+
+async function fetchOverviewNews() {
+    const box = document.getElementById('ov-news');
+    if (!box) return;
+    const d = await loadDigest();
+    if (d && d.ai) {
+        box.innerHTML = (d.headline ? `<div class="dg-headline sm">${mpEsc(d.headline)}</div>` : '') +
+            d.events.slice(0, 3).map(e => dgEventHTML(e, true)).join('') +
+            `<button class="tool-btn" onclick="openNews()" style="width:100%; justify-content:center; margin-top:8px;"><i class="ti ti-news"></i> Celý briefing – co to znamená pro tebe</button>`;
+        return;
+    }
+    const list = (d && d.headlines) || [];
+    if (!list.length) { box.innerHTML = '<div class="ov-empty">Novinky teď nelze načíst.</div>'; return; }
+    box.innerHTML = list.slice(0, 5).map(n => `<div class="ov-news-row" onclick="window.open('${String(n.link || '').replace(/'/g, "\\'")}', '_blank', 'noopener')">
+        <div class="meta">${n.ts ? formatNewsTime(n.ts) : ''}</div><div class="txt">${escapeHtml(n.title)}</div></div>`).join('') +
+        `<button class="tool-btn" onclick="openNews()" style="width:100%; justify-content:center; margin-top:8px;"><i class="ti ti-news"></i> Briefing</button>`;
 }
 </script>
 </body>

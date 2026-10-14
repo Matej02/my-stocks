@@ -4503,6 +4503,314 @@ def api_plan_goal():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ---------------------------------------------------------------------------
+# DENNÍ BRIEFING – „Co se děje · proč · koho se to týká · co s tím".
+# Místo seznamu odkazů na dlouhé články: AI shrne JEN to, co je v dodaných
+# zprávách (každá událost musí citovat zdroj, jinak se zahodí). Čísla trhu
+# počítá server sám, AI je nesmí vymýšlet. Rada „co s tím" NEPOCHÁZÍ z AI –
+# odvozuje ji frontend z dlouhodobého plánu (zprávy plán nemění).
+# Globální briefing se počítá max. jednou za 3 hodiny pro všechny (KV cache).
+# ---------------------------------------------------------------------------
+DIGEST_SLOT_H = 3
+DIGEST_SECTORS = ["celý trh"] + list(SECTOR_CZ.values())
+# Rady, listicles a osobní finance: pro „co se dnes stalo" čistý šum
+NEWS_NOISE = ("could soar", "buy and hold", "millionaire", "retire", "my sister", "my brother", "my husband",
+              "my wife", "my mother", "my father", "should you buy", "stocks to buy", "forever", "prediction:",
+              "i'm ", "social security", "beaten-down", "no-brainer", "smartest", "too cheap to ignore",
+              "here's why", "here's how", "dear ", "moneyist", "best ", "top 3", "top 5", "2 stocks", "3 stocks",
+              "my 401", "credit card", "mortgage rates today", "reasons", "stock to buy", "better buy",
+              "which stock", "did the market", "still buys", "dividend stocks", "is it time to", "should i ",
+              "stocks that", "buy right now", "buy now", "vs.", "watchlist", "battleground", "behind the ticker")
+DIGEST_FACTS = [("^GSPC", "S&P 500", ""), ("^IXIC", "Nasdaq", ""), ("^VIX", "VIX (strach)", ""),
+                ("^TNX", "Výnos 10letých dluhopisů USA", "%"), ("CZK=X", "Dolar v korunách", " Kč"),
+                ("CL=F", "Ropa WTI", " $")]
+
+
+def _news_pool(hours=36, limit=60):
+    """Čerstvé tržní zprávy ze všech zdrojů: titulek + perex, bez šumu, bez duplicit."""
+    items, seen = [], set()
+    now = time.time()
+    for key, src in _RSS_SOURCES.items():
+        try:
+            rss = _fetch_rss(key) or []
+        except Exception:
+            continue
+        for it in rss[:25]:
+            title = _strip_html(it.get("title") or "")
+            text = _strip_html(it.get("summary") or "")
+            if text.lower().startswith(title.lower()[:30]):
+                text = text[len(title):].strip(" .:-–")
+            ts = _parse_rss_time(it.get("pub_date"))
+            if not title or (ts and now - ts > hours * 3600):
+                continue
+            low = title.lower()
+            if any(n in low for n in NEWS_NOISE) or not _is_market_news(title + " " + text[:200]):
+                continue
+            k = re.sub(r"[^a-z0-9á-ž]", "", low)[:50]
+            if k in seen:
+                continue
+            seen.add(k)
+            items.append({"src": src["label"], "title": title[:200], "text": text[:280],
+                          "link": it.get("link") or "", "ts": ts or 0})
+    try:
+        r = requests.get("https://query2.finance.yahoo.com/v1/finance/search?q=%5EGSPC&quotesCount=0&newsCount=12",
+                         headers=HEADERS, timeout=6).json()
+        for n in (r.get("news") or []):
+            t = (n.get("title") or "").strip()
+            k = re.sub(r"[^a-z0-9á-ž]", "", t.lower())[:50]
+            ts = n.get("providerPublishTime") or 0
+            if t and k not in seen and not any(x in t.lower() for x in NEWS_NOISE) and (not ts or now - ts < hours * 3600):
+                seen.add(k)
+                items.append({"src": n.get("publisher") or "Yahoo Finance", "title": t[:200], "text": "",
+                              "link": n.get("link") or "", "ts": ts})
+    except Exception:
+        pass
+    items.sort(key=lambda x: -(x["ts"] or 0))
+    items = items[:limit]
+    for i, it in enumerate(items, 1):
+        it["id"] = f"n{i}"
+    return items
+
+
+def _market_facts():
+    """Tvrdá čísla dne (počítá server, ne AI)."""
+    from concurrent.futures import ThreadPoolExecutor
+    tks = [t for t, _l, _u in DIGEST_FACTS] + [t for t, _l, _i in _SECTOR_ETFS]
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        got = dict(zip(tks, ex.map(_fetch_macro_one, tks)))
+    facts = []
+    for t, label, unit in DIGEST_FACTS:
+        d = got.get(t)
+        if d:
+            facts.append({"key": t, "label": label, "unit": unit, "price": round(d["price"], 2), "chg": d["chg_pct"]})
+    secs = sorted([{"label": l, "chg": got[t]["chg_pct"]} for t, l, _i in _SECTOR_ETFS if got.get(t)],
+                  key=lambda x: x["chg"])
+    return {"facts": facts, "best": secs[-1] if secs else None, "worst": secs[0] if secs else None}
+
+
+DIGEST_PROMPT = """Jsi zkušený analytik, který každé ráno píše českému DLOUHODOBÉMU investorovi stručný briefing.
+Investor nechce dlouhé články. Chce vědět: CO se stalo, PROČ je to důležité a KOHO se to týká.
+
+TVRDÁ ČÍSLA DNE (spočítaná, použij je přesně takto, nic nepřidávej):
+{facts}
+
+ZPRÁVY (id | zdroj | titulek | perex):
+{items}
+
+Úkol:
+1. Vyber 3 až 5 NEJDŮLEŽITĚJŠÍCH událostí pro trh (makro, sazby, inflace, výsledky velkých firem, geopolitika,
+   regulace, velké pohyby sektorů). Ignoruj rady typu „kup tuhle akcii", žebříčky, osobní finance a reklamu.
+   Více zpráv o tomtéž spoj do jedné události.
+2. Ke každé napiš česky, krátce a konkrétně:
+   - "title": max 8 slov, věcně (ne clickbait)
+   - "what": 1–2 věty, CO se stalo – jen fakta a čísla, která jsou ve zprávách
+   - "why": 1–2 věty, PROČ je to pro trh/firmy důležité (mechanismus: např. vyšší inflace → sazby zůstanou
+     výš → dražší úvěry → tlak na ocenění růstových akcií)
+   - "impact": "pozitivní" | "negativní" | "smíšené" (pro dotčené akcie)
+   - "sectors": dotčené sektory, POUZE z tohoto seznamu: {sectors}
+   - "tickers": tickery amerických firem, o kterých zpráva přímo mluví (např. ["MS","JPM"]), jinak []
+   - "sources": id zpráv, ze kterých vycházíš (např. ["n3","n7"]) – POVINNÉ
+3. "headline": jedna věta, co dnes hýbe trhem. Pokud zprávy důvod pohybu neuvádějí, napiš to – nevymýšlej příčinu.
+4. "long_term": jedna věta, co to celé znamená pro dlouhodobého investora (střízlivě, bez paniky i bez nadšení).
+
+Pravidla: žádné předpovědi cen, žádné „kupte/prodejte", žádná čísla, která nejsou ve zprávách nebo v tvrdých číslech.
+Piš srozumitelně pro člověka, který není ekonom. Odpověz JEN JSON:
+{{"headline": "...", "events": [{{"title": "...", "what": "...", "why": "...", "impact": "...", "sectors": [], "tickers": [], "sources": []}}], "long_term": "..."}}"""
+
+
+def _clean_digest(raw, pool):
+    """Validace výstupu AI: událost bez platného zdroje se zahodí, sektory jen
+    ze seznamu, tickery jen jako tickery, texty zkrácené."""
+    if not isinstance(raw, dict):
+        return None
+    by_id = {p["id"]: p for p in pool}
+    clip = lambda s, n: (str(s or "").strip()[:n])
+    events = []
+    for e in (raw.get("events") or [])[:6]:
+        if not isinstance(e, dict):
+            continue
+        srcs = [by_id[s] for s in (e.get("sources") or []) if isinstance(s, str) and s in by_id]
+        if not srcs or not e.get("what"):
+            continue
+        imp = (e.get("impact") or "").lower()
+        events.append({
+            "title": clip(e.get("title"), 90), "what": clip(e.get("what"), 360), "why": clip(e.get("why"), 360),
+            "impact": imp if imp in ("pozitivní", "negativní", "smíšené") else "smíšené",
+            "sectors": [s for s in (e.get("sectors") or []) if s in DIGEST_SECTORS][:4],
+            "tickers": [t.upper() for t in (e.get("tickers") or [])
+                        if isinstance(t, str) and re.match(r"^[A-Za-z.\-]{1,6}$", t)][:6],
+            "sources": [{"title": s["title"], "src": s["src"], "link": s["link"]} for s in srcs[:3]],
+        })
+    if not events:
+        return None
+    return {"headline": clip(raw.get("headline"), 240), "long_term": clip(raw.get("long_term"), 300),
+            "events": events[:5]}
+
+
+def _news_digest(allow_llm=True):
+    """Globální briefing (kešováno na 3h slot). Bez AI → fallback se surovými titulky."""
+    now = datetime.now(timezone.utc)
+    slot = f"{now.strftime('%Y-%m-%d')}:{now.hour // DIGEST_SLOT_H}"
+    try:
+        c = kv_get_json(f"news:digest:{slot}")
+        # verze bez AI (výpadek) platí jen 15 min, pak se AI zkusí znovu
+        if c and (c.get("ai") or not analysis_enabled() or time.time() - c.get("generated", 0) < 900):
+            return c
+    except Exception:
+        pass
+    pool = _news_pool()
+    mk = _market_facts()
+    out = {"ok": True, "slot": slot, "generated": int(time.time()), "market": mk, "ai": False,
+           "headlines": [{"title": p["title"], "text": p["text"][:200], "src": p["src"], "link": p["link"], "ts": p["ts"]}
+                         for p in pool[:14]]}
+    if allow_llm and analysis_enabled() and pool:
+        facts = "\n".join(f"- {f['label']}: {f['price']}{f['unit']} ({'+' if f['chg'] >= 0 else ''}{f['chg']} % za den)"
+                          for f in mk["facts"])
+        if mk.get("best") and mk.get("worst"):
+            facts += (f"\n- Nejvíc rostoucí sektor: {mk['best']['label']} ({mk['best']['chg']:+.2f} %), "
+                      f"nejvíc klesající: {mk['worst']['label']} ({mk['worst']['chg']:+.2f} %)")
+        items = "\n".join(f"{p['id']} | {p['src']} | {p['title']} | {p['text']}" for p in pool)
+        raw = call_llm(DIGEST_PROMPT.format(facts=facts, items=items, sectors=", ".join(DIGEST_SECTORS)))
+        dg = _clean_digest(raw, pool)
+        if dg:
+            out.update(dg)
+            out["ai"] = True
+    try:
+        kv_set_json(f"news:digest:{slot}", out)
+    except Exception:
+        pass
+    return out
+
+
+@app.route("/api/news/digest")
+def api_news_digest():
+    if not _rate_ok("digest", 60, 60):
+        return jsonify({"ok": False, "error": "Moc požadavků, zkus to za chvíli."}), 429
+    try:
+        return jsonify(_news_digest())
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+MINE_PROMPT = """Jsi analytik a píšeš českému dlouhodobému investorovi, co je nového u akcií, které DRŽÍ.
+Zprávy (id | ticker | zdroj | titulek | perex):
+{items}
+
+Pro každý ticker, u kterého je ve zprávách něco PODSTATNÉHO (výsledky, výhled, akvizice, soud, regulace,
+změna vedení, velký pohyb ceny s uvedeným důvodem), napiš česky:
+- "ticker", "what": 1–2 věty co se stalo (jen fakta ze zpráv), "why": 1 věta proč je to pro firmu důležité,
+- "impact": "pozitivní" | "negativní" | "smíšené", "sources": id zpráv (povinné).
+Tickery, kde jsou jen obecné články, rady nebo nic podstatného, VYNECH. Žádné rady kupovat/prodat, žádné předpovědi.
+Odpověz JEN JSON: {{"items": [{{"ticker": "...", "what": "...", "why": "...", "impact": "...", "sources": []}}]}}"""
+
+
+_NAME_SUFFIX = re.compile(r"\b(inc|incorporated|corp|corporation|co|company|holdings?|group|plc|n\.?v|s\.?a|ag|se|ltd|limited|the|class [a-c])\b\.?", re.I)
+
+
+_COMMON_FIRST = {"state", "first", "general", "american", "united", "bank", "global", "national", "public",
+                 "digital", "energy", "capital", "international", "target", "block", "match", "best", "dollar",
+                 "southern", "western", "eastern", "northern", "texas", "universal", "applied", "advanced",
+                 "consolidated", "regional", "realty", "insurance", "health", "booking", "progressive", "principal"}
+
+
+def _name_keys(ticker, name):
+    """Řetězce, podle kterých poznáme, že zpráva je opravdu o téhle firmě."""
+    keys = {k.lower() for k in _ticker_synonyms(ticker) if len(k) >= 3 and not k.isupper()}
+    clean = _NAME_SUFFIX.sub(" ", re.sub(r"[(),]", " ", name or "")).strip()
+    words = [w.lower() for w in clean.split() if len(w) >= 3]
+    if words:
+        common = words[0] in _COMMON_FIRST or len(words[0]) < 5
+        if len(words) > 1:
+            keys.add(" ".join(words[:2]))
+        if not common:
+            keys.add(words[0])
+    return keys
+
+
+def _about(title, ticker, keys):
+    base = ticker.split(".")[0].upper()
+    if len(base) >= 2 and re.search(rf"(?<![A-Za-z]){re.escape(base)}(?![A-Za-z])", title):
+        return True
+    low = title.lower()
+    return any(k in low for k in keys)
+
+
+def _mine_digest(tickers, names=None):
+    """Co je nového u TVÝCH akcií (zprávy o firmě za 3 dny), kešováno na slot."""
+    names = names or {}
+    tickers = sorted({t.upper() for t in tickers if re.match(r"^[A-Z0-9.\-]{1,12}$", (t or "").upper())})[:10]
+    if not tickers:
+        return {"ok": True, "items": [], "ai": False}
+    now = datetime.now(timezone.utc)
+    slot = f"{now.strftime('%Y-%m-%d')}:{now.hour // DIGEST_SLOT_H}"
+    key = "news:mine:" + hashlib.sha1((slot + "|" + ",".join(tickers)).encode()).hexdigest()[:20]
+    try:
+        c = kv_get_json(key)
+        if c and (c.get("ai") or not analysis_enabled() or time.time() - c.get("generated", 0) < 900):
+            return c
+    except Exception:
+        pass
+
+    def one(t):
+        try:
+            r = requests.get(f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(t)}&quotesCount=0&newsCount=8",
+                             headers=HEADERS, timeout=6).json()
+            out, keys = [], _name_keys(t, names.get(t))
+            for n in (r.get("news") or []):
+                ts = n.get("providerPublishTime") or 0
+                tt = (n.get("title") or "").strip()
+                if (tt and (not ts or time.time() - ts < 72 * 3600) and not any(x in tt.lower() for x in NEWS_NOISE)
+                        and _about(tt, t, keys)):
+                    out.append({"ticker": t, "src": n.get("publisher") or "Yahoo", "title": tt[:200], "text": "",
+                                "link": n.get("link") or "", "ts": ts})
+            return out[:4]
+        except Exception:
+            return []
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        pool = [x for lst in ex.map(one, tickers) for x in lst]
+    for i, p in enumerate(pool, 1):
+        p["id"] = f"m{i}"
+    res = {"ok": True, "ai": False, "items": [], "generated": int(time.time()),
+           "headlines": [{"ticker": p["ticker"], "title": p["title"], "src": p["src"], "link": p["link"], "ts": p["ts"]}
+                         for p in pool]}
+    if pool and analysis_enabled():
+        raw = call_llm(MINE_PROMPT.format(items="\n".join(
+            f"{p['id']} | {p['ticker']} | {p['src']} | {p['title']} | {p['text']}" for p in pool)))
+        by_id = {p["id"]: p for p in pool}
+        for e in ((raw or {}).get("items") or [])[:10]:
+            if not isinstance(e, dict):
+                continue
+            t = str(e.get("ticker") or "").upper()
+            # zdroj musí být zpráva právě o tomhle tickeru
+            srcs = [by_id[s] for s in (e.get("sources") or [])
+                    if isinstance(s, str) and s in by_id and by_id[s]["ticker"] == t]
+            if not srcs or t not in tickers or not e.get("what"):
+                continue
+            imp = (e.get("impact") or "").lower()
+            res["items"].append({"ticker": t, "what": str(e["what"])[:360], "why": str(e.get("why") or "")[:300],
+                                 "impact": imp if imp in ("pozitivní", "negativní", "smíšené") else "smíšené",
+                                 "sources": [{"title": s["title"], "src": s["src"], "link": s["link"]} for s in srcs[:2]]})
+        res["ai"] = raw is not None
+    try:
+        kv_set_json(key, res)
+    except Exception:
+        pass
+    return res
+
+
+@app.route("/api/news/mine", methods=["POST"])
+def api_news_mine():
+    if not _rate_ok("news_mine", 30, 60):
+        return jsonify({"ok": False, "error": "Moc požadavků, zkus to za chvíli."}), 429
+    try:
+        b = request.get_json(silent=True) or {}
+        names = b.get("names") if isinstance(b.get("names"), dict) else {}
+        return jsonify(_mine_digest(b.get("tickers") or [], {str(k).upper(): str(v)[:80] for k, v in names.items()}))
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/signals")
 def get_signals():
     """Dnešní nákupní signály ověřeného modelu (celé S&P 500)."""
@@ -6593,23 +6901,29 @@ def _brief_payload(user=None, date=None, risk=None):
     today = _today_iso()
     date = date or today
     market, signals = None, []
+    digest = None
     if date == today:
         market = _market_brief()
         signals = _todays_signals()[:5]
+        try:
+            dg = _news_digest()
+            digest = {k: dg.get(k) for k in ("ai", "headline", "events", "long_term")} if dg.get("ai") else None
+        except Exception:
+            digest = None
         try:                       # ulož snímek dne do archivu
-            kv_set_json(f"brief:{date}", {"market": market, "signals": signals,
+            kv_set_json(f"brief:{date}", {"market": market, "signals": signals, "digest": digest,
                                           "generated": int(time.time())})
             kv_sadd("brief:dates", date)
         except Exception:
             pass
     else:
         snap = kv_get_json(f"brief:{date}") or {}
-        market, signals = snap.get("market"), snap.get("signals") or []
+        market, signals, digest = snap.get("market"), snap.get("signals") or [], snap.get("digest")
         if not market:
             return {"ok": False, "date": date, "error": "Pro tenhle den nemáme uložený přehled."}
 
     out = {"ok": True, "date": date, "is_today": date == today,
-           "market": market, "signals": signals}
+           "market": market, "signals": signals, "digest": digest}
     if date == today:
         out["risk"] = _market_risk()
     if user and date == today:
@@ -6775,7 +7089,23 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
                       f"nejvíc klesá <b>{b['worst']['label']}</b> "
                       f"<span style='color:#FF3D00'>{b['worst']['chg']:+.2f} %</span>.</p>")
         news = ""
-        if b.get("news"):
+        try:
+            dg = _news_digest()
+        except Exception:
+            dg = {}
+        if dg.get("ai") and dg.get("events"):
+            col = {"pozitivní": "#00C853", "negativní": "#FF3D00"}
+            rows = "".join(
+                f"<div style='padding:10px 0;border-top:1px solid #23262f;font-size:13px;line-height:1.5'>"
+                f"<b style='color:{col.get(e['impact'], '#FFB347')}'>●</b> <b>{_html_escape(e['title'])}</b><br>"
+                f"<span style='color:#9ba1b0'>Co se stalo:</span> {_html_escape(e['what'])}<br>"
+                + (f"<span style='color:#9ba1b0'>Proč je to důležité:</span> {_html_escape(e['why'])}" if e.get("why") else "")
+                + "</div>" for e in dg["events"][:4])
+            news = ((f"<p style='margin:14px 0 6px;font-size:14px'><b>{_html_escape(dg.get('headline') or '')}</b></p>"
+                     if dg.get("headline") else "") + rows +
+                    "<p style='color:#9ba1b0;font-size:12px;margin:8px 0 0'>Pro dlouhodobý plán: zprávy jsou kontext, "
+                    "ne signál – kvůli nim nic neměň.</p>")
+        elif b.get("news"):
             def _news_row(n):
                 blurb = (f"<div style='color:#9ba1b0;font-size:12px;margin:2px 0 0 14px'>"
                         f"{_html_escape(n['blurb'])}</div>") if n.get("blurb") else ""
