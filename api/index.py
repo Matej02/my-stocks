@@ -3824,6 +3824,102 @@ def _value_holdings(holdings):
     return rows, total, missing, scan
 
 
+# ---------------------------------------------------------------------------
+# PAUZA U VÁŽNÉHO PRŮŠVIHU. Nový nákup titulu se na 30 dní odloží (peníze jdou
+# dalšímu v pořadí), NIC se neprodává. Zdroje: SEC 8-K kódy (spolehlivé) a AI
+# ze zpráv (podvod, vyšetřování, hrozba bankrotu). POCTIVĚ: na S&P 500 2015-26
+# akcie po těchto podáních v průměru dál NEZAOSTÁVALY (po přepočtu účetnictví
+# medián +4 % za 3 měsíce) – trh zprávu zpracuje hned. Je to pojistka proti
+# vzácné katastrofě, ne zdroj výnosu (research/lt9b_eval.py).
+# ---------------------------------------------------------------------------
+REDFLAG_DAYS = 30
+REDFLAG_PAUSE = {"4.02": "přepočet účetnictví – dřívější výkazy neplatí (SEC 8-K 4.02)",
+                 "1.03": "bankrot / ochrana před věřiteli (SEC 8-K 1.03)",
+                 "3.01": "hrozba vyřazení z burzy (SEC 8-K 3.01)"}
+REDFLAG_WARN = {"4.01": "výměna auditora (SEC 8-K 4.01)"}
+
+
+def _cik_map():
+    """Ticker (formát skenu, BRK.B) → CIK z univerza S&P 500 (bez stahování 1 MB seznamu SEC)."""
+    try:
+        return {s: c for s, c, _x in _sp500_universe() if c}
+    except Exception:
+        return {}
+
+
+def _sec_flags(ticker, cmap):
+    """Vážná 8-K za posledních 30 dní (kešováno den)."""
+    key = _spx_key(ticker)
+    day = _today_iso()
+    ck = f"secflag:{key}:{day}"
+    try:
+        c = kv_get_json(ck)
+        if c is not None:
+            return c.get("flags") or []
+    except Exception:
+        pass
+    cik = cmap.get(key)
+    if not cik:
+        try:
+            cik = int(_sec_lookup_cik(ticker) or 0) or None
+        except Exception:
+            cik = None
+    flags = []
+    if cik:
+        try:
+            r = requests.get(f"https://data.sec.gov/submissions/CIK{int(cik):010d}.json", headers=SEC_HEADERS, timeout=8)
+            rec = ((r.json() or {}).get("filings") or {}).get("recent") or {}
+            cutoff = (datetime.now(timezone.utc).date() - timedelta(days=REDFLAG_DAYS)).isoformat()
+            for f, d, it, acc, doc in zip(rec.get("form", []), rec.get("filingDate", []), rec.get("items", []),
+                                          rec.get("accessionNumber", []), rec.get("primaryDocument", [])):
+                if f not in ("8-K", "8-K/A") or d < cutoff:
+                    continue
+                for code in (it or "").split(","):
+                    code = code.strip()
+                    if code in REDFLAG_PAUSE or code in REDFLAG_WARN:
+                        flags.append({"code": code, "date": d, "pause": code in REDFLAG_PAUSE,
+                                      "reason": REDFLAG_PAUSE.get(code) or REDFLAG_WARN[code],
+                                      "url": f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc.replace('-', '')}/{doc}"})
+        except Exception:
+            return []          # výpadek SEC nekešovat
+    try:
+        kv_set_json(ck, {"flags": flags})
+    except Exception:
+        pass
+    return flags
+
+
+def _red_flags(tickers):
+    """{ticker: {"pause": bool, "reasons": [...], "until": "YYYY-MM-DD"}} – jen tituly s nějakým nálezem."""
+    tickers = sorted({t for t in tickers if t})[:60]
+    if not tickers:
+        return {}
+    cmap = _cik_map()
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=5) as ex:      # SEC povoluje max 10 dotazů/s
+        sec = dict(zip(tickers, ex.map(lambda t: _sec_flags(t, cmap), tickers)))
+    out = {}
+    now = time.time()
+    for t in tickers:
+        items = list(sec.get(t) or [])
+        try:
+            ai = kv_get_json(f"redflag:ai:{_spx_key(t)}")
+            if ai and ai.get("until_ts", 0) > now:
+                items.append({"code": "ai", "date": ai.get("date"), "pause": True, "reason": ai.get("reason"),
+                              "url": ai.get("url")})
+        except Exception:
+            pass
+        if not items:
+            continue
+        pause = any(i["pause"] for i in items)
+        last = max((i.get("date") or "") for i in items)
+        until = None
+        if pause and last:
+            until = (datetime.strptime(last, "%Y-%m-%d").date() + timedelta(days=REDFLAG_DAYS)).isoformat()
+        out[t] = {"pause": pause, "until": until, "reasons": items[:3]}
+    return out
+
+
 def _build_plan(rows, risk, scan):
     """Cílové portfolio podle ověřených pravidel (sloty, limit sektoru, vítěze
     nechat běžet). Každé pozici doplní stav a případnou akci (ořez/prodej)."""
@@ -3843,10 +3939,21 @@ def _build_plan(rows, risk, scan):
         cnt[r.get("sector")] = cnt.get(r.get("sector"), 0) + 1
     capn = math.ceil(LT_SECTOR_CAP * N)
     free, new, skipped = N - len(keep), [], []
+    # kandidáti (2N nejlepších nedržených) + držené tituly → jedna kontrola průšvihů
+    cand = [t for t, rk in sorted(ranks.items(), key=lambda x: x[1]) if rk <= 2 * N and t not in held]
+    try:
+        flags = _red_flags([c.replace(".", "-") for c in cand] + [r["ticker"] for r in rows if r["kind"] != "core"])
+    except Exception:
+        flags = {}
+    paused = []
     for t, rk in sorted(ranks.items(), key=lambda x: x[1]):
         if free <= 0 or rk > 2 * N:
             break
         if t in held:
+            continue
+        fl = flags.get(t.replace(".", "-"))
+        if fl and fl["pause"]:
+            paused.append({"ticker": t.replace(".", "-"), "name": names.get(t) or t, "vm_rank": rk, **fl})
             continue
         sec = smap.get(t) or ""
         if sec and cnt.get(sec, 0) >= capn:
@@ -3862,6 +3969,11 @@ def _build_plan(rows, risk, scan):
     trim_cap = LT_TRIM_X * slot
     for r in rows:
         r["action"] = None
+        fl = flags.get(r["ticker"])
+        if fl:
+            r["flag"] = fl
+            if fl["pause"] and r["kind"] != "core" and r["ticker"] in keep_t:
+                paused.append({"ticker": r["ticker"], "name": r["name"], "vm_rank": r["vm_rank"], "held": True, **fl})
         if r["kind"] == "core":
             r["status"], r["status_label"] = "core", "Indexové jádro"
             continue
@@ -3906,7 +4018,7 @@ def _build_plan(rows, risk, scan):
     p = LONGTERM["profiles"][risk]
     return {"risk": risk, "stocks_pct": int(split * 100), "core_pct": int(round((1 - split) * 100)),
             "slots": N, "slots_used": len(keep), "slot_pct": round(split / N * 100, 2), "new": new,
-            "sector_skipped": skipped[:5], "actions": actions,
+            "sector_skipped": skipped[:5], "actions": actions, "paused": paused,
             "validation": {k: p[k] for k in ("train", "holdout", "full")},
             "benchmark": LONGTERM["benchmark"], "rule": LONGTERM["rule"]}
 
@@ -3933,7 +4045,7 @@ def _allocate(amount, rows, total, plan):
     per_slot = max(0.0, split * V - legacy) / N
     stocks = []
     for r in rows:
-        if r.get("status") == "plan":
+        if r.get("status") == "plan" and not (r.get("flag") or {}).get("pause"):
             stocks.append({"ticker": r["ticker"], "name": r["name"], "action": "topup", "target": per_slot,
                            "cur": r["value_czk"], "vm_rank": r["vm_rank"], "sector": r.get("sector"),
                            "price": r["price"], "currency": r["currency"]})
@@ -3991,14 +4103,16 @@ def _allocate(amount, rows, total, plan):
         fx = _fx_czk(cur) if (price and cur) else None
         px_czk = price * fx if (price and fx) else None
         now_pct = l["cur"] / total * 100 if total else 0
+        after_pct = l["cur"] / V * 100 if V else 0      # podíl po vkladu, kdyby se nedokoupilo
         if l["action"] == "core":
-            why = (f"Indexové jádro (S&P 500): cíl {plan['core_pct']} % portfolia, teď {_pc(now_pct, 0)} %."
+            why = (f"Indexové jádro (S&P 500): cíl {plan['core_pct']} % portfolia. Teď má {_pc(now_pct, 0)} %, "
+                   f"s novým vkladem by bez dokoupení kleslo na {_pc(after_pct, 0)} %."
                    if core_rows else
                    f"Základ portfolia: 500 největších firem USA v jednom ETF, cíl {plan['core_pct']} %. "
                    "Irská UCITS verze – z ČR koupitelná, dividendy reinvestuje sama.")
         elif l["action"] == "topup":
             why = (f"Držíš a pořád je v plánu (#{l['vm_rank']} v S&P 500 podle hodnoty+momenta). "
-                   f"Má {_pc(now_pct)} %, cíl {_pc(per_slot / V * 100)} % – dokoupení ji vrací k cíli.")
+                   f"S novým vkladem by měla {_pc(after_pct)} %, cíl je {_pc(per_slot / V * 100)} % – dokoupení ji vrací k cíli.")
         else:
             facts = ([f"P/E {_pc(l['pe'], 0)}"] if l.get("pe") else []) + \
                     ([f"za rok {'+' if l['mom_pct'] >= 0 else ''}{_pc(l['mom_pct'], 0)} %"] if l.get("mom_pct") is not None else [])
@@ -4744,9 +4858,12 @@ Zprávy (id | ticker | zdroj | titulek | perex):
 Pro každý ticker, u kterého je ve zprávách něco PODSTATNÉHO (výsledky, výhled, akvizice, soud, regulace,
 změna vedení, velký pohyb ceny s uvedeným důvodem), napiš česky:
 - "ticker", "what": 1–2 věty co se stalo (jen fakta ze zpráv), "why": 1 věta proč je to pro firmu důležité,
-- "impact": "pozitivní" | "negativní" | "smíšené", "sources": id zpráv (povinné).
+- "impact": "pozitivní" | "negativní" | "smíšené", "sources": id zpráv (povinné),
+- "severe": true JEN pokud zprávy přímo uvádějí podvod nebo účetní skandál, vyšetřování úřady (SEC, DOJ)
+  kvůli podvodu, přepočet dřívějších výsledků, bankrot nebo vážnou hrozbu bankrotu, vyřazení z burzy.
+  Pokuta, prohraný soud, slabé výsledky nebo snížený výhled NEJSOU severe. Jinak false.
 Tickery, kde jsou jen obecné články, rady nebo nic podstatného, VYNECH. Žádné rady kupovat/prodat, žádné předpovědi.
-Odpověz JEN JSON: {{"items": [{{"ticker": "...", "what": "...", "why": "...", "impact": "...", "sources": []}}]}}"""
+Odpověz JEN JSON: {{"items": [{{"ticker": "...", "what": "...", "why": "...", "impact": "...", "severe": false, "sources": []}}]}}"""
 
 
 _NAME_SUFFIX = re.compile(r"\b(inc|incorporated|corp|corporation|co|company|holdings?|group|plc|n\.?v|s\.?a|ag|se|ltd|limited|the|class [a-c])\b\.?", re.I)
@@ -4780,10 +4897,10 @@ def _about(title, ticker, keys):
     return any(k in low for k in keys)
 
 
-def _mine_digest(tickers, names=None):
-    """Co je nového u TVÝCH akcií (zprávy o firmě za 3 dny), kešováno na slot."""
+def _mine_digest(tickers, names=None, cap=20):
+    """Co je nového u TVÝCH akcií / tipů (zprávy o firmě za 3 dny), kešováno na slot."""
     names = names or {}
-    tickers = sorted({t.upper() for t in tickers if re.match(r"^[A-Z0-9.\-]{1,12}$", (t or "").upper())})[:10]
+    tickers = sorted({t.upper() for t in tickers if re.match(r"^[A-Z0-9.\-]{1,12}$", (t or "").upper())})[:cap]
     if not tickers:
         return {"ok": True, "items": [], "ai": False}
     now = datetime.now(timezone.utc)
@@ -4833,9 +4950,18 @@ def _mine_digest(tickers, names=None):
             if not srcs or t not in tickers or not e.get("what"):
                 continue
             imp = (e.get("impact") or "").lower()
+            severe = e.get("severe") is True
             res["items"].append({"ticker": t, "what": str(e["what"])[:360], "why": str(e.get("why") or "")[:300],
                                  "impact": imp if imp in ("pozitivní", "negativní", "smíšené") else "smíšené",
+                                 "severe": severe,
                                  "sources": [{"title": s["title"], "src": s["src"], "link": s["link"]} for s in srcs[:2]]})
+            if severe:
+                try:
+                    kv_set_json(f"redflag:ai:{_spx_key(t)}", {
+                        "until_ts": time.time() + REDFLAG_DAYS * 86400, "date": _today_iso(),
+                        "reason": "ze zpráv: " + str(e["what"])[:200], "url": srcs[0]["link"]})
+                except Exception:
+                    pass
         res["ai"] = raw is not None
     try:
         kv_set_json(key, res)
@@ -7507,6 +7633,19 @@ def admin_morning_test():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+def _warm_plan_news():
+    """Ráno projde 50 nejlepších titulů dle hodnoty+momenta: SEC 8-K a zprávy přes AI
+    (příznak vážného průšvihu). Pak uživatel v „Kam s penězi" nečeká a pauza platí i
+    pro tituly, které ještě nikdo nedrží."""
+    scan = market_scan(allow_step=False) or {}
+    ranks, _v, _s, names, _m = _scan_maps(scan)
+    top = [t.replace(".", "-") for t, _r in sorted(ranks.items(), key=lambda x: x[1])[:50]]
+    _red_flags(top)
+    for i in range(0, len(top), 20):
+        chunk = top[i:i + 20]
+        _mine_digest(chunk, {t: names.get(t.replace("-", "."), t) for t in chunk})
+
+
 @app.route("/api/cron/morning")
 def cron_morning():
     # Ochrana (fail-closed): vyžaduje env CRON_SECRET. Vercel Cron posílá
@@ -7523,6 +7662,10 @@ def cron_morning():
         # zely díry za dny, kdy bylo posílání vypnuté.
         try:
             _brief_payload()
+        except Exception:
+            pass
+        try:
+            _warm_plan_news()
         except Exception:
             pass
         # Cron běží ve dvou UTC časech (6:00 a 7:00), aby jeden z nich vždy padl

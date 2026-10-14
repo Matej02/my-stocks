@@ -1459,6 +1459,16 @@ html, body {max-width:100%;}
   .dg-facts {grid-template-columns:repeat(2, 1fr);}
   .dg-row {grid-template-columns:1fr; gap:1px;}
 }
+
+.mp-news {margin-top:6px; padding:7px 10px; border-radius:10px; background:var(--surface); border-left:3px solid var(--border2); font-size:12.5px; line-height:1.5; color:var(--text2);}
+.mp-news b {color:var(--text);}
+.mp-news.up {border-left-color:var(--up);} .mp-news.down {border-left-color:var(--down);} .mp-news.mix {border-left-color:var(--amber);}
+.mp-news .pn {display:block; color:var(--text3); margin-top:2px;}
+.mp-news a {color:var(--text3);}
+.mp-pause {display:flex; gap:10px; padding:10px 12px; border-radius:12px; background:rgba(255,61,0,0.08); border:1px solid rgba(255,61,0,0.3); font-size:12.5px; line-height:1.5; margin-top:10px;}
+.mp-pause i {color:var(--down); font-size:17px;}
+.mp-pause b {color:var(--text);}
+.mp-flag {font-size:11.5px; color:var(--down); margin-top:3px; line-height:1.4;}
 </style>
 </head>
 <body>
@@ -1676,7 +1686,7 @@ html, body {max-width:100%;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.14·d</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.14·e</div>
 
 <div class="container">
   
@@ -6465,6 +6475,7 @@ let planShowDeposit = false;
 let planRisk = (() => { try { return localStorage.getItem('ma_plan_risk') || investorRisk; } catch (e) { return investorRisk; } })();
 let planStress = null, planStressKey = '', planStressLoading = false;
 let planGoal = null, planGoalLoading = false;
+let tipNews = null, tipNewsKey = '', tipNewsLoading = false;
 
 const MP_SECTOR_CZ = {
     'Information Technology': 'Technologie', 'Health Care': 'Zdravotnictví', 'Financials': 'Finance',
@@ -6561,6 +6572,57 @@ async function planRefresh() {
     renderPlan();
     renderOverviewPlan();
     if (planData && planData.rows && planData.rows.length) planLoadStress();
+    planLoadTipNews();
+}
+
+// Zprávy k tipům z „Kam s penězi" a k tvým pozicím (co je nového a proč)
+async function planLoadTipNews() {
+    if (!planData) return;
+    const names = {};
+    const dep = (planData.deposit && planData.deposit.lines) || [];
+    dep.filter(l => l.action !== 'core').slice(0, 14).forEach(l => { names[l.ticker] = l.name || l.ticker; });
+    (planData.rows || []).filter(r => r.status !== 'core').sort((a, b) => b.weight - a.weight).slice(0, 8)
+        .forEach(r => { names[r.ticker] = r.name; });
+    const tickers = Object.keys(names).slice(0, 20);
+    if (!tickers.length) return;
+    const key = tickers.slice().sort().join(',');
+    if (tipNewsLoading || (tipNews && tipNewsKey === key)) return;
+    tipNewsLoading = true;
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/news/mine`, { method: 'POST', headers: authHeaders(),
+            body: JSON.stringify({ tickers, names }) })).json();
+        if (d.ok) { tipNews = d; tipNewsKey = key; }
+    } catch (e) {}
+    tipNewsLoading = false;
+    if (activeTab === 'portfolio') renderPlan();
+}
+
+function planTipNewsHTML(ticker, ctx, status) {
+    const it = tipNews && tipNews.ai && (tipNews.items || []).find(x => x.ticker === ticker);
+    if (!it) return '';
+    const cls = { 'pozitivní': 'up', 'negativní': 'down' }[it.impact] || 'mix';
+    let note = '';
+    if (it.severe) note = 'Vážná zpráva – nové nákupy tohoto titulu jsou na 30 dní pozastavené.';
+    else if (ctx === 'buy') note = it.impact === 'negativní'
+        ? 'Plán ji přesto kupuje: hodnota a momentum se počítají z dat a historicky reakce na zprávy dál nepokračovala spolehlivě.'
+        : (it.impact === 'pozitivní' ? 'Kupuje se podle plánu – ne víc jen kvůli dobrému titulku.' : '');
+    else note = it.impact === 'negativní'
+        ? (status === 'plan' ? 'Držíme – jeden titulek plán nemění.' : 'Neprodávej v panice; o prodeji rozhoduje jen pravidlo po 3 letech.')
+        : '';
+    const src = (it.sources || [])[0];
+    return `<div class="mp-news ${cls}">📰 <b>${mpEsc(it.what)}</b> ${mpEsc(it.why || '')}${src ? ` <a href="${mpEsc(src.link)}" target="_blank" rel="noopener noreferrer">(${mpEsc(src.src)})</a>` : ''}${note ? `<span class="pn">${note}</span>` : ''}</div>`;
+}
+
+function planPausedHTML(p) {
+    const ps = (p && p.paused) || [];
+    if (!ps.length) return '';
+    return ps.map(x => {
+        const r = (x.reasons || []).find(y => y.pause) || (x.reasons || [])[0] || {};
+        return `<div class="mp-pause"><i class="ti ti-player-pause"></i><div><b>${mpEsc(mpBase(x.ticker))} – nákup pozastaven do ${mpEsc(x.until ? new Date(x.until).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric' }) : '30 dní')}.</b>
+          ${mpEsc(r.reason || '')}${r.url ? ` <a href="${mpEsc(r.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--text2)">zdroj</a>` : ''}.
+          ${x.held ? 'Pozici držíš dál, jen se teď nedokupuje.' : 'Peníze šly dalšímu titulu v pořadí.'}
+          <span style="color:var(--text3)">Pojistka proti vzácné katastrofě – historicky tyhle zprávy výnos nesnižovaly ani nezvyšovaly, trh je zpracuje hned.</span></div></div>`;
+    }).join('');
 }
 
 function planDeposit(v) {
@@ -6683,10 +6745,11 @@ function planDepositHTML(d) {
             const sh = l.shares != null ? `≈ ${mpQty(l.shares)} ks · ${mpQty(l.price)} ${mpEsc(l.currency || '')}` : '';
             return `<div class="mp-line">
               <span class="mp-badge ${b[0]}">${b[1]}</span>
-              <div class="nm"><div class="t">${mpEsc(mpBase(l.ticker))}<small>${mpEsc(l.name || '')}</small></div><div class="w">${mpEsc(l.why)}</div></div>
+              <div class="nm"><div class="t">${mpEsc(mpBase(l.ticker))}<small>${mpEsc(l.name || '')}</small></div><div class="w">${mpEsc(l.why)}</div>${l.action !== 'core' ? planTipNewsHTML(l.ticker, 'buy') : ''}</div>
               <div class="amt"><div class="a">${mpKc(l.amount_czk)}</div><div class="q">${sh}</div></div>
             </div>`;
         }).join('') + `</div>`;
+        html += planPausedHTML(p);
         if (dep.deferred && dep.deferred.length) {
             html += `<div class="mp-note"><i class="ti ti-clock"></i><span>Na řadu příště: <b>${dep.deferred.slice(0, 12).map(x => mpEsc(mpBase(x.ticker))).join(', ')}</b>${dep.deferred.length > 12 ? ' a další' : ''}. Nákup pod ${dep.min_order} Kč nedává smysl – každý měsíc dostanou peníze tituly s největší mezerou, takže se vystřídají.</span></div>`;
         }
@@ -6735,9 +6798,10 @@ function planRowsHTML(d) {
           <div style="min-width:0"><div class="tk">${mpEsc(mpBase(r.ticker))} ${r.chg != null ? `<span style="font-size:11.5px;font-weight:500;color:var(--${r.chg >= 0 ? 'up' : 'down'})">${r.chg >= 0 ? '+' : ''}${mpPct(r.chg, 1)}</span>` : ''}</div><div class="sm">${mpEsc(r.name)}</div></div>
           <div><div class="num">${mpKc(r.value_czk)}</div><div class="sm">${mpQty(r.qty)} ks${lots}</div></div>
           <div class="num">${mpPct(r.weight, 1)}</div>
-          <div style="min-width:0">${badge(r)}<div class="sm" style="margin-top:3px">${mpEsc(sec)}</div>${act}</div>
+          <div style="min-width:0">${badge(r)}<div class="sm" style="margin-top:3px">${mpEsc(sec)}</div>${act}${r.flag ? `<div class="mp-flag">${r.flag.pause ? '⏸ Nákup pozastaven' : '⚠'} – ${mpEsc(((r.flag.reasons || [])[0] || {}).reason || '')}</div>` : ''}</div>
           <div style="min-width:0">${planTaxHTML(r)}</div>
           <div><button class="mp-icon-btn" onclick="openLot('${mpEsc(r.ticker)}')" title="Upravit nákupy"><i class="ti ti-pencil"></i></button></div>
+          ${r.status !== 'core' && planTipNewsHTML(r.ticker, 'hold', r.status) ? `<div style="grid-column:1 / -1">${planTipNewsHTML(r.ticker, 'hold', r.status)}</div>` : ''}
         </div>`;
     }).join('');
     return `<div class="mp-card"><h4><i class="ti ti-briefcase"></i> Moje pozice</h4>
