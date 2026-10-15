@@ -3891,7 +3891,7 @@ def _sec_flags(ticker, cmap):
 
 def _red_flags(tickers):
     """{ticker: {"pause": bool, "reasons": [...], "until": "YYYY-MM-DD"}} – jen tituly s nějakým nálezem."""
-    tickers = sorted({t for t in tickers if t})[:60]
+    tickers = sorted({t for t in tickers if t})[:150]
     if not tickers:
         return {}
     cmap = _cik_map()
@@ -4212,13 +4212,15 @@ def api_holdings():
         if request.method == "POST":
             b = request.get_json(silent=True) or {}
             hs = _clean_holdings(b.get("holdings"))
+            old = kv_get_json(f"holdings:{user}") or {}
             rec = {"updated": int(time.time()), "holdings": hs}
+            for k in ("deposit_czk", "deposit_month"):      # nastavení, které se importem nemění
+                if old.get(k) is not None:
+                    rec[k] = old[k]
             if b.get("risk") in LT_PROFILES:
                 rec["risk"] = b["risk"]
-            else:
-                old = (kv_get_json(f"holdings:{user}") or {}).get("risk")
-                if old:
-                    rec["risk"] = old
+            elif old.get("risk"):
+                rec["risk"] = old["risk"]
             kv_set_json(f"holdings:{user}", rec)
             return jsonify({"ok": True, "count": len(hs)})
         rec = kv_get_json(f"holdings:{user}") or {}
@@ -4249,6 +4251,14 @@ def api_plan():
         amount = _num(body.get("amount_czk"))
         if amount and 0 < amount < 1e10:
             out["deposit"] = _allocate(amount, rows, total, plan)
+            if user:       # ranní e-mail pak ukáže rozdělení pravidelného vkladu
+                try:
+                    rec = kv_get_json(f"holdings:{user}") or {}
+                    if rec.get("deposit_czk") != round(amount):
+                        rec["deposit_czk"] = round(amount)
+                        kv_set_json(f"holdings:{user}", rec)
+                except Exception:
+                    pass
         return jsonify(out)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -4982,9 +4992,10 @@ def _news_digest(allow_llm=True):
     now = datetime.now(timezone.utc)
     slot = f"{now.strftime('%Y-%m-%d')}:{now.hour // DIGEST_SLOT_H}"
     try:
-        c = kv_get_json(f"news:digest2:{slot}")
-        # verze bez AI (výpadek) platí jen 15 min, pak se AI zkusí znovu
-        if c and (c.get("ai") or not analysis_enabled() or time.time() - c.get("generated", 0) < 900):
+        c = kv_get_json("news:digest3:cur")
+        age = time.time() - (c or {}).get("generated", 0)
+        # platí 3 h; verze bez AI (výpadek) jen 15 min, pak se AI zkusí znovu
+        if c and age < DIGEST_SLOT_H * 3600 and (c.get("ai") or not analysis_enabled() or age < 900):
             return c
     except Exception:
         pass
@@ -5032,7 +5043,7 @@ def _news_digest(allow_llm=True):
                 out["ai"] = True
                 out["ai_status"] = "ok"
     try:
-        kv_set_json(f"news:digest2:{slot}", out)
+        kv_set_json("news:digest3:cur", out)
         kv_set_json("news:digest:status", {"ts": int(time.time()), "ai": out["ai"], "ai_status": out["ai_status"],
                                            "pool": len(pool), "mood": base["label"]})
     except Exception:
@@ -5097,20 +5108,43 @@ def _about(title, ticker, keys):
 
 
 def _mine_digest(tickers, names=None, cap=20):
-    """Co je nového u TVÝCH akcií / tipů (zprávy o firmě za 3 dny), kešováno na slot."""
+    """Co je nového u TVÝCH akcií / tipů (zprávy o firmě za 3 dny). Kešuje se PO
+    JEDNOTLIVÝCH TICKERECH na 3h slot – ranní e-maily i web tak sdílí výsledek
+    a AI se volá jen pro tituly, které ještě nikdo nepočítal."""
     names = names or {}
     tickers = sorted({t.upper() for t in tickers if re.match(r"^[A-Z0-9.\-]{1,12}$", (t or "").upper())})[:cap]
     if not tickers:
-        return {"ok": True, "items": [], "ai": False}
-    now = datetime.now(timezone.utc)
-    slot = f"{now.strftime('%Y-%m-%d')}:{now.hour // DIGEST_SLOT_H}"
-    key = "news:mine:" + hashlib.sha1((slot + "|" + ",".join(tickers)).encode()).hexdigest()[:20]
-    try:
-        c = kv_get_json(key)
-        if c and (c.get("ai") or not analysis_enabled() or time.time() - c.get("generated", 0) < 900):
-            return c
-    except Exception:
-        pass
+        return {"ok": True, "items": [], "headlines": [], "ai": False}
+    ttl = DIGEST_SLOT_H * 3600
+    got, missing = {}, []
+    for t in tickers:
+        try:
+            c = kv_get_json(f"news:t:{t}")
+        except Exception:
+            c = None
+        age = time.time() - (c or {}).get("generated", 0)
+        if c and age < ttl and (c.get("ai") or not analysis_enabled() or age < 900):
+            got[t] = c
+        else:
+            missing.append(t)
+    if missing:
+        fresh = _mine_compute(missing, names)
+        for t in missing:
+            rec = {"ai": fresh["ai"], "generated": fresh["generated"],
+                   "items": [i for i in fresh["items"] if i["ticker"] == t],
+                   "headlines": [h for h in fresh["headlines"] if h["ticker"] == t]}
+            got[t] = rec
+            try:
+                kv_set_json(f"news:t:{t}", rec)
+            except Exception:
+                pass
+    return {"ok": True, "ai": any(got[t]["ai"] for t in tickers), "generated": int(time.time()),
+            "items": [i for t in tickers for i in got[t]["items"]],
+            "headlines": [h for t in tickers for h in got[t]["headlines"]]}
+
+
+def _mine_compute(tickers, names):
+    """Stáhne titulky k tickerům a (když je AI) z nich vybere podstatné události."""
 
     def one(t):
         try:
@@ -5162,10 +5196,6 @@ def _mine_digest(tickers, names=None, cap=20):
                 except Exception:
                     pass
         res["ai"] = raw is not None
-    try:
-        kv_set_json(key, res)
-    except Exception:
-        pass
     return res
 
 
@@ -7383,7 +7413,129 @@ def _portfolio_why(tickers, limit=3):
             "Proč se to hýbe:</div>" + "".join(rows))
 
 
-def build_morning_summary_html(email, top_opps, top_signals=None):
+def _portfolio_email_html(email, mark_sent=False):
+    """Sekce „Tvoje portfolio" pro ranní e-mail: hodnota v Kč a změna za poslední
+    obchodní den, kdo se nejvíc hýbal, co je nového u TVÝCH akcií (zprávy ověřené
+    zdrojem), pozastavené nákupy, úkoly z plánu a 1× měsíčně rozdělení pravidelného
+    vkladu. Vrací (html, jedna_věta_co_dnes) nebo ("", None) bez uložených pozic."""
+    hrec = kv_get_json(f"holdings:{email}") or {}
+    lots = hrec.get("holdings") or []
+    if not lots:
+        return "", None
+    rows, total, missing, scan = _value_holdings(lots)
+    if not total:
+        return "", None
+    risk = hrec.get("risk") or _user_risk(email)
+    plan = _build_plan(rows, risk, scan)
+    held = [r for r in rows if r["kind"] != "core"]
+    # změna za poslední obchodní den (z pohybu ceny; nové nákupy ji nezkreslí)
+    day = sum(r["value_czk"] * r["chg"] / (100 + r["chg"]) for r in rows if r.get("chg") is not None)
+    base = total - day
+    col = "#00C853" if day >= 0 else "#FF3D00"
+    sg = "+" if day >= 0 else "−"
+    core = sum(r["weight"] for r in rows if r.get("status") == "core")
+    html = ("<h3 style='font-size:16px;margin:22px 0 8px'>🧭 Tvoje portfolio</h3>"
+            "<div style='background:#12141c;border:1px solid #23262f;border-radius:12px;padding:14px 16px;margin-bottom:10px'>"
+            f"<div style='font-size:24px;font-weight:700'>{_kc(total)}</div>"
+            f"<div style='font-size:14px;margin-top:2px;color:{col}'>{sg}{_kc(abs(day))} "
+            f"({sg}{_pc(abs(day) / base * 100 if base else 0, 2)} %) za poslední obchodní den</div>"
+            f"<div style='color:#9ba1b0;font-size:13px;margin-top:6px'>Indexové jádro {_pc(core, 0)} % (cíl {plan['core_pct']} %) · "
+            f"akcie v plánu {plan['slots_used']}/{plan['slots']}</div></div>")
+    # kdo se hýbal nejvíc (v Kč)
+    mv = sorted([r for r in rows if r.get("chg") is not None and r["value_czk"]],
+                key=lambda r: -abs(r["value_czk"] * r["chg"] / (100 + r["chg"])))[:3]
+    if mv and any(abs(r["chg"]) >= 0.5 for r in mv):
+        parts = []
+        for r in mv:
+            d = r["value_czk"] * r["chg"] / (100 + r["chg"])
+            c = "#00C853" if d >= 0 else "#FF3D00"
+            parts.append(f"<b>{_html_escape(r['ticker'].split('.')[0])}</b> "
+                         f"<span style='color:{c}'>{'+' if d >= 0 else '−'}{_pc(abs(r['chg']), 1)} % "
+                         f"({'+' if d >= 0 else '−'}{_kc(abs(d))})</span>")
+        html += ("<div style='font-size:13px;margin:0 0 12px'>Nejvíc se hýbalo: " + " · ".join(parts) + "</div>")
+    # co je nového u mých akcií
+    try:
+        top = sorted(held, key=lambda r: -r["weight"])[:8]
+        mine = _mine_digest([r["ticker"] for r in top], {r["ticker"]: r["name"] for r in top}) if top else {}
+    except Exception:
+        mine = {}
+    items = mine.get("items") or []
+    if items:
+        colmap = {"pozitivní": "#00C853", "negativní": "#FF3D00"}
+        html += "<div style='color:#9ba1b0;font-size:12px;margin:10px 0 4px'>Co je nového u tvých akcií:</div>"
+        for it in items[:4]:
+            src = (it.get("sources") or [{}])[0]
+            link = (f" <a href='{_html_escape(src.get('link') or '#')}' style='color:#9ba1b0'>({_html_escape(src.get('src') or '')})</a>"
+                    if src.get("link") else "")
+            html += (f"<div style='padding:8px 0;border-top:1px solid #23262f;font-size:13px;line-height:1.5'>"
+                     f"<b style='color:{colmap.get(it['impact'], '#FFB347')}'>●</b> <b>{_html_escape(it['ticker'].split('.')[0])}</b> – "
+                     f"{_html_escape(it['what'])}"
+                     + (f" <span style='color:#9ba1b0'>{_html_escape(it['why'])}</span>" if it.get("why") else "")
+                     + link + "</div>")
+    elif mine.get("ai"):
+        html += ("<div style='color:#9ba1b0;font-size:13px;margin:8px 0'>U tvých akcií nic podstatného – "
+                 "žádné výsledky, akvizice ani velké zprávy za poslední 3 dny.</div>")
+    # pozastavené nákupy (vážný průšvih)
+    for x in (plan.get("paused") or [])[:3]:
+        rs = (x.get("reasons") or [{}])[0]
+        html += (f"<div style='padding:10px 12px;border-radius:10px;background:rgba(255,61,0,0.08);"
+                 f"border:1px solid rgba(255,61,0,0.3);margin:8px 0;font-size:13px;line-height:1.5'>"
+                 f"⏸ <b>{_html_escape(x['ticker'].split('.')[0])}</b> – nákup pozastaven: {_html_escape(rs.get('reason') or '')}. "
+                 f"{'Pozici držíš dál, jen se nedokupuje.' if x.get('held') else 'Peníze šly dalšímu titulu v pořadí.'}</div>")
+    # úkoly z plánu
+    acts = plan.get("actions") or []
+    for a in acts[:3]:
+        verb = "Oříznout" if a["type"] == "trim" else "Prodat"
+        html += (f"<div style='padding:10px 12px;border-radius:10px;background:rgba(255,179,71,0.1);"
+                 f"border:1px solid rgba(255,179,71,0.3);margin:8px 0;font-size:14px;line-height:1.5'>"
+                 f"✂️ <b>{verb} {_html_escape(a['ticker'].split('.')[0])} za ≈ {_kc(a['amount_czk'])}</b> – {_html_escape(a['why'])}</div>")
+    # pravidelný vklad: 1× za měsíc s rozdělením (částka = poslední zadaná v appce)
+    today = datetime.now(timezone.utc)
+    month = today.strftime("%Y-%m")
+    dep_html, action = "", None
+    amount = hrec.get("deposit_czk")
+    due = today.day <= 10 and hrec.get("deposit_month") != month
+    if due:
+        if amount and amount > 0:
+            dep = _allocate(float(amount), rows, total, plan)
+            lines = "".join(
+                f"<div style='padding:4px 0;font-size:14px'><b>{_html_escape(l['ticker'].split('.')[0])}</b> "
+                f"<span style='color:#9ba1b0;font-size:12px'>{_html_escape((l.get('name') or '')[:34])}</span>"
+                f"<span style='float:right'><b>{_kc(l['amount_czk'])}</b></span></div>"
+                for l in dep["lines"][:10])
+            more = (f"<div style='color:#9ba1b0;font-size:12px'>… a dalších {len(dep['lines']) - 10}</div>"
+                    if len(dep["lines"]) > 10 else "")
+            dep_html = (f"<div style='margin-top:12px;padding:12px 14px;border-radius:12px;background:rgba(255,122,0,0.10);"
+                        f"border:1px solid rgba(255,122,0,0.30)'><div style='font-size:14px;margin-bottom:6px'>"
+                        f"📅 <b>Pravidelný vklad {_kc(amount)} – kam s ním:</b></div>{lines}{more}"
+                        f"<div style='color:#9ba1b0;font-size:12px;margin-top:8px'>Částka je ta, kterou jsi naposledy zadal v appce "
+                        f"(Moje portfolio → Kam s penězi). Nic se neprodává.</div></div>")
+            action = f"Dnes: pravidelný vklad {_kc(amount)} rozděl podle seznamu výš."
+        else:
+            dep_html = ("<div style='margin-top:12px;padding:12px 14px;border-radius:12px;background:rgba(255,122,0,0.10);"
+                        "border:1px solid rgba(255,122,0,0.30);font-size:14px;line-height:1.5'>📅 <b>Začátek měsíce – čas na vklad.</b> "
+                        "Otevři appku → Moje portfolio → <i>Kam s penězi</i>, zadej částku a appka řekne, co koupit.</div>")
+            action = "Dnes: začátek měsíce – zadej v appce částku a uvidíš, kam s ní."
+        if mark_sent:
+            try:
+                hrec["deposit_month"] = month
+                kv_set_json(f"holdings:{email}", hrec)
+            except Exception:
+                pass
+    html += dep_html
+    if action is None:
+        if acts:
+            a0 = acts[0]
+            action = (f"Dnes: {'oříznout' if a0['type'] == 'trim' else 'prodat'} {a0['ticker'].split('.')[0]} "
+                      f"za ≈ {_kc(a0['amount_czk'])} (bez daně).")
+        elif plan.get("paused"):
+            action = "Dnes: nic neprodávej; u pozastavených titulů se jen nedokupuje."
+        else:
+            action = "Dnes: nemusíš nic dělat – plán drží. Zprávy jsou kontext, ne signál."
+    return html, action
+
+
+def build_morning_summary_html(email, top_opps, top_signals=None, mark_sent=False):
     pf = kv_get_json(f"portfolio:{email}") or {}
     watch = (pf.get("watchlist") or [])[:8]
     rows = ""
@@ -7504,14 +7656,25 @@ def build_morning_summary_html(email, top_opps, top_signals=None):
     except Exception:
         brief_html = ""
 
-    action = _todays_action(email, top_signals or [])
+    try:
+        plan_html, plan_action = _portfolio_email_html(email, mark_sent=mark_sent)
+    except Exception:
+        plan_html, plan_action = "", None
+    # Má-li uživatel nahrané portfolio, rozhoduje dlouhodobý plán; krátkodobé
+    # signály jsou jen doplněk (jeho cíl: investovat dlouhodobě, ne obchodovat).
+    action = plan_action or _todays_action(email, top_signals or [])
     action_html = (f"<div style='margin:18px 0 4px;padding:14px 16px;border-radius:12px;"
                    f"background:rgba(255,122,0,0.10);border:1px solid rgba(255,122,0,0.30)'>"
                    f"<b style='color:#F0A030'>{_html_escape(action)}</b></div>") if action else ""
 
     why_html = _portfolio_why(why_tickers + [t for t in watch if t not in why_tickers])
-    portfolio_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>📊 Tvé portfolio</h3>"
-                      + pos_html + watch_html + why_html)
+    if plan_html:
+        short = ("<div style='color:#9ba1b0;font-size:12px;margin:14px 0 4px'>Krátkodobé signály – otevřené pozice:</div>"
+                 + pos_html) if (why_tickers and pos_html) else ""
+        portfolio_html = plan_html + short + watch_html + why_html
+    else:
+        portfolio_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>📊 Tvé portfolio</h3>"
+                          + pos_html + watch_html + why_html)
 
     return _email_shell("Ranní přehled trhu ☀️",
                         "<p style='line-height:1.6'>Dobré ráno!</p>" +
@@ -7858,6 +8021,25 @@ def save_risk_profile():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/cron/warm")
+def cron_warm():
+    """Předehřátí zpráv a kontrol SEC (5:50 UTC, před ranními e-maily). Samostatný
+    běh, aby zdržení nikdy neblokovalo odeslání e-mailu. Chráněno CRON_SECRET."""
+    err = _cron_auth()
+    if err:
+        return err
+    try:
+        t0 = time.time()
+        _warm_plan_news()
+        try:
+            _news_digest()
+        except Exception:
+            pass
+        return jsonify({"ok": True, "seconds": round(time.time() - t0, 1)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/admin/morning-test", methods=["POST"])
 def admin_morning_test():
     """Pošle ranní souhrn na admina – test, že to celé funguje."""
@@ -7882,9 +8064,20 @@ def _warm_plan_news():
     scan = market_scan(allow_step=False) or {}
     ranks, _v, _s, names, _m = _scan_maps(scan)
     top = [t.replace(".", "-") for t, _r in sorted(ranks.items(), key=lambda x: x[1])[:50]]
-    _red_flags(top)
-    for i in range(0, len(top), 20):
-        chunk = top[i:i + 20]
+    # + všechny tituly, které uživatelé drží (ať se zprávy v e-mailech nepočítají za pochodu)
+    held = []
+    try:
+        for em in (kv_smembers("users") or [])[:200]:
+            for h in ((kv_get_json(f"holdings:{em}") or {}).get("holdings") or []):
+                t = (h.get("ticker") or "").upper()
+                if t and t not in CORE_ETFS and t not in held and t not in top:
+                    held.append(t)
+    except Exception:
+        pass
+    allt = top + held[:60]
+    _red_flags(allt)
+    for i in range(0, len(allt), 20):
+        chunk = allt[i:i + 20]
         _mine_digest(chunk, {t: names.get(t.replace("-", "."), t) for t in chunk})
 
 
@@ -7906,10 +8099,6 @@ def cron_morning():
             _brief_payload()
         except Exception:
             pass
-        try:
-            _warm_plan_news()
-        except Exception:
-            pass
         # Cron běží ve dvou UTC časech (6:00 a 7:00), aby jeden z nich vždy padl
         # na 8:00 pražského času – letního i zimního. Odešle jen ten správný.
         hour = _prague_hour()
@@ -7922,7 +8111,7 @@ def cron_morning():
             return jsonify({"ok": True, "sent": 0, "skipped": True,
                             "prague_hour": hour, "send_hour": SEND_HOUR_PRAGUE})
         sent = _broadcast("morning", "☀️ Ranní přehled trhu – MY ADVANTAGE",
-                          lambda em: build_morning_summary_html(em, top_opps, top_signals))
+                          lambda em: build_morning_summary_html(em, top_opps, top_signals, mark_sent=True))
         return jsonify({"ok": True, "sent": sent, "prague_hour": hour,
                         "sending_enabled": digest_sending_enabled()})
     except Exception as e:

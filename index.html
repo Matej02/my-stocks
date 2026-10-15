@@ -1709,7 +1709,7 @@ html, body {max-width:100%;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.15·a</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.15·c</div>
 
 <div class="container">
   
@@ -3293,9 +3293,22 @@ function renderBrief(d) {
              '</div>';
     }
 
+    // Nahrané dlouhodobé portfolio (z plánu) – hodnota v Kč, změna, úkoly, zprávy k akciím
+    if (typeof planLots !== 'undefined' && planLots.length && typeof planData !== 'undefined' && planData && planData.rows) {
+        const rows = planData.rows, tot = planData.total_czk || 0;
+        const day = rows.reduce((sm, r) => sm + (r.chg != null ? r.value_czk * r.chg / (100 + r.chg) : 0), 0);
+        const base = tot - day, up = day >= 0, acts = (planData.plan.actions || []);
+        const news = (tipNews && tipNews.ai && tipNews.items) ? tipNews.items.slice(0, 3) : [];
+        h += '<div class="brief-h">Tvoje portfolio</div>' +
+            `<div class="dg-story ${up ? 'calm' : 'mixed'}"><div class="dg-what">${mpKc(tot)}
+                <span style="font-size:14px;font-weight:600;color:var(--${up ? 'up' : 'down'})">${up ? '+' : '−'}${mpKc(Math.abs(day))} (${up ? '+' : '−'}${mpPct(Math.abs(base ? day / base * 100 : 0), 2)}) za poslední obchodní den</span></div>
+                <div class="dg-why">${acts.length ? acts.map(a => `${a.type === 'trim' ? 'Oříznout' : 'Prodat'} <b>${mpEsc(mpBase(a.ticker))}</b> za ≈ ${mpKc(a.amount_czk)}`).join(' · ') : 'Dnes nemusíš nic dělat – plán drží.'}</div></div>` +
+            news.map(it => `<div class="mp-news ${{ 'pozitivní': 'up', 'negativní': 'down' }[it.impact] || 'mix'}"><b>${mpEsc(mpBase(it.ticker))}</b> – ${mpEsc(it.what)}</div>`).join('');
+    }
+
     const pos = d.positions;
     if (pos) {
-        h += '<div class="brief-h">Tvé portfolio</div>';
+        h += '<div class="brief-h">' + ((typeof planLots !== 'undefined' && planLots.length) ? 'Krátkodobé signály – otevřené pozice' : 'Tvé portfolio') + '</div>';
         const items = pos.items || [];
         if (items.length) {
             const tag = {target:'Cíl', stop:'Stop', expired:'Horizont', open:'Drží se'};
@@ -3320,7 +3333,8 @@ function renderBrief(d) {
         }
     }
 
-    if (d.action) h += `<div class="brief-act">${escapeHtml(d.action)}</div>`;
+    // s nahraným portfoliem rozhoduje dlouhodobý plán (viz výše), ne krátkodobý signál
+    if (d.action && !(typeof planLots !== 'undefined' && planLots.length)) h += `<div class="brief-act">${escapeHtml(d.action)}</div>`;
     if ((d.signals || []).length) {
         h += '<div class="brief-h">Signály toho dne</div>' + d.signals.map(sg =>
             `<div class="brief-sig"><b>${escapeHtml(sg.ticker || '')}</b>

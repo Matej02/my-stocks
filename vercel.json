@@ -92,6 +92,10 @@
       "schedule": "40 5 * * *"
     },
     {
+      "path": "/api/cron/warm",
+      "schedule": "50 5 * * *"
+    },
+    {
       "path": "/api/cron/weekly-digest",
       "schedule": "0 7 * * 6"
     }
