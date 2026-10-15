@@ -1492,6 +1492,116 @@ html, body {max-width:100%;}
 .dg-ov-mood.calm .dot {background:var(--up);} .dg-ov-mood.mixed .dot {background:var(--amber);}
 .dg-ov-mood.stress .dot, .dg-ov-mood.panic .dot {background:var(--down);}
 .dg-chips2 {display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 2px;}
+
+/* ===================== MOBIL 2026-10 – dolaďění celé appky ===================== */
+@media (max-width:768px) {
+  .navbar {margin-bottom:1.1rem; gap:10px 8px; align-items:center;}
+  .brand {order:1;}
+  .nav-actions {order:2; margin-left:auto;}
+  .search-box {order:3;}
+  .search-box input {padding:12px 16px 12px 44px; font-size:16px;}   /* 16 px = iOS nezoomuje při psaní */
+}
+@media (max-width:640px) {
+  /* Stav trhu: nepřekrývá obsah, je to malý štítek úplně nahoře */
+  .mkt-widget {position:relative; left:auto; bottom:auto; display:flex; justify-content:flex-end; padding:10px 16px 0;}
+  .mkt-pill {font-size:11.5px; padding:5px 10px; box-shadow:none;}
+  .mkt-panel {top:calc(100% + 6px); bottom:auto; right:16px; left:auto; transform:translateY(-6px);}
+  #buildTag {display:none !important;}
+
+  /* Spodní navigace jako v normální aplikaci */
+  .dash-tabs {position:fixed; left:0; right:0; bottom:0; z-index:850; margin:0; gap:2px; overflow:visible;
+    border-radius:18px 18px 0 0; border:none; border-top:1px solid var(--border2);
+    background:rgba(10,12,17,0.94); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+    padding:6px 6px calc(6px + env(safe-area-inset-bottom));}
+  .dash-tab {flex:1 1 0; min-width:0; flex-direction:column; gap:3px; padding:7px 2px; font-size:10.5px;
+    line-height:1.1; border-radius:12px; font-weight:600;}
+  .dash-tab i {font-size:22px;}
+  .dt-pre {display:none;}
+  .dash-tab {text-transform:capitalize;}
+  .nav-actions .profile-btn[onclick^="openAbout"] {display:none;}   /* „O nás“ je i v patičce */
+  body.has-dash-tabs {padding-bottom:calc(84px + env(safe-area-inset-bottom));}
+
+  /* drobné popisky ať se dají přečíst */
+  .si-type, .search-grp, .pick-badge, .deep-badge, .dl-cell .l, .track-stat .l, .track-score, .tb-cell .l, .at-cell .l,
+  .starter-sector, .ov-event .tag, .ov-news-row .meta, .cmp-picker-grp, .cmp-picker-item .type-badge, .heat-cell .hc-tk,
+  .sim-cell .l, .exit-tag, .opp-stat .l, .signal-scale, .opp-badge, .opp-disclaimer, .mp-badge, .mp-rv-hd, .dg-imp,
+  .news-src-tag, .sec-sum-cell .l, .notif-dot, .lp-footer-links span {font-size:11px;}
+  .opp-score small {font-size:9px;}
+  .pfp-r {padding:9px 14px; font-size:12px;}
+  .app-footer-col a {display:block; padding:7px 0;}
+
+  /* Landing: čísla stejně velká a vedle sebe */
+  .lp-proof {display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:26px;}
+  .lp-proof:has(.c:nth-child(3):last-child) {grid-template-columns:repeat(3, 1fr);}
+  .lp-proof .c {min-width:0; padding:14px 8px; text-align:center;}
+  .lp-proof .v {font-size:24px;}
+  .lp-proof .l {font-size:11.5px;}
+
+  /* Kam s penězi: částka nahoře vpravo, vysvětlení přes celou šířku */
+  .mp-line {grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"badge amt" "nm nm"; row-gap:8px; align-items:center;}
+  .mp-line .mp-badge {grid-area:badge; grid-column:auto; justify-self:start;}
+  .mp-line .amt {grid-area:amt;}
+  .mp-line .nm {grid-area:nm;}
+  .mp-kpi .v {white-space:normal;}
+  .ov-mini-stat .v {font-size:17px; white-space:nowrap;}
+
+  /* Živý záznam modelu: ticker a výnos nahoře, stav pod tím */
+  .tr-live-row {grid-template-columns:minmax(0,1fr) auto !important; row-gap:6px;}
+  .tr-live-row > :nth-child(1) {grid-column:1; grid-row:1;}
+  .tr-live-row > .ret {grid-column:2; grid-row:1;}
+  .tr-live-row > :nth-child(2) {grid-column:1; grid-row:2;}
+  .tr-live-row > :nth-child(4) {grid-column:1 / -1; grid-row:3; white-space:normal !important; font-size:11.5px !important;}
+  .tr-prof .sh {display:none;}
+}
+@media (max-width:420px) {
+  .brand-text {font-size:17px; letter-spacing:.5px;}
+  .brand {gap:8px;}
+  .profile-btn {padding:8px 9px;}
+  .nav-actions {gap:5px;}
+}
+
+.mp-rv-f {display:block; min-width:0;}
+.mp-rv-f span {display:none; font-size:11px; color:var(--text3); margin-bottom:3px;}
+@media (max-width:640px) {
+  .mp-rv-hd {display:none;}
+  .mp-rv {grid-template-columns:24px minmax(0,1fr) minmax(0,1fr); grid-template-areas:"chk raw raw" ". tick tick" ". qty mon"; row-gap:8px; padding:12px;}
+  .mp-rv > input[type=checkbox] {grid-area:chk; width:20px; height:20px;}
+  .mp-rv > :nth-child(2) {grid-area:raw;}
+  .mp-rv > :nth-child(3) {grid-area:tick;}
+  .mp-rv > .mp-rv-f:nth-of-type(1), .mp-rv > :nth-child(4) {grid-area:qty;}
+  .mp-rv > :nth-child(5) {grid-area:mon;}
+  .mp-rv-f span {display:block;}
+  .mp-rv .raw {white-space:normal;}
+  .mp-rv input[type=number], .mp-rv input[type=month], .mp-rv input[type=text], .mp-rv select {font-size:16px; padding:10px;}
+  .dg-what {font-size:15px;}
+  .dg-headline {font-size:15px;}
+}
+
+/* Detail akcie na telefonu: žádné vodorovné roztahování stránky */
+@media (max-width:768px) {
+  #detail-view {padding:1rem; border-radius:18px;}
+  .detail-body > *, .detail-body {min-width:0; max-width:100%;}
+  .detail-header {flex-wrap:wrap; gap:10px 12px;}
+  .dh-left {min-width:0;}
+  .chart-controls {padding:8px 10px;}
+  .btn-group {flex-wrap:wrap; justify-content:center; row-gap:4px;}
+  .c-btn {padding:7px 11px; font-size:13px;}
+  .chart-container {padding:10px 8px 0 8px; max-width:100%; overflow:hidden;}
+  .metrics-grid {gap:10px;}
+  .metric-box {padding:12px;}
+  .ai-box {padding:16px 14px; font-size:14px; line-height:1.7;}
+}
+
+.dh-back {display:none; align-items:center; gap:8px; position:sticky; top:8px; z-index:30; margin:0 0 12px; padding:9px 14px;
+  background:#0F1218; box-shadow:0 6px 18px rgba(0,0,0,0.45); border:1px solid var(--border2);
+  border-radius:12px; color:var(--text); font-family:var(--fb); font-size:14px; font-weight:600; cursor:pointer;}
+@media (max-width:768px) {.dh-back {display:inline-flex;}}
+
+@media (max-width:640px) {
+  .signal-head {flex-wrap:wrap; gap:8px;}
+  .signal-title {letter-spacing:.8px; flex-wrap:wrap; min-width:0;}
+  .signal-box {padding:16px;}
+}
 </style>
 </head>
 <body>
@@ -1709,7 +1819,7 @@ html, body {max-width:100%;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.15·a</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.15·b</div>
 
 <div class="container">
   
@@ -2163,7 +2273,7 @@ html, body {max-width:100%;}
     <!-- NAVIGACE SEKCÍ -->
     <div class="dash-tabs">
       <button class="dash-tab active" id="dtab-overview" onclick="switchTab('overview')"><i class="ti ti-layout-dashboard"></i> Přehled</button>
-      <button class="dash-tab" id="dtab-portfolio" onclick="switchTab('portfolio')"><i class="ti ti-wallet"></i> Moje portfolio</button>
+      <button class="dash-tab" id="dtab-portfolio" onclick="switchTab('portfolio')"><i class="ti ti-wallet"></i> <span class="dt-pre">Moje&nbsp;</span>portfolio</button>
       <button class="dash-tab" id="dtab-opportunities" onclick="switchTab('opportunities')"><i class="ti ti-rocket"></i> Příležitosti</button>
       <button class="dash-tab" id="dtab-results" onclick="switchTab('results')"><i class="ti ti-chart-histogram"></i> Výsledky</button>
       <button class="dash-tab" id="dtab-ai" onclick="switchTab('ai')"><i class="ti ti-bulb"></i> Doporučení</button>
@@ -2468,6 +2578,7 @@ html, body {max-width:100%;}
   </footer>
 
   <div id="detail-view">
+    <button class="dh-back" onclick="closeDetail()"><i class="ti ti-arrow-left"></i> Zpět</button>
     <div class="detail-header">
       <div class="dh-left">
         <h1 id="d-ticker">--</h1>
@@ -3087,6 +3198,7 @@ function switchTab(name) {
     requestAnimationFrame(() => {
         const tabs = document.querySelector('.dash-tabs');
         if (!tabs) return;
+        if (getComputedStyle(tabs).position === 'fixed') { window.scrollTo(0, 0); return; }
         const y = tabs.getBoundingClientRect().top + window.scrollY - 20;
         if (window.scrollY > y) window.scrollTo(0, Math.max(0, y));
     });
@@ -3744,7 +3856,7 @@ async function loadResultsBacktest() {
             <div class="tr-kpi"><div class="lbl">Nejhorší propad (konzerv.)</div><div class="val" style="color:var(--up)">${pf.conservative.full.max_dd}%</div>
                 <div class="sub">index ${spy.full.max_dd}%</div></div>`;
         const row = (lbl, x) => `<tr><td>${lbl}</td>${['train','holdout','full'].map(k =>
-            `<td><b>${x[k].cagr >= 0 ? '+' : ''}${x[k].cagr}%</b><br><span>${x[k].max_dd}% · Sharpe ${x[k].sharpe}</span></td>`).join('')}</tr>`;
+            `<td><b>${x[k].cagr >= 0 ? '+' : ''}${x[k].cagr}%</b><br><span>${x[k].max_dd}%<span class="sh"> · Sharpe ${x[k].sharpe}</span></span></td>`).join('')}</tr>`;
         grid.innerHTML = `<div class="tr-prof"><table>
             <tr><th>ročně · nejhorší propad</th><th>2015–2022<br><span>ladění</span></th><th>2023–2026<br><span>čisté ověření</span></th><th>celé období</th></tr>
             ${row('Index S&amp;P 500', spy)}${row('Konzervativní', pf.conservative)}${row('Vyvážený', pf.balanced)}${row('Agresivní', pf.aggressive)}
@@ -5153,6 +5265,11 @@ function startMain() {
 
 // Rozhodne, zda ukázat přístupovou zeď, nebo appku. Vrací true = má přístup.
 function refreshGate() {
+    const ok = _refreshGateInner();
+    document.body.classList.toggle('has-dash-tabs', !!ok);   // místo pro spodní lištu jen když je vidět appka
+    return ok;
+}
+function _refreshGateInner() {
     const wall = document.getElementById('gateWall');
     if (!cloudEnabled) { wall.style.display = 'none'; return true; }   // dev bez účtů
     if (!authToken) {
@@ -7099,8 +7216,8 @@ function renderImport() {
               <input type="checkbox" ${r.include ? 'checked' : ''} onchange="impState.rows[${i}].include=this.checked; renderImport()">
               <div style="min-width:0"><div class="raw" title="${mpEsc(r.name)}">${mpEsc(r.name || r.raw_ticker || '?')}</div>${impCheckHTML(r)}</div>
               <div style="min-width:0">${tick}</div>
-              <input type="number" step="any" min="0" value="${r.qty != null ? r.qty : ''}" onchange="impQty(${i}, this.value)">
-              <input type="month" value="${mpEsc(r.buy_month || '')}" max="${mpThisMonth()}" onchange="impState.rows[${i}].buy_month=this.value">
+              <label class="mp-rv-f"><span>Počet kusů</span><input type="number" step="any" min="0" value="${r.qty != null ? r.qty : ''}" onchange="impQty(${i}, this.value)"></label>
+              <label class="mp-rv-f"><span>Koupeno (měsíc)</span><input type="month" value="${mpEsc(r.buy_month || '')}" max="${mpThisMonth()}" onchange="impState.rows[${i}].buy_month=this.value"></label>
             </div>`;
         });
         if (planLots.length) {
@@ -7548,6 +7665,13 @@ async function fetchOverviewNews() {
         <div class="meta">${n.ts ? formatNewsTime(n.ts) : ''}</div><div class="txt">${escapeHtml(n.title)}</div></div>`).join('') +
         `<button class="tool-btn" onclick="openNews()" style="width:100%; justify-content:center; margin-top:8px;"><i class="ti ti-news"></i> Briefing</button>`;
 }
+
+// Patička až POD detailem akcie (dřív byla v DOM před ním → po otevření akcie
+// se nejdřív scrollovalo přes celou patičku, na telefonu skoro dvě obrazovky).
+(function () {
+    const f = document.querySelector('.app-footer'), d = document.getElementById('detail-view');
+    if (f && d && f.parentNode === d.parentNode) d.parentNode.appendChild(f);
+})();
 </script>
 </body>
 </html>
