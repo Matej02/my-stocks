@@ -1469,6 +1469,29 @@ html, body {max-width:100%;}
 .mp-pause i {color:var(--down); font-size:17px;}
 .mp-pause b {color:var(--text);}
 .mp-flag {font-size:11.5px; color:var(--down); margin-top:3px; line-height:1.4;}
+
+.dg-story {border-radius:16px; padding:14px 16px; margin:4px 0 14px; background:var(--surface); border:1px solid var(--border);}
+.dg-story.calm {border-color:rgba(0,230,118,0.35); background:linear-gradient(160deg, rgba(0,230,118,0.07), var(--surface));}
+.dg-story.mixed {border-color:rgba(255,179,71,0.4); background:linear-gradient(160deg, rgba(255,179,71,0.08), var(--surface));}
+.dg-story.stress, .dg-story.panic {border-color:rgba(255,61,0,0.45); background:linear-gradient(160deg, rgba(255,61,0,0.09), var(--surface));}
+.dg-mood {display:inline-flex; align-items:center; gap:8px; font-family:var(--fh); font-size:13px; font-weight:700; letter-spacing:.3px; margin-bottom:8px;}
+.dg-mood .dot {width:10px; height:10px; border-radius:50%;}
+.calm .dg-mood .dot {background:var(--up);} .mixed .dg-mood .dot {background:var(--amber);}
+.stress .dg-mood .dot, .panic .dg-mood .dot {background:var(--down);}
+.dg-what {font-family:var(--fh); font-size:16.5px; font-weight:600; line-height:1.45;}
+.dg-why {font-size:13.5px; line-height:1.55; color:var(--text2); margin-top:8px;}
+.dg-why b {color:var(--text);}
+.dg-drv {border-left:3px solid var(--accent); padding:4px 0 4px 12px; margin:10px 0; font-size:13.5px; line-height:1.5;}
+.dg-drv b {display:block; font-size:14px; margin-bottom:2px;}
+.dg-drv .s {font-size:11.5px; color:var(--text3); margin-top:3px;}
+.dg-drv .s a {color:var(--text2); text-decoration:none;} .dg-drv .s a:hover {color:var(--accent);}
+.dg-quote {margin-top:10px; padding:9px 11px; border-radius:10px; background:var(--elev); font-size:12.5px; line-height:1.5; color:var(--text2);}
+.dg-quote b {color:var(--text);}
+.dg-ov-mood {display:flex; align-items:center; gap:8px; font-size:12.5px; margin-bottom:6px; font-weight:700;}
+.dg-ov-mood .dot {width:9px; height:9px; border-radius:50%;}
+.dg-ov-mood.calm .dot {background:var(--up);} .dg-ov-mood.mixed .dot {background:var(--amber);}
+.dg-ov-mood.stress .dot, .dg-ov-mood.panic .dot {background:var(--down);}
+.dg-chips2 {display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 2px;}
 </style>
 </head>
 <body>
@@ -1686,7 +1709,7 @@ html, body {max-width:100%;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.14·f</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.15·a</div>
 
 <div class="container">
   
@@ -3258,10 +3281,9 @@ function renderBrief(d) {
     // Pořadí musí sedět s ranním e-mailem: trh → co se píše → TVÉ PORTFOLIO
     // (+ proč) → co dnes udělat → zbytek. Dřív tu portfolio chybělo úplně
     // a akce byla vražená mezi trh a zprávy.
-    if (d.digest && d.digest.ai && (d.digest.events || []).length) {
-        h += '<div class="brief-h">Co se děje a proč</div>' +
-             (d.digest.headline ? `<div class="dg-headline sm">${escapeHtml(d.digest.headline)}</div>` : '') +
-             d.digest.events.map(e => dgEventHTML(e)).join('');
+    if (d.digest && d.digest.story && d.digest.story.what) {
+        h += '<div class="brief-h">Co se dnes stalo a proč</div>' + dgStoryHTML(d.digest.story, true) +
+             ((d.digest.events || []).length ? '<div class="brief-h">Další události</div>' + d.digest.events.map(e => dgEventHTML(e)).join('') : '');
     } else if ((m.news || []).length) {
         h += '<div class="brief-h">Co se k tomu píše</div><div class="brief-news">' +
              m.news.map(n => `<a href="${escapeHtml(n.link)}" target="_blank" rel="noopener">
@@ -4986,6 +5008,8 @@ async function loadEmailStatus() {
             ok(d.digest_send, 'Rozesílání zapnuté (DIGEST_SEND=on)', 'Vercel → Settings → Environment Variables → přidej DIGEST_SEND = on (Production) a dej Redeploy') +
             ok(d.cron_secret, 'Ranní cron má heslo (CRON_SECRET)', 'na Vercelu chybí CRON_SECRET – bez něj cron nic neudělá') +
             ok(d.me.morning, `Ty máš ranní souhrn zapnutý (${escapeHtml(d.me.email)})`, 'zapni ho v Profil → Notifikace') +
+            ok(d.ai_enabled, 'AI shrnutí zpráv zapnuté (ANALYSIS_API_KEY)', 'bez klíče briefing ukazuje jen čísla a témata, ne vysvětlení příčin') +
+            (d.news_status ? `<div style="color:var(--text2)">Poslední briefing: <b style="color:var(--text)">${when(d.news_status)}</b> · nálada ${escapeHtml(d.news_status.mood || '')} · AI ${d.news_status.ai ? 'ano' : 'ne (' + escapeHtml(d.news_status.ai_status || '?') + ')'}</div>` : '') +
             `<div style="color:var(--text2)">Odběratelé: ranní ${d.recipients.morning}, sobotní ${d.recipients.weekly}</div>` +
             `<div style="color:var(--text2)">Cron naposledy běžel: <b style="color:var(--text)">${when(run)}</b>${run ? ` (v Praze ${run.prague_hour}:xx, posílá se v ${run.send_hour}:xx)` : ' – pokud tu bude „nikdy" i zítra, cron se nespouští'}</div>` +
             `<div style="color:var(--text2)">Poslední rozesílka: <b style="color:var(--text)">${when(snd)}</b>${snd ? ` · příjemců ${snd.recipients}, odesláno ${snd.sent}, chyb ${snd.failed}${snd.error ? ` · <span style="color:var(--down)">${escapeHtml(snd.error)}</span>` : ''}` : ''}</div>`;
@@ -7381,6 +7405,30 @@ function dgForMe(ev) {
     return { hit, text: `Týká se: <b>${mpEsc(who.join(' + '))}</b> (≈ ${mpPct(w, 0)} portfolia). ${act}` };
 }
 
+
+function dgStoryHTML(story, withDrivers) {
+    if (!story || !story.what) return '';
+    const lvl = story.level || 'mixed';
+    const drv = (story.drivers || []);
+    let h = `<div class="dg-story ${lvl}">
+        <div class="dg-mood"><span class="dot"></span> Trh je dnes ${mpEsc(story.label || '')}</div>
+        <div class="dg-what">${mpEsc(story.what)}</div>
+        ${story.why ? `<div class="dg-why">${mpEsc(story.why)}</div>` : ''}`;
+    if (!story.ai && story.note) {
+        h += `<div class="dg-quote"><b>Co k tomu píšou zdroje:</b> „${mpEsc(story.note.title)}“ – ${mpEsc(story.note.text)}
+            <a href="${mpEsc(story.note.link)}" target="_blank" rel="noopener noreferrer" style="color:var(--text3)">(${mpEsc(story.note.src)})</a></div>`;
+    }
+    h += `</div>`;
+    if (withDrivers && drv.length) {
+        h += `<div class="dg-h"><i class="ti ti-flame"></i> Co dnes trh hýbe</div>` + drv.map(d => {
+            const src = (d.sources || []).filter((x, i, a) => a.findIndex(y => y.src === x.src) === i)
+                .map(x => `<a href="${mpEsc(x.link)}" target="_blank" rel="noopener noreferrer">${mpEsc(x.src)}</a>`).join(' · ');
+            return `<div class="dg-drv"><b>${mpEsc(d.title)}</b>${mpEsc(d.text)}${src ? `<div class="s">Zdroj: ${src}</div>` : ''}</div>`;
+        }).join('');
+    }
+    return h;
+}
+
 function dgFactsHTML(mk) {
     if (!mk || !(mk.facts || []).length) return '';
     const badUp = { '^VIX': 1, '^TNX': 1 };   // u strachu a výnosů je růst spíš špatná zpráva
@@ -7441,17 +7489,22 @@ function renderDigestModal() {
     if (!list) return;
     const d = digestData;
     if (!d) { list.innerHTML = '<div class="dg-note">Briefing se teď nepodařilo načíst.</div>'; return; }
-    let h = dgFactsHTML(d.market);
-    if (d.ai) {
-        if (d.headline) h += `<div class="dg-headline">${mpEsc(d.headline)}</div>`;
-        h += `<div class="dg-h"><i class="ti ti-bolt"></i> Co se dnes děje</div>` + d.events.map(e => dgEventHTML(e)).join('');
-    } else {
+    let h = dgStoryHTML(d.story, true);
+    h += dgFactsHTML(d.market);
+    if (d.ai && (d.events || []).length) {
+        h += `<div class="dg-h"><i class="ti ti-bolt"></i> Další důležité události</div>` + d.events.map(e => dgEventHTML(e)).join('');
+    }
+    if (!d.ai && d.story && d.story.what) {
+        const why = { no_key: 'AI shrnutí není zapnuté (chybí klíč ANALYSIS_API_KEY).', llm_failed: 'AI shrnutí se teď nepodařilo získat – zkusíme to znovu za pár minut.',
+                      no_valid: 'AI shrnutí neprošlo kontrolou zdrojů – zobrazuji jen ověřená čísla a témata.', skipped: '' }[d.ai_status] || '';
+        h += `<div class="dg-note warn"><i class="ti ti-info-circle"></i> Příčiny jsou odvozené z nejčastějších témat ve zprávách.${why ? ' ' + why : ''}</div>`;
+    } else if (!d.ai) {
         h += `<div class="dg-note warn"><i class="ti ti-info-circle"></i> AI shrnutí teď není k dispozici – níže jsou nejdůležitější titulky s perexem.</div>` +
             (d.headlines || []).slice(0, 8).map(n => `<a class="dg-hl" href="${mpEsc(n.link)}" target="_blank" rel="noopener noreferrer"><b>${mpEsc(n.title)}</b>${n.text ? `<span>${mpEsc(n.text)}</span>` : ''}<small>${mpEsc(n.src)}</small></a>`).join('');
     }
     h += dgMineHTML();
     h += `<div class="dg-lt"><i class="ti ti-compass"></i><div><b>Pro dlouhodobý plán:</b> ${d.long_term ? mpEsc(d.long_term) + ' ' : ''}Zprávy jsou kontext, ne signál. Plán nakupuje jednou měsíčně podle hodnoty a momenta – kvůli dnešním titulkům nic neměň.</div></div>`;
-    if (d.ai && (d.headlines || []).length) {
+    if ((d.headlines || []).length) {
         h += `<details class="dg-all"><summary>Všechny titulky (${d.headlines.length})</summary>` +
             d.headlines.map(n => `<a class="dg-hl" href="${mpEsc(n.link)}" target="_blank" rel="noopener noreferrer"><b>${mpEsc(n.title)}</b><small>${mpEsc(n.src)}</small></a>`).join('') + `</details>`;
     }
@@ -7479,10 +7532,14 @@ async function fetchOverviewNews() {
     const box = document.getElementById('ov-news');
     if (!box) return;
     const d = await loadDigest();
-    if (d && d.ai) {
-        box.innerHTML = (d.headline ? `<div class="dg-headline sm">${mpEsc(d.headline)}</div>` : '') +
-            d.events.slice(0, 3).map(e => dgEventHTML(e, true)).join('') +
-            `<button class="tool-btn" onclick="openNews()" style="width:100%; justify-content:center; margin-top:8px;"><i class="ti ti-news"></i> Celý briefing – co to znamená pro tebe</button>`;
+    const st = d && d.story;
+    if (st && st.what) {
+        const drv = (st.drivers || []).slice(0, 3).map(x => `<span class="dg-chip">${mpEsc(x.title)}</span>`).join('');
+        box.innerHTML = `<div class="dg-ov-mood ${st.level || 'mixed'}"><span class="dot"></span> Trh je dnes ${mpEsc(st.label || '')}</div>
+            <div class="dg-headline sm" style="margin:0 0 8px">${mpEsc(st.what)}</div>
+            ${st.why ? `<div style="font-size:12.5px;color:var(--text2);line-height:1.5">${mpEsc(st.why)}</div>` : ''}
+            ${drv ? `<div class="dg-chips2">${drv}</div>` : ''}
+            <button class="tool-btn" onclick="openNews()" style="width:100%; justify-content:center; margin-top:10px;"><i class="ti ti-news"></i> Proč? – celý briefing</button>`;
         return;
     }
     const list = (d && d.headlines) || [];
