@@ -3733,9 +3733,11 @@ def _kc(x):
 
 
 def _clean_holdings(raw):
-    """Validace nákupů (lotů): [{ticker, qty, buy_month?, name?}]. Stejný ticker
+    """Validace nákupů (lotů): [{ticker, qty?, buy_month?, name?}]. Stejný ticker
     a měsíc se sloučí; různé měsíce zůstávají zvlášť – 3letý časový test platí
-    pro každý nákup zvlášť, sloučení by mohlo mylně hlásit „bez daně"."""
+    pro každý nákup zvlášť. `qty` může chybět (uživatel zná jen NÁZVY akcií):
+    takový titul se eviduje jako „vlastním, počet neznámý" – nejde ocenit, ale
+    appka ví, že ho nemá doporučit jako nový, a hlídá k němu zprávy."""
     merged = {}
     for h in (raw or [])[:600]:
         if not isinstance(h, dict):
@@ -3744,16 +3746,22 @@ def _clean_holdings(raw):
         if not re.match(r"^[A-Z0-9.\-=^]{1,15}$", t):
             continue
         qty = _num(h.get("qty"))
-        if qty is None or not (0 < qty < 1e9):
+        if qty is not None and not (0 < qty < 1e9):
             continue
         bm = (h.get("buy_month") or "").strip()
         bm = bm if re.match(r"^\d{4}-(0[1-9]|1[0-2])$", bm) else None
         k = (t, bm)
         if k in merged:
-            merged[k]["qty"] = round(merged[k]["qty"] + qty, 6)
+            a0 = merged[k]["qty"]
+            merged[k]["qty"] = (round(a0 + qty, 6) if (a0 is not None and qty is not None)
+                                else (a0 if a0 is not None else (round(qty, 6) if qty is not None else None)))
         else:
-            merged[k] = {"ticker": t, "qty": round(qty, 6), "buy_month": bm, "name": str(h.get("name") or "")[:80]}
-    return list(merged.values())[:400]
+            merged[k] = {"ticker": t, "qty": round(qty, 6) if qty is not None else None, "buy_month": bm,
+                         "name": str(h.get("name") or "")[:80]}
+    out = list(merged.values())
+    quantified = {l["ticker"] for l in out if l["qty"] is not None}
+    out = [l for l in out if l["qty"] is not None or l["ticker"] not in quantified]   # známý počet má přednost
+    return out[:400]
 
 
 def _tax_free_from(ym):
@@ -3797,10 +3805,11 @@ def _value_holdings(holdings):
             continue
         key = _spx_key(t)
         kind = "core" if t in CORE_ETFS else ("stock" if key in ranks else "other")
-        qty = round(sum(l["qty"] for l in ls), 6)
+        no_qty = all(l["qty"] is None for l in ls)
+        qty = round(sum(l["qty"] or 0 for l in ls), 6)
         px_czk = qt["price"] * fx
-        free_q = sum(l["qty"] for l in ls if l["buy_month"] and _months_between(l["buy_month"]) >= TAX_FREE_MONTHS)
-        unknown_q = sum(l["qty"] for l in ls if not l["buy_month"])
+        free_q = sum((l["qty"] or 0) for l in ls if l["buy_month"] and _months_between(l["buy_month"]) >= TAX_FREE_MONTHS)
+        unknown_q = sum((l["qty"] or 0) for l in ls if not l["buy_month"])
         pending = sorted(_tax_free_from(l["buy_month"]) for l in ls
                          if l["buy_month"] and _months_between(l["buy_month"]) < TAX_FREE_MONTHS)
         known = sorted(l["buy_month"] for l in ls if l["buy_month"])
@@ -3812,7 +3821,8 @@ def _value_holdings(holdings):
                "sector": smap.get(key) or ("ETF" if kind == "core" else ""),
                "tax_free_qty": round(free_q, 6), "tax_free_value_czk": round(free_q * px_czk),
                "unknown_qty": round(unknown_q, 6),
-               "tax_free": unknown_q == 0 and free_q >= qty - 1e-9,
+               "no_qty": no_qty,
+               "tax_free": (not no_qty) and unknown_q == 0 and free_q >= qty - 1e-9,
                "tax_next": pending[0] if pending else None,
                "tax_free_from": (pending[-1] if pending else (known[0] and _tax_free_from(known[0]))) if known else None,
                "months_held": _months_between(known[0]) if known else None}
@@ -3984,6 +3994,9 @@ def _build_plan(rows, risk, scan):
             r["status_label"] = "Mimo plán · držet, nedokupovat"
         else:
             r["status"], r["status_label"] = "other", "Mimo S&P 500 · držet, nedokupovat"
+        if r.get("no_qty"):
+            r["status_label"] += " · počet kusů neznámý"
+            continue
         free_v = r["tax_free_value_czk"]
         if slot and r["value_czk"] > trim_cap:
             excess = r["value_czk"] - trim_cap
@@ -4045,7 +4058,7 @@ def _allocate(amount, rows, total, plan):
     per_slot = max(0.0, split * V - legacy) / N
     stocks = []
     for r in rows:
-        if r.get("status") == "plan" and not (r.get("flag") or {}).get("pause"):
+        if r.get("status") == "plan" and not (r.get("flag") or {}).get("pause") and not r.get("no_qty"):
             stocks.append({"ticker": r["ticker"], "name": r["name"], "action": "topup", "target": per_slot,
                            "cur": r["value_czk"], "vm_rank": r["vm_rank"], "sector": r.get("sector"),
                            "price": r["price"], "currency": r["currency"]})
@@ -4274,22 +4287,25 @@ def api_plan():
 VISION_MODELS = {"groq": ["meta-llama/llama-4-scout-17b-16e-instruct",
                           "meta-llama/llama-4-maverick-17b-128e-instruct"],
                  "openai": ["gpt-4o-mini"]}
-IMPORT_PROMPT = """Na obrázku je přehled investičního portfolia (nejčastěji aplikace Trading 212, může být česky nebo anglicky).
-Vypiš KAŽDOU pozici, která je na obrázku vidět. Nic si nedomýšlej – co nevidíš, dej null.
-Pro každou pozici:
+IMPORT_PROMPT = """Na obrázku je přehled akcií nebo investičního portfolia (nejčastěji aplikace Trading 212, ale může jít o jakoukoli
+aplikaci, banku nebo seznam; česky nebo anglicky).
+Vypiš KAŽDOU akcii / ETF / fond, který je na obrázku vidět – I KDYŽ u něj nejsou vidět počty kusů ani hodnoty. Stačí název
+nebo symbol. Nic si nedomýšlej – co nevidíš, dej null.
+Pro každý titul:
 - "name": název tak, jak je napsaný (např. "Apple", "iShares Core S&P 500 (Acc)")
 - "ticker": symbol, pokud je vidět (např. "AAPL", "CSPX", "SXR8"), jinak null
 - "quantity": počet kusů/akcií jako číslo (zlomky jsou běžné, např. 12.3456), jinak null
 - "value": aktuální hodnota pozice jako číslo, jinak null
 - "currency": měna hodnoty ("CZK", "EUR", "USD", "GBP"), jinak null
 - "avg_price": průměrná nákupní cena, pokud je vidět, jinak null
-Čísla piš bez mezer a jednotek, desetinnou tečkou. Nezahrnuj celkový součet účtu, hotovost ani zisk/ztrátu jako pozici.
-Odpověz JEN JSON: {"positions": [...], "account_currency": "CZK"}"""
+Čísla piš bez mezer a jednotek, desetinnou tečkou. Nezahrnuj celkový součet účtu, hotovost ani zisk/ztrátu jako titul.
+Odpověz JEN JSON: {"positions": [{"name": "...", "ticker": null, "quantity": null, "value": null, "currency": null, "avg_price": null}], "account_currency": "CZK"}"""
 ETF_SUFFIXES = (".DE", ".L", ".AS", ".MI", ".PA", ".SW")
 
 
 def call_vision(image_data_url, prompt=IMPORT_PROMPT):
-    """Vrací (dict | None, chyba). Zkusí modely poskytovatele po řadě."""
+    """Vrací (dict | list | None, chyba). Zkusí modely poskytovatele po řadě; když model
+    nebere `response_format` (HTTP 400), zopakuje dotaz bez něj a JSON vytáhne z textu."""
     prov = (os.environ.get("VISION_PROVIDER") or _llm_creds()[0]).lower()
     key = os.environ.get("VISION_API_KEY") or _llm_creds()[1]
     if not key:
@@ -4298,24 +4314,90 @@ def call_vision(image_data_url, prompt=IMPORT_PROMPT):
            else "https://api.groq.com/openai/v1/chat/completions")
     models = ([os.environ["VISION_MODEL"]] if os.environ.get("VISION_MODEL")
               else VISION_MODELS.get(prov, VISION_MODELS["groq"]))
-    err = None
+    errs = []
     for model in models:
-        payload = {"model": model, "temperature": 0, "response_format": {"type": "json_object"},
-                   "messages": [{"role": "user", "content": [
-                       {"type": "text", "text": prompt},
-                       {"type": "image_url", "image_url": {"url": image_data_url}}]}]}
-        try:
-            r = requests.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                              data=json.dumps(payload), timeout=25)
-            if r.status_code != 200:
-                err = f"{model}: HTTP {r.status_code} {r.text[:160]}"
-                continue
-            content = (((r.json() or {}).get("choices") or [{}])[0].get("message") or {}).get("content") or ""
-            m = re.search(r"\{.*\}", content, re.S)
-            return json.loads(m.group(0) if m else content), None
-        except Exception as e:
-            err = f"{model}: {e}"
-    return None, err
+        for json_mode in (True, False):
+            payload = {"model": model, "temperature": 0, "max_tokens": 4000,
+                       "messages": [{"role": "user", "content": [
+                           {"type": "text", "text": prompt},
+                           {"type": "image_url", "image_url": {"url": image_data_url}}]}]}
+            if json_mode:
+                payload["response_format"] = {"type": "json_object"}
+            try:
+                r = requests.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                                  data=json.dumps(payload), timeout=25)
+                if r.status_code != 200:
+                    errs.append(f"{model}{'' if json_mode else ' (bez JSON režimu)'}: HTTP {r.status_code} {r.text[:140]}")
+                    if r.status_code == 400 and json_mode:
+                        continue          # zkusit stejný model bez response_format
+                    break                  # jiná chyba → další model
+                content = (((r.json() or {}).get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+                m = re.search(r"(\{.*\}|\[.*\])", content, re.S)
+                return json.loads(m.group(0) if m else content), None
+            except Exception as e:
+                errs.append(f"{model}: {str(e)[:120]}")
+                break
+    return None, " | ".join(errs[-3:])
+
+
+def _vision_positions(data):
+    """Seznam titulů z odpovědi AI – snese i jiné názvy klíčů a prosté seznamy názvů."""
+    lst = []
+    if isinstance(data, list):
+        lst = data
+    elif isinstance(data, dict):
+        for k in ("positions", "holdings", "stocks", "items", "portfolio", "securities", "pozice", "akcie"):
+            if isinstance(data.get(k), list):
+                lst = data[k]
+                break
+        else:
+            lst = next((v for v in data.values() if isinstance(v, list) and v and isinstance(v[0], (dict, str))), [])
+    out = []
+    for x in lst[:80]:
+        if isinstance(x, str) and x.strip():
+            out.append({"name": x.strip()})
+        elif isinstance(x, dict):
+            d = dict(x)
+            d["name"] = d.get("name") or x.get("company") or x.get("security") or x.get("instrument") or x.get("title") or x.get("název") or x.get("nazev")
+            d["quantity"] = d.get("quantity") if d.get("quantity") is not None else (x.get("qty") or x.get("shares") or x.get("pocet") or x.get("počet"))
+            d["value"] = d.get("value") if d.get("value") is not None else (x.get("market_value") or x.get("hodnota"))
+            if d.get("name") or d.get("ticker"):
+                out.append(d)
+    return out
+
+
+_INDEXY = re.compile(r"s&p|msci|nasdaq|russell|ftse|stoxx|\bdax\b|dow jones|world|all-?world", re.I)
+
+
+def _parse_text_list(text):
+    """Vložený text → tituly: řádky nebo čárky, „Apple", „NVDA 12", „Microsoft - 3,5 ks".
+    Číslo na konci je počet kusů jen když je to zřejmé (jednotka, oddělovač, ticker
+    nebo malé číslo) – „iShares Core S&P 500" je název, ne 500 kusů."""
+    out = []
+    for part in re.split(r"[\n;]+|,(?=\s*[A-Za-zÁ-ž])", text or ""):
+        line = part.strip(" \t•*-–—·")
+        if not line or len(line) > 80:
+            continue
+        qty, name = None, line
+        m = re.match(r"^(\d+(?:[.,]\d+)?)\s*(?:ks|kusů|x|×)\s+(.+)$", line, re.I)
+        if m:
+            qty, name = _num(m.group(1)), m.group(2)
+        else:
+            m = re.search(r"^(.*?)\s*(?:(?:[:–-]\s*)|\s[x×]\s*|\s)(\d+(?:[.,]\d+)?)\s*(ks|kusů|kusu|pcs|shares|akcií|akcie)?\)?$", line, re.I)
+            if m and m.group(1).strip():
+                head, num, unit = m.group(1).strip(" \t(:–-x×"), m.group(2), m.group(3)
+                sep_explicit = bool(re.search(r"[:–-]\s*" + re.escape(num) + r"\s*\w*\)?$", line)) or bool(re.search(r"\s[x×]\s*" + re.escape(num), line))
+                is_ticker = bool(re.match(r"^[A-Z]{1,6}(?:[.\-][A-Z]{1,3})?$", head))
+                val = _num(num)
+                if unit or sep_explicit or is_ticker or (val is not None and val < 100 and not _INDEXY.search(head)):
+                    if not (_INDEXY.search(head) and not (unit or sep_explicit)):
+                        qty, name = val, head
+        name = name.strip(" \t,")
+        if not name:
+            continue
+        tick = name if (re.match(r"^[A-Z]{1,6}(?:[.\-][A-Z]{1,3})?$", name)) else None
+        out.append({"name": name, "ticker": tick, "quantity": qty, "currency": "CZK"})
+    return out[:80]
 
 
 def _yahoo_search(q, n=8):
@@ -4329,6 +4411,22 @@ def _yahoo_search(q, n=8):
                 if x.get("symbol") and x.get("quoteType") in ("EQUITY", "ETF", "MUTUALFUND")]
     except Exception:
         return []
+
+
+_NAME_STOP = {"inc", "corp", "corporation", "co", "company", "the", "ltd", "plc", "group", "holdings", "holding",
+              "class", "a", "b", "c", "adr", "sa", "ag", "nv", "se", "de", "and", "of"}
+
+
+def _name_match(a, b):
+    """Je název z obrázku/textu téhož podniku jako název nalezeného titulu?"""
+    la, lb = re.findall(r"[a-z0-9]+", (a or "").lower()), re.findall(r"[a-z0-9]+", (b or "").lower())
+    ta, tb = set(la) - _NAME_STOP, set(lb) - _NAME_STOP
+    if not (ta and tb):
+        return False
+    ja, jb = "".join(w for w in la if w not in _NAME_STOP), "".join(w for w in lb if w not in _NAME_STOP)
+    if len(ja) >= 4 and (ja in jb or jb in ja):          # „Exxon Mobil" ↔ „ExxonMobil Holdings"
+        return True
+    return len(ta & tb) / len(ta) >= 0.6
 
 
 def _resolve_position(p):
@@ -4394,7 +4492,7 @@ def _resolve_position(p):
     else:
         exact = [c for c in scored if c["ticker"].split(".")[0] == base] if base else []
         best = min(exact or scored, key=pref)
-        status = "ok" if exact else "check"
+        status = "ok" if (exact or _name_match(name, best["name"])) else "check"
     if not qty and value_czk and best.get("px_czk"):
         qty = round(value_czk / best["px_czk"], 6)
         derived = True
@@ -4403,7 +4501,7 @@ def _resolve_position(p):
     return {
         "name": name or best["name"], "raw_ticker": raw_t or None, "ticker": best["ticker"],
         "qty": qty, "qty_derived": derived, "value_czk": round(value_czk) if value_czk else None,
-        "implied_czk": round(qty * best["px_czk"]) if qty else None, "status": status if qty else "check",
+        "implied_czk": round(qty * best["px_czk"]) if qty else None, "status": status, "no_qty": qty is None,
         "avg_price": _num(p.get("avg_price")),
         "candidates": [{"ticker": c["ticker"], "name": c["name"], "exchange": c["exchange"],
                         "price": c["price"], "currency": c["currency"],
@@ -4414,19 +4512,34 @@ def _resolve_position(p):
 
 @app.route("/api/holdings/import", methods=["POST"])
 def api_holdings_import():
-    """Jeden screenshot (data URL, klient ho zmenší) → pozice ke kontrole.
-    Klient posílá každou fotku zvlášť a výsledky slučuje (překryv při
-    scrollování řeší deduplikace podle tickeru)."""
-    if not _rate_ok("import", 30, 3600):
+    """Jeden screenshot (data URL, klient ho zmenší) NEBO vložený text se seznamem
+    akcií → tituly ke kontrole. Počet kusů není povinný (stačí vědět, co vlastníš).
+    Klient posílá každou fotku zvlášť a výsledky slučuje (překryv při scrollování
+    řeší deduplikace podle tickeru)."""
+    if not _rate_ok("import", 40, 3600):
         return jsonify({"ok": False, "error": "Moc importů za hodinu, zkus to později."}), 429
-    img = (request.get_json(silent=True) or {}).get("image") or ""
-    if not re.match(r"^data:image/(jpeg|png|webp);base64,", img) or len(img) > 4_000_000:
-        return jsonify({"ok": False, "error": "Pošli obrázek JPG/PNG (max ~3 MB)."}), 400
-    data, err = call_vision(img)
-    if data is None:
-        return jsonify({"ok": False, "error": "Fotku se nepodařilo přečíst.", "detail": err}), 502
-    raw = [p for p in (data.get("positions") or []) if isinstance(p, dict)][:60]
+    body = request.get_json(silent=True) or {}
+    text, img = (body.get("text") or "").strip(), body.get("image") or ""
+    note, preview = None, None
+    if text:
+        raw = _parse_text_list(text[:4000])
+        data = None
+    else:
+        if not re.match(r"^data:image/(jpeg|png|webp);base64,", img) or len(img) > 4_000_000:
+            return jsonify({"ok": False, "error": "Pošli obrázek JPG/PNG (max ~3 MB)."}), 400
+        data, err = call_vision(img)
+        if data is None:
+            try:
+                kv_set_json("import:last", {"ts": int(time.time()), "ok": False, "error": err})
+            except Exception:
+                pass
+            return jsonify({"ok": False, "error": "Fotku se nepodařilo přečíst.", "detail": err}), 502
+        raw = _vision_positions(data)
+        if not raw:
+            preview = json.dumps(data, ensure_ascii=False)[:300]
+            note = "AI na obrázku nenašla žádný titul."
     from concurrent.futures import ThreadPoolExecutor
+
     def safe(p):
         try:
             return _resolve_position(p)
@@ -4435,8 +4548,14 @@ def api_holdings_import():
                     "qty": _num(p.get("quantity")), "status": "unresolved", "candidates": []}
     with ThreadPoolExecutor(max_workers=6) as ex:
         res = list(ex.map(safe, raw))
-    return jsonify({"ok": True, "positions": res, "read": len(raw),
-                    "account_currency": data.get("account_currency")})
+    try:
+        kv_set_json("import:last", {"ts": int(time.time()), "ok": True, "mode": "text" if text else "image",
+                                    "read": len(raw), "resolved": sum(1 for r in res if r.get("ticker")),
+                                    "note": note, "preview": preview})
+    except Exception:
+        pass
+    return jsonify({"ok": True, "positions": res, "read": len(raw), "note": note, "preview": preview,
+                    "account_currency": (data or {}).get("account_currency") if isinstance(data, dict) else None})
 
 
 @app.route("/api/holdings/resolve")
@@ -4579,7 +4698,7 @@ def api_plan_stress():
         for h in hs:
             qt = q.get(h["ticker"])
             fx = _fx_czk(qt["currency"]) if qt else None
-            if qt and qt.get("price") and fx:
+            if qt and qt.get("price") and fx and h.get("qty"):
                 rows.append({"ticker": h["ticker"], "currency": qt["currency"],
                              "value_czk": h["qty"] * qt["price"] * fx})
         if not rows:
@@ -7423,24 +7542,36 @@ def _portfolio_email_html(email, mark_sent=False):
     if not lots:
         return "", None
     rows, total, missing, scan = _value_holdings(lots)
-    if not total:
+    if not rows:
         return "", None
     risk = hrec.get("risk") or _user_risk(email)
     plan = _build_plan(rows, risk, scan)
     held = [r for r in rows if r["kind"] != "core"]
+    nq = [r for r in rows if r.get("no_qty")]
     # změna za poslední obchodní den (z pohybu ceny; nové nákupy ji nezkreslí)
     day = sum(r["value_czk"] * r["chg"] / (100 + r["chg"]) for r in rows if r.get("chg") is not None)
     base = total - day
     col = "#00C853" if day >= 0 else "#FF3D00"
     sg = "+" if day >= 0 else "−"
     core = sum(r["weight"] for r in rows if r.get("status") == "core")
-    html = ("<h3 style='font-size:16px;margin:22px 0 8px'>🧭 Tvoje portfolio</h3>"
-            "<div style='background:#12141c;border:1px solid #23262f;border-radius:12px;padding:14px 16px;margin-bottom:10px'>"
-            f"<div style='font-size:24px;font-weight:700'>{_kc(total)}</div>"
-            f"<div style='font-size:14px;margin-top:2px;color:{col}'>{sg}{_kc(abs(day))} "
-            f"({sg}{_pc(abs(day) / base * 100 if base else 0, 2)} %) za poslední obchodní den</div>"
-            f"<div style='color:#9ba1b0;font-size:13px;margin-top:6px'>Indexové jádro {_pc(core, 0)} % (cíl {plan['core_pct']} %) · "
-            f"akcie v plánu {plan['slots_used']}/{plan['slots']}</div></div>")
+    if total:
+        html = ("<h3 style='font-size:16px;margin:22px 0 8px'>🧭 Tvoje portfolio</h3>"
+                "<div style='background:#12141c;border:1px solid #23262f;border-radius:12px;padding:14px 16px;margin-bottom:10px'>"
+                f"<div style='font-size:24px;font-weight:700'>{_kc(total)}</div>"
+                f"<div style='font-size:14px;margin-top:2px;color:{col}'>{sg}{_kc(abs(day))} "
+                f"({sg}{_pc(abs(day) / base * 100 if base else 0, 2)} %) za poslední obchodní den</div>"
+                f"<div style='color:#9ba1b0;font-size:13px;margin-top:6px'>Indexové jádro {_pc(core, 0)} % (cíl {plan['core_pct']} %) · "
+                f"akcie v plánu {plan['slots_used']}/{plan['slots']}</div></div>")
+    else:       # uživatel zná jen NÁZVY akcií – bez počtu kusů nejde ocenit
+        names = ", ".join(_html_escape(r["ticker"].split(".")[0]) for r in rows[:12])
+        html = ("<h3 style='font-size:16px;margin:22px 0 8px'>🧭 Tvoje akcie</h3>"
+                "<div style='background:#12141c;border:1px solid #23262f;border-radius:12px;padding:12px 16px;margin-bottom:10px;"
+                f"font-size:14px;line-height:1.5'><b>{names}</b>"
+                "<div style='color:#9ba1b0;font-size:12px;margin-top:6px'>Počet kusů neznám, proto nepočítám hodnotu ani úkoly. "
+                "Doplníš ho v appce (Moje portfolio → tužka u akcie).</div></div>")
+    if total and nq:
+        html += (f"<div style='color:#9ba1b0;font-size:12px;margin:0 0 8px'>U {len(nq)} {'akcie' if len(nq) == 1 else 'akcií'} neznám počet kusů "
+                 f"({_html_escape(', '.join(r['ticker'].split('.')[0] for r in nq[:6]))}), proto nejsou v hodnotě.</div>")
     # kdo se hýbal nejvíc (v Kč)
     mv = sorted([r for r in rows if r.get("chg") is not None and r["value_czk"]],
                 key=lambda r: -abs(r["value_czk"] * r["chg"] / (100 + r["chg"])))[:3]
@@ -7455,7 +7586,7 @@ def _portfolio_email_html(email, mark_sent=False):
         html += ("<div style='font-size:13px;margin:0 0 12px'>Nejvíc se hýbalo: " + " · ".join(parts) + "</div>")
     # co je nového u mých akcií
     try:
-        top = sorted(held, key=lambda r: -r["weight"])[:8]
+        top = sorted(held, key=lambda r: (-r["weight"], r["ticker"]))[:8]
         mine = _mine_digest([r["ticker"] for r in top], {r["ticker"]: r["name"] for r in top}) if top else {}
     except Exception:
         mine = {}
@@ -7948,7 +8079,8 @@ def admin_email_status():
                     "recipients": cnt, "me": {"email": admin, "morning": bool(me.get("morning")), "weekly": bool(me.get("weekly"))},
                     "last_run_morning": kv_get_json("cron:run:morning"), "last_send_morning": kv_get_json("cron:send:morning"),
                     "last_send_weekly": kv_get_json("cron:send:weekly"), "send_hour": SEND_HOUR_PRAGUE,
-                    "ai_enabled": analysis_enabled(), "news_status": kv_get_json("news:digest:status")})
+                    "ai_enabled": analysis_enabled(), "news_status": kv_get_json("news:digest:status"),
+                    "import_last": kv_get_json("import:last")})
 
 
 @app.route("/api/admin/weekly-test", methods=["POST"])
