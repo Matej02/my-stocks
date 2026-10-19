@@ -4,7 +4,7 @@
   "description": "Investiční asistent s ověřeným edge. Verdikt ze 5 datových pilířů.",
   "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#050507",
   "theme_color": "#FF7A00",
   "categories": ["finance", "business", "productivity"],

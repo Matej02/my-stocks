@@ -2,7 +2,8 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
 <title>MY ADVANTAGE</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1626,6 +1627,59 @@ body.modal-open {overflow:hidden;}
   body.kb-open.has-dash-tabs {padding-bottom:20px;}
   body.modal-open .dash-tabs {visibility:hidden;}
 }
+
+/* ===== Všechna zařízení: výřez displeje, domovská obrazovka (PWA), tablet ===== */
+:root {color-scheme:dark;}
+@supports (padding:max(0px)) {
+  body {padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right);}
+  /* stavový řádek iPhonu je v aplikaci z domovské obrazovky přes obsah (black-translucent) */
+  body {padding-top:env(safe-area-inset-top);}
+  #gateWall {padding-top:env(safe-area-inset-top);}
+}
+@media (max-width:640px) {
+  .dash-tabs {padding-left:calc(6px + env(safe-area-inset-left)); padding-right:calc(6px + env(safe-area-inset-right));}
+}
+/* telefon na šířku: málo na výšku → menší mezery, okna ze spodku nezabírají celou výšku */
+@media (max-height:520px) and (orientation:landscape) {
+  .container {padding-top:1rem; padding-bottom:3rem;}
+  .navbar {margin-bottom:.8rem;}
+  .pl-modal-box, .profile-box, .mp-modal-box {max-height:94vh; max-height:94dvh;}
+  .pl-modal {align-items:center;}
+  .dash-tabs {position:static !important; margin-bottom:1rem !important; border-radius:15px !important; border:1px solid var(--border) !important;
+    background:rgba(255,255,255,0.03) !important; padding:5px !important; -webkit-backdrop-filter:none; backdrop-filter:none; overflow-x:auto !important;}
+  .dash-tab {flex-direction:row !important; font-size:13px !important; padding:9px 14px !important; min-width:max-content !important;}
+  body.has-dash-tabs {padding-bottom:0 !important;}
+}
+
+/* ===== Malé telefony (320–360 px), odkazy a tabulky ===== */
+@media (max-width:360px) {
+  .brand-text {font-size:15px; letter-spacing:.3px;}
+  .brand {gap:7px;}
+  .brand .applogo {width:34px !important; height:34px !important;}
+  .profile-btn {padding:7px 8px;}
+  .profile-btn i {font-size:17px;}
+  .nav-actions {gap:4px;}
+  .container {padding-left:.75rem; padding-right:.75rem;}
+  .mp-box, .mp-card {padding-left:.9rem; padding-right:.9rem;}
+  .mp-kpi .v {font-size:16px;}
+}
+.mp-why table {display:block; overflow-x:auto; -webkit-overflow-scrolling:touch;}
+@media (pointer:coarse) {
+  .mp-row a, .mp-note a, .mp-line a, .dg-src a, .dg-drv a, .profile-cloud-link, .mp-lot + a, #lot-body > a {display:inline-block; padding:8px 2px; margin:-8px 0;}
+  .app-footer-legal a {display:inline-block; padding:6px 2px;}
+}
+@media (max-height:520px) and (orientation:landscape) {
+  .mkt-widget {left:8px; bottom:6px;}
+  .mkt-pill {padding:4px 9px; font-size:11px;}
+}
+
+@media (max-width:640px) {
+  .lp-proof .v {white-space:nowrap;}
+}
+@media (max-width:420px) {
+  .lp-proof:has(.c:nth-child(3):last-child) .v {font-size:20px;}
+  .lp-proof:has(.c:nth-child(3):last-child) .c {padding:12px 4px;}
+}
 </style>
 </head>
 <body>
@@ -1843,7 +1897,7 @@ body.modal-open {overflow:hidden;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.19·a</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.19·b</div>
 
 <div class="container">
   
