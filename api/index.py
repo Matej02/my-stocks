@@ -3277,6 +3277,43 @@ def _value_item(r):
     }
 
 
+def _mix_maps(recs, ranked):
+    """Pro tipy a hodnocení akcií: pořadí podle čistého momenta, kombinované pořadí
+    (průměr percentilu hodnota+momentum a percentilu momenta), P/E, momentum a cena."""
+    mom_sorted = sorted([r for r in recs if r.get("mom") is not None], key=lambda r: -r["mom"])
+    mom_rank = {r["ticker"]: i for i, r in enumerate(mom_sorted, 1)}
+    n_vm, n_mom = len(ranked), len(mom_sorted)
+    mix = []
+    for r in recs:
+        if r["ticker"] in mom_rank and r.get("vm_rank"):
+            vp = 1 - (r["vm_rank"] - 1) / max(1, n_vm - 1)
+            mp = 1 - (mom_rank[r["ticker"]] - 1) / max(1, n_mom - 1)
+            mix.append(((vp + mp) / 2, r["ticker"]))
+    mix.sort(reverse=True)
+    return {
+        "mom_rank_map": mom_rank,
+        "mix_rank_map": {t: i for i, (_v, t) in enumerate(mix, 1)},
+        "mom_map": {r["ticker"]: round(r["mom"] * 100, 1) for r in mom_sorted},
+        "pe_map": {r["ticker"]: round(1 / r["ep"], 1) for r in recs if r.get("ep") and r["ep"] > 0},
+        "px_map": {r["ticker"]: [round(r["price"], 2), r.get("cur", "USD"), r.get("chg")] for r in recs if r.get("price")},
+    }
+
+
+def _ensure_scan_maps(scan):
+    """Sken z doby před tipy (bez mapy momenta) dopočítá z uložených řádků dne –
+    bez nového stahování. Když to nejde, vrátí sken beze změny (tipy pak jen z H+M)."""
+    if not scan or scan.get("mom_rank_map") or not cloud_enabled():
+        return scan
+    try:
+        raw = _kv_cmd("HGETALL", _pk(f"scanrows:{scan.get('date')}")) or []
+        rows = {raw[i]: json.loads(raw[i + 1]) for i in range(0, len(raw) - 1, 2)}
+        if len(rows) >= 400:
+            return _scan_finalize(scan["date"], _sp500_universe(), rows)
+    except Exception:
+        pass
+    return scan
+
+
 def _scan_finalize(date, uni, rows):
     ciks = {c for _s, c, _x in uni if c}
     fund = _sec_fundamentals(ciks)
@@ -3322,6 +3359,7 @@ def _scan_finalize(date, uni, rows):
         "mcap_map": {r["ticker"]: round(r["mcap"] / 1e6) for r in recs if r.get("mcap")},
         "rule": {"vm_min": int(VM_MIN * 100), "setup_min": VERDICT_TOP, "sector_cap": SECTOR_CAP},
     }
+    out.update(_mix_maps(recs, ranked))
     try:
         kv_set_json(f"scan:{date}", out)
         kv_set_json("scan:last", out)
@@ -3794,7 +3832,7 @@ def _value_holdings(holdings):
     for l in lots:
         by_t.setdefault(l["ticker"], []).append(l)
     q = _quotes(list(by_t))
-    scan = market_scan(allow_step=False) or {}
+    scan = _ensure_scan_maps(market_scan(allow_step=False) or {}) or {}
     ranks, vms, smap, _n, _m = _scan_maps(scan)
     rows, missing = [], []
     for t, ls in by_t.items():
@@ -3928,6 +3966,189 @@ def _red_flags(tickers):
             until = (datetime.strptime(last, "%Y-%m-%d").date() + timedelta(days=REDFLAG_DAYS)).isoformat()
         out[t] = {"pause": pause, "until": until, "reasons": items[:3]}
     return out
+
+
+# ---------------------------------------------------------------------------
+# TIPY A HODNOCENÍ TVÝCH AKCIÍ (2026-10, research ~/dev/my-stocks-research/eval_mix.py)
+# Koš = střídavě nejlepší podle hodnoty+momenta a podle čistého momenta. Ověřeno
+# na historickém složení S&P 500 (fundamenty až 120 dní po konci roku):
+#   10 tipů: koš porazil index za 12 měs. v 73 % měsíců 2015–22 (+7,7 b.) a v 64 %
+#            2023–26 (+9,6 b.); jednotlivý tip jen 50 / 54 % → kupovat KOŠ.
+#    6 tipů: 66 % (+8,7 b.) a 67 % (+11,4 b.), víc kolísá.
+# Samotné skóre NEUMÍ spolehlivě říct, kterou držbu prodat (2015–22 nejhorší desetina
+# dopadla jako nejlepší) → hodnocení držby jen „přikupuj / drž / nedokupuj", nikdy
+# „prodej" podle skóre. Prodej jen z pravidel plánu (ořez po 3 letech, průšvih).
+# ---------------------------------------------------------------------------
+PICKS_STATS = {
+    10: {"train": {"beat_pct": 73, "excess": 7.7, "tip_pct": 50}, "holdout": {"beat_pct": 64, "excess": 9.6, "tip_pct": 54}},
+    6: {"train": {"beat_pct": 66, "excess": 8.7, "tip_pct": 49}, "holdout": {"beat_pct": 67, "excess": 11.4, "tip_pct": 54}},
+}
+HOLD_CONC_PCT = 15          # nad tolik % portfolia v jedné firmě = upozornění
+
+
+def _mix_basket(scan, n):
+    """Pořadí koše: střídavě #1 H+M, #1 momentum, #2 H+M, … (bez duplicit)."""
+    rk, mk = scan.get("rank_map") or {}, scan.get("mom_rank_map") or {}
+    a = sorted(rk, key=lambda t: rk[t])
+    b = sorted(mk, key=lambda t: mk[t])
+    out, seen, ia, ib = [], set(), 0, 0
+    while (ia < len(a) or ib < len(b)) and len(out) < n * 6:
+        for lst, src in ((a, "vm"), (b, "mom")):
+            i = ia if src == "vm" else ib
+            while i < len(lst) and lst[i] in seen:
+                i += 1
+            if i < len(lst):
+                out.append((lst[i], src))
+                seen.add(lst[i])
+                i += 1
+            if src == "vm":
+                ia = i
+            else:
+                ib = i
+    return out
+
+
+def _pick_item(t, src, scan):
+    rk, mk = scan.get("rank_map") or {}, scan.get("mom_rank_map") or {}
+    names, smap = scan.get("name_map") or {}, scan.get("sector_map") or {}
+    mom, pe = (scan.get("mom_map") or {}).get(t), (scan.get("pe_map") or {}).get(t)
+    px = (scan.get("px_map") or {}).get(t) or [None, "USD", None]
+    if src == "vm":
+        why = f"#{rk.get(t)} v S&P 500 podle hodnoty+momenta: levná podle zisků a cash flow a zároveň roste"
+    else:
+        why = f"#{mk.get(t)} v S&P 500 podle momenta: za poslední rok patří k nejsilnějším firmám"
+    facts = ([f"P/E {_pc(pe, 0)}" if pe < 200 else "P/E velmi vysoké (zisky zatím malé)"] if pe else []) + \
+            ([f"za rok {'+' if mom >= 0 else ''}{_pc(mom, 0)} %"] if mom is not None else [])
+    return {"ticker": t.replace(".", "-"), "name": names.get(t) or t, "sector": smap.get(t) or "",
+            "source": src, "vm_rank": rk.get(t), "mom_rank": mk.get(t), "mom_pct": mom, "pe": pe,
+            "price": px[0], "currency": px[1], "chg": px[2],
+            "why": why + (" · " + " · ".join(facts) if facts else "") + "."}
+
+
+def _picks(scan, n, held=(), flags=None):
+    """Koš n tipů (vč. držených) + seznam NOVÝCH tipů (bez držených a pozastavených)."""
+    n = 6 if n == 6 else 10
+    flags = flags or {}
+    basket, new, paused = [], [], []
+    for t, src in _mix_basket(scan, n):
+        fl = flags.get(t.replace(".", "-"))
+        if fl and fl.get("pause"):
+            paused.append({"ticker": t.replace(".", "-"), "reason": ((fl.get("reasons") or [{}])[0]).get("reason")})
+            continue
+        if len(basket) < n:
+            basket.append(_pick_item(t, src, scan))
+        if t not in held and len(new) < n:
+            new.append(_pick_item(t, src, scan))
+        if len(basket) >= n and len(new) >= n:
+            break
+    return {"n": n, "basket": basket, "new": new, "paused": paused[:3], "stats": PICKS_STATS[n],
+            "mix": bool(scan.get("mom_rank_map"))}
+
+
+def _evaluate_holdings(rows, scan, basket_set):
+    """Hodnocení každé držené akcie: pořadí mezi S&P 500, momentum, P/E, váha, verdikt."""
+    mix, mk, rk = scan.get("mix_rank_map") or {}, scan.get("mom_rank_map") or {}, scan.get("rank_map") or {}
+    n_uni = max(len(mix), 1)
+    out, counts = [], {"strong": 0, "hold": 0, "weak": 0, "na": 0}
+    for r in rows:
+        key = _spx_key(r["ticker"])
+        mom, pe = (scan.get("mom_map") or {}).get(key), (scan.get("pe_map") or {}).get(key)
+        e = {"ticker": r["ticker"], "rank": mix.get(key), "of": n_uni, "mom_pct": mom, "pe": pe,
+             "weight": r.get("weight"), "no_qty": r.get("no_qty"), "warn": []}
+        if r["kind"] == "core":
+            e["level"], e["verdict"] = "na", "Indexový fond"
+            e["why"] = "Široký index – stabilní základ. Pokud chceš jen akcie, nedokupuj ho a nové peníze dávej do tipů."
+        elif key in mix:
+            pct = mix[key] / n_uni
+            if key in basket_set and (r.get("weight") or 0) < HOLD_CONC_PCT:
+                e["level"], e["verdict"] = "strong", "Silná – přikupuj"
+                e["why"] = "Patří do aktuálního koše tipů – nové peníze sem dávají smysl."
+            elif key in basket_set:
+                e["level"], e["verdict"] = "strong", "Silná – drž, už jí máš hodně"
+                e["why"] = "Je v koši tipů, ale už tvoří velkou část portfolia – nové peníze dávej jinam."
+            elif pct <= 0.10:
+                e["level"], e["verdict"] = "strong", "Silná – drž"
+                e["why"] = "Mezi nejlepšími 10 % S&P 500 – drž a nech běžet."
+            elif pct <= 0.50:
+                e["level"], e["verdict"] = "hold", "Drž"
+                e["why"] = "Lepší polovina S&P 500. Nic neměň."
+            else:
+                e["level"], e["verdict"] = "weak", "Slabší – nedokupuj"
+                e["why"] = ("Horší polovina S&P 500 – drahá nebo bez momenta. Neprodávej kvůli tomu, "
+                            "jen nové peníze dávej do silnějších tipů.")
+        else:
+            e["level"], e["verdict"] = "na", "Mimo hodnocení"
+            e["why"] = "Hodnotím jen akcie z S&P 500 – tady sleduji zprávy a riziko, ne pořadí."
+        if r.get("weight") and r["weight"] >= HOLD_CONC_PCT and r["kind"] != "core":
+            e["warn"].append(f"Tvoří {_pc(r['weight'], 0)} % portfolia – velké riziko jedné firmy.")
+        if (r.get("flag") or {}).get("pause"):
+            e["warn"].append("Vážná zpráva: " + (((r["flag"].get("reasons") or [{}])[0]).get("reason") or ""))
+        counts[e["level"]] = counts.get(e["level"], 0) + 1
+        out.append(e)
+    strong, weak = counts["strong"], counts["weak"]
+    ranked_n = strong + counts["hold"] + weak
+    if not ranked_n:
+        headline = "Tvoje akcie jsou mimo S&P 500 nebo indexové fondy – hodnotím u nich zprávy a riziko."
+    elif weak > strong:
+        headline = f"Víc slabších než silných akcií ({weak} vs {strong}). Nové peníze dávej do tipů níž, slabé nedokupuj."
+    elif strong >= max(1, ranked_n // 2):
+        headline = f"Portfolio je v dobré kondici: {strong} z {ranked_n} hodnocených akcií patří k nejsilnějším."
+    else:
+        headline = f"Smíšené: {strong} silných, {counts['hold']} na držení, {weak} slabších."
+    return {"items": out, "counts": counts, "headline": headline}
+
+
+def _allocate_basket(amount, rows, picks):
+    """„Jen akcie": vklad rozdělí do koše tipů (držené z koše dokoupí, nové otevře)
+    podle mezer k rovnoměrné váze. Nákup pod MIN_ORDER_CZK se nedělá – nejmenší
+    mezera vypadne a dostane peníze příště. Nic se neprodává, žádné ETF."""
+    held = {r["ticker"].replace(".", "-"): r for r in rows}
+    lines = []
+    for p in picks["basket"]:
+        h = held.get(p["ticker"])
+        if h and h.get("no_qty"):
+            continue                          # neznámý počet → nevíme, kolik chybí
+        lines.append({"p": p, "cur": (h or {}).get("value_czk", 0.0), "action": "topup" if h else "new"})
+    if not lines:
+        return {"amount_czk": int(round(amount)), "lines": [], "deferred": [], "min_order": MIN_ORDER_CZK,
+                "split": {"core": 0, "topup": 0, "new": 0}, "mode": "basket"}
+    target = (sum(l["cur"] for l in lines) + amount) / len(lines)
+    for l in lines:
+        l["gap"] = max(0.0, target - l["cur"])
+    need = sum(l["gap"] for l in lines) or 1
+    for l in lines:
+        l["amount"] = amount * l["gap"] / need
+    while True:
+        pos = [l for l in lines if l["amount"] > 0]
+        small = [l for l in pos if l["amount"] < MIN_ORDER_CZK]
+        if not small or len(pos) <= 1:
+            break
+        drop = min(pos, key=lambda l: (l["gap"], -(l["p"].get("vm_rank") or l["p"].get("mom_rank") or 999)))
+        moved, drop["amount"], drop["deferred"] = drop["amount"], 0.0, True
+        keep = [l for l in pos if l is not drop]
+        base = sum(l["gap"] for l in keep) or 1
+        for l in keep:
+            l["amount"] += moved * l["gap"] / base
+    out = []
+    for l in sorted(lines, key=lambda l: -l["amount"]):
+        if l["amount"] <= 0:
+            continue
+        p = l["p"]
+        fx = _fx_czk(p.get("currency")) if p.get("price") else None
+        px_czk = p["price"] * fx if (p.get("price") and fx) else None
+        why = ("Držíš a je v koši tipů – dokoupení ji vrací k rovnoměrné váze. " if l["action"] == "topup" else "Nový tip: ") + p["why"]
+        out.append({"ticker": p["ticker"], "name": p["name"], "action": l["action"], "amount_czk": int(round(l["amount"])),
+                    "shares": round(l["amount"] / px_czk, 4) if px_czk else None, "price": p.get("price"),
+                    "currency": p.get("currency"), "why": why, "sector": p.get("sector"),
+                    "vm_rank": p.get("vm_rank") or p.get("mom_rank")})
+    diff = int(round(amount)) - sum(o["amount_czk"] for o in out)
+    if out and diff:
+        out[0]["amount_czk"] += diff
+    return {"amount_czk": int(round(amount)), "lines": out, "mode": "basket", "min_order": MIN_ORDER_CZK,
+            "deferred": [{"ticker": l["p"]["ticker"], "name": l["p"]["name"], "action": l["action"]} for l in lines if l.get("deferred")],
+            "split": {"core": 0, "topup": sum(o["amount_czk"] for o in out if o["action"] == "topup"),
+                      "new": sum(o["amount_czk"] for o in out if o["action"] == "new")},
+            "stocks_full": False, "legacy_pct": 0}
 
 
 def _build_plan(rows, risk, scan):
@@ -4259,11 +4480,20 @@ def api_plan():
     try:
         rows, total, missing, scan = _value_holdings(holdings or [])
         plan = _build_plan(rows, risk, scan)
+        held = {_spx_key(r["ticker"]) for r in rows}
+        try:
+            cand = [t.replace(".", "-") for t, _s in _mix_basket(scan, 10)[:40]]
+            flags = _red_flags(cand)
+        except Exception:
+            flags = {}
+        picks = _picks(scan, int(_num(body.get("picks_n")) or 10), held, flags)
         out = {"ok": True, "rows": rows, "total_czk": round(total), "missing": missing, "plan": plan,
-               "xray": _xray(rows, total, scan), "scan_date": scan.get("date")}
+               "xray": _xray(rows, total, scan), "scan_date": scan.get("date"), "picks": picks,
+               "evaluation": _evaluate_holdings(rows, scan, {_spx_key(p["ticker"]) for p in picks["basket"]})}
         amount = _num(body.get("amount_czk"))
         if amount and 0 < amount < 1e10:
-            out["deposit"] = _allocate(amount, rows, total, plan)
+            out["deposit"] = (_allocate_basket(amount, rows, picks) if risk == "maximum"
+                              else _allocate(amount, rows, total, plan))
             if user:       # ranní e-mail pak ukáže rozdělení pravidelného vkladu
                 try:
                     rec = kv_get_json(f"holdings:{user}") or {}
