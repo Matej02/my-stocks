@@ -1607,6 +1607,25 @@ html, body {max-width:100%;}
 .mp-textarea {width:100%; padding:11px 12px; background:var(--surface); border:1px solid var(--border2); border-radius:12px; color:var(--text);
   font-family:var(--fb); font-size:15px; line-height:1.5; outline:none; resize:vertical;}
 .mp-textarea:focus {border-color:var(--accent);}
+
+/* ===== Telefon: psaní do políček, okna, klávesnice ===== */
+@media (max-width:768px) {
+  /* iPhone přibližuje stránku, když má políčko písmo pod 16 px – a už se nevrátí */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select, textarea {font-size:16px !important;}
+  .pl-modal {align-items:flex-end; padding:0; overscroll-behavior:contain;}
+  .pl-modal-box, .profile-box, .mp-modal-box {width:100%; max-width:100%; max-height:92vh; max-height:92dvh; overflow-y:auto;
+    -webkit-overflow-scrolling:touch; overscroll-behavior:contain; border-radius:22px 22px 0 0; padding:1.2rem 1.1rem 0;}
+  .pl-modal-btns {position:sticky; bottom:0; z-index:5; margin:1rem -1.1rem 0; padding:12px 1.1rem calc(12px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg, rgba(15,18,24,0), #0F1218 22%); }
+  .pl-modal-btns .btn-primary, .pl-modal-btns .btn-ghost {min-height:46px;}
+  .mp-lot {align-items:end;}
+}
+body.modal-open {overflow:hidden;}
+@media (max-width:640px) {
+  body.kb-open .dash-tabs {display:none;}
+  body.kb-open.has-dash-tabs {padding-bottom:20px;}
+  body.modal-open .dash-tabs {visibility:hidden;}
+}
 </style>
 </head>
 <body>
@@ -1824,7 +1843,7 @@ html, body {max-width:100%;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.18·b</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.19·a</div>
 
 <div class="container">
   
@@ -6809,6 +6828,7 @@ function planPausedHTML(p) {
 }
 
 function planDeposit(v) {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     if (v != null) planAmount = String(v);
     else { const el = document.getElementById('mp-amount'); if (el) planAmount = el.value; }
     const amt = parseFloat(String(planAmount).replace(/\s/g, '').replace(',', '.'));
@@ -6822,9 +6842,19 @@ function planDeposit(v) {
 }
 
 // ---------- vykreslení ----------
+// Když uživatel píše do políčka v sekci plánu, na pozadí doběhlé načítání (stres test,
+// zprávy…) sekci NEPŘEKRESLÍ – dřív to zrušilo fokus, na telefonu zmizela klávesnice a
+// psaní se přerušilo. Překreslí se hned po opuštění políčka.
+let planPending = false;
+function planTyping() {
+    const ae = document.activeElement, root = document.getElementById('plan-root');
+    return !!(ae && root && root.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
+}
 function renderPlan() {
     const root = document.getElementById('plan-root');
     if (!root) return;
+    if (planTyping()) { planPending = true; return; }
+    planPending = false;
     const d = planData;
     const has = planLots.length > 0;
     const riskPills = ['conservative', 'balanced', 'aggressive', 'maximum'].map(r =>
@@ -7094,6 +7124,7 @@ function planGoalHTML(d) {
 }
 
 async function planRunGoal() {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     const v = id => (document.getElementById(id) || {}).value;
     const body = { start_czk: v('mp-g-start'), monthly_czk: v('mp-g-monthly'), years: v('mp-g-years'), goal_czk: v('mp-g-goal') };
     planGoalLoading = true; renderPlan();
@@ -7257,7 +7288,7 @@ function renderImport() {
     }
     body.innerHTML = h;
     btns.innerHTML = `<button class="btn-ghost" onclick="openImport()">Jiné obrázky</button>
-      <button class="btn-primary" ${ok ? '' : 'disabled style="opacity:.5"'} onclick="impSave()"><i class="ti ti-check"></i> Uložit ${ok} ${ok === 1 ? 'akcii' : (ok >= 2 && ok <= 4 ? 'akcie' : 'akcií')}${noQty ? ' (' + noQty + ' bez počtu)' : ''}</button>`;
+      <button class="btn-primary" ${ok ? '' : 'disabled style="opacity:.5"'} onclick="impSave()"><i class="ti ti-check"></i> Uložit ${ok} ${ok === 1 ? 'akcii' : (ok >= 2 && ok <= 4 ? 'akcie' : 'akcií')}</button>`;
 }
 
 function impCheckHTML(r) {
@@ -7431,7 +7462,7 @@ function openBought() {
 function renderLot() {
     const s = lotState, title = document.getElementById('lot-title'), body = document.getElementById('lot-body'), btns = document.getElementById('lot-btns');
     const lotRows = () => s.lots.map((l, i) => `<div class="mp-lot">
-        <div class="mp-field"><label>${i ? '' : 'Počet kusů (nepovinné)'}</label><input type="number" step="any" min="0" value="${l.qty}" oninput="lotState.lots[${i}].qty=this.value"></div>
+        <div class="mp-field"><label>${i ? '' : 'Počet kusů'}</label><input type="number" inputmode="decimal" step="any" min="0" placeholder="nepovinné" value="${l.qty}" oninput="lotState.lots[${i}].qty=this.value"></div>
         <div class="mp-field"><label>${i ? '' : 'Koupeno (měsíc)'}</label><input type="month" max="${mpThisMonth()}" value="${mpEsc(l.buy_month || '')}" oninput="lotState.lots[${i}].buy_month=this.value"></div>
         <div class="mp-field"><label>${i ? '' : '&nbsp;'}</label><button class="mp-icon-btn" style="height:42px;width:36px" onclick="lotState.lots.splice(${i},1); if(!lotState.lots.length) lotState.lots.push({qty:'',buy_month:''}); renderLot()"><i class="ti ti-x"></i></button></div>
       </div>`).join('') + `<a style="color:var(--accent);cursor:pointer;font-size:13px" onclick="lotState.lots.push({qty:'',buy_month:''}); renderLot()"><i class="ti ti-plus"></i> další nákup (jiný měsíc)</a>
@@ -7727,6 +7758,22 @@ async function fetchOverviewNews() {
 (function () {
     const f = document.querySelector('.app-footer'), d = document.getElementById('detail-view');
     if (f && d && f.parentNode === d.parentNode) d.parentNode.appendChild(f);
+})();
+
+// ---- Telefon: zamčená stránka pod oknem, spodní lišta mizí při psaní, odložené překreslení ----
+(function () {
+    const isField = el => el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) && !/^(checkbox|radio|button|submit|file)$/.test(el.type || '');
+    document.addEventListener('focusin', e => { if (isField(e.target)) document.body.classList.add('kb-open'); });
+    document.addEventListener('focusout', () => {
+        setTimeout(() => {
+            if (!isField(document.activeElement)) document.body.classList.remove('kb-open');
+            if (planPending && !planTyping()) renderPlan();
+        }, 150);
+    });
+    setInterval(() => { if (planPending && !planTyping()) renderPlan(); }, 1000);   // pojistka, kdyby focusout nepřišel
+    const syncModal = () => document.body.classList.toggle('modal-open', !!document.querySelector('.pl-modal.open'));
+    new MutationObserver(syncModal).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    syncModal();
 })();
 </script>
 </body>
