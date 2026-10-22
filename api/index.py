@@ -4514,9 +4514,32 @@ def api_plan():
 # (rozliší třeba CSPX v Londýně v USD od SXR8 na Xetře v EUR). Fotka se
 # nikam neukládá. Model: env VISION_MODEL (jinak výchozí podle poskytovatele).
 # ---------------------------------------------------------------------------
-VISION_MODELS = {"groq": ["meta-llama/llama-4-scout-17b-16e-instruct",
-                          "meta-llama/llama-4-maverick-17b-128e-instruct"],
+VISION_MODELS = {"groq": ["qwen/qwen3.8-27b", "qwen/qwen3.6-27b",
+                          "meta-llama/llama-4-scout-17b-16e-instruct"],
                  "openai": ["gpt-4o-mini"]}
+# Groq modely časem vypíná (llama-4 scout/maverick 2026) → seznam se doplní z /models:
+# nejdřív známé vizuální, pak cokoli, co podle názvu bere obrázky.
+_VISION_RX = re.compile(r"(vision|[-/]vl\b|-vl-|omni|scout|maverick|qwen3\.\d+-27b|gemma-3|llava|pixtral|muse)", re.I)
+_vision_cache = {"ts": 0, "models": None}
+
+
+def _groq_vision_models(key):
+    base = VISION_MODELS["groq"]
+    if _vision_cache["models"] and time.time() - _vision_cache["ts"] < 6 * 3600:
+        return _vision_cache["models"]
+    try:
+        r = requests.get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"}, timeout=8)
+        ids = [m.get("id") for m in (r.json() or {}).get("data", []) if m.get("id") and m.get("active", True)]
+        if not ids:
+            return base
+        known = [m for m in base if m in ids]
+        extra = sorted([m for m in ids if _VISION_RX.search(m) and m not in known],
+                       key=lambda m: (not m.startswith("qwen/"), m))
+        models = (known + extra)[:4] or base
+    except Exception:
+        return base
+    _vision_cache.update(ts=time.time(), models=models)
+    return models
 IMPORT_PROMPT = """Na obrázku je přehled akcií nebo investičního portfolia (nejčastěji aplikace Trading 212, ale může jít o jakoukoli
 aplikaci, banku nebo seznam; česky nebo anglicky).
 Vypiš KAŽDOU akcii / ETF / fond, který je na obrázku vidět – I KDYŽ u něj nejsou vidět počty kusů ani hodnoty. Stačí název
@@ -4543,7 +4566,7 @@ def call_vision(image_data_url, prompt=IMPORT_PROMPT):
     url = ("https://api.openai.com/v1/chat/completions" if prov == "openai"
            else "https://api.groq.com/openai/v1/chat/completions")
     models = ([os.environ["VISION_MODEL"]] if os.environ.get("VISION_MODEL")
-              else VISION_MODELS.get(prov, VISION_MODELS["groq"]))
+              else (_groq_vision_models(key) if prov != "openai" else VISION_MODELS["openai"]))
     errs = []
     for model in models:
         for json_mode in (True, False):
@@ -4562,6 +4585,7 @@ def call_vision(image_data_url, prompt=IMPORT_PROMPT):
                         continue          # zkusit stejný model bez response_format
                     break                  # jiná chyba → další model
                 content = (((r.json() or {}).get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+                content = re.sub(r"<think>.*?</think>", "", content, flags=re.S)   # Qwen umí vypsat úvahu
                 m = re.search(r"(\{.*\}|\[.*\])", content, re.S)
                 return json.loads(m.group(0) if m else content), None
             except Exception as e:
