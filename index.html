@@ -1387,7 +1387,13 @@ html, body {max-width:100%;}
 .mp-progress {font-size:13px; color:var(--text2); display:flex; align-items:center; gap:8px; margin:14px 0;}
 .mp-mode {display:flex; gap:14px; flex-wrap:wrap; font-size:13px; color:var(--text2); margin:12px 0 0;}
 .mp-mode label {display:flex; gap:6px; align-items:center; cursor:pointer;}
-.mp-lot {display:grid; grid-template-columns:1fr 1fr 36px; gap:8px; margin-bottom:8px;}
+.mp-lot {display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px; gap:8px; margin-bottom:8px;}
+.mp-lot > *, .mp-field {min-width:0;}
+/* iPhone Safari: pole data/měsíce ignorují šířku a prázdná mají nulovou výšku → rozhozené řádky */
+input[type=month], input[type=date] {-webkit-appearance:none; appearance:none; display:block; box-sizing:border-box; width:100%; min-width:0; max-width:100%; min-height:40px; line-height:1.25; text-align:left;}
+input[type=month]::-webkit-date-and-time-value, input[type=date]::-webkit-date-and-time-value {text-align:left; min-height:1.25em;}
+input[type=month]::-webkit-datetime-edit, input[type=date]::-webkit-datetime-edit {padding:0;}
+.mp-rv input, .mp-rv select, .mp-field input, .mp-field select {box-sizing:border-box; max-width:100%;}
 .mp-search-res {font-size:13px; color:var(--text2); margin:8px 0; min-height:20px;}
 .mp-search-res b {color:var(--text);}
 @media (max-width:900px) {
@@ -1573,7 +1579,7 @@ html, body {max-width:100%;}
   .mp-rv > :nth-child(5) {grid-area:mon;}
   .mp-rv-f span {display:block;}
   .mp-rv .raw {white-space:normal;}
-  .mp-rv input[type=number], .mp-rv input[type=month], .mp-rv input[type=text], .mp-rv select {font-size:16px; padding:10px;}
+  .mp-rv input[type=number], .mp-rv input[type=month], .mp-rv input[type=text], .mp-rv select {font-size:16px; padding:10px; min-height:44px;}
   .dg-what {font-size:15px;}
   .dg-headline {font-size:15px;}
 }
@@ -1923,7 +1929,7 @@ body.modal-open {overflow:hidden;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.22·a</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.22·b</div>
 
 <div class="container">
   
@@ -7345,8 +7351,8 @@ function renderImport() {
     const body = document.getElementById('imp-body'), btns = document.getElementById('imp-btns');
     if (impState.step === 'pick') {
         body.innerHTML = `<div class="cmp-sub" style="margin-bottom:12px">Appka z obrázku přečte <b>názvy akcií</b> (a počty kusů, když jsou vidět) a každou ověří proti burze. Počty kusů nejsou povinné – stačí vědět, co vlastníš. Než se cokoli uloží, všechno zkontroluješ.</div>
-          <label class="mp-drop" id="imp-drop"><i class="ti ti-photo-up"></i><b>Vyber screenshoty</b> nebo je sem přetáhni<br><span style="font-size:12px">JPG / PNG, klidně víc najednou</span>
-            <input type="file" id="imp-file" accept="image/*" multiple style="display:none" onchange="impFiles(this.files)"></label>
+          <label class="mp-drop" id="imp-drop"><i class="ti ti-photo-up"></i><b>Vyber screenshoty</b> nebo je sem přetáhni<br><span style="font-size:12px">JPG / PNG / HEIC (iPhone), klidně víc najednou</span>
+            <input type="file" id="imp-file" accept="image/*,.heic,.heif" multiple style="display:none" onchange="impFiles(this.files)"></label>
           <ul class="mp-tips">
             <li>Trading 212 → <b>Portfolio</b> (Investice) → seznam pozic. Vyfoť celý seznam, při scrollování klidně s překryvem.</li>
             <li>Nejlepší je, když je u pozic vidět <b>počet kusů</b> i <b>hodnota v Kč</b> – podle hodnoty appka pozná správnou burzu (např. CSPX v USD vs. SXR8 v EUR).</li>
@@ -7424,11 +7430,33 @@ function impCheckHTML(r) {
     return t;
 }
 
+const impIsHeic = f => /image\/hei[cf]/i.test(f.type) || /\.hei[cf]$/i.test(f.name || '');
+let _heicLib = null;
+function impHeicLib() {   // převodník HEIC → JPEG, načte se jen když prohlížeč HEIC sám neumí (Chrome, Android, Windows)
+    if (window.heic2any) return Promise.resolve(window.heic2any);
+    return _heicLib = _heicLib || new Promise((res, rej) => {
+        const sc = document.createElement('script');
+        sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js';
+        sc.onload = () => window.heic2any ? res(window.heic2any) : rej(new Error('heic'));
+        sc.onerror = () => { _heicLib = null; rej(new Error('heic')); };
+        document.head.appendChild(sc);
+    });
+}
+function impLoadImg(blob) {
+    const url = URL.createObjectURL(blob);
+    return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; })
+        .finally(() => setTimeout(() => URL.revokeObjectURL(url), 0));
+}
 async function impPrep(file) {
     // zmenšit (a dlouhé screenshoty rozřezat), ať je text čitelný a request malý
-    const url = URL.createObjectURL(file);
-    try {
-        const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+    {
+        let img;
+        try { img = await impLoadImg(file); }                 // Safari / iPhone umí HEIC sám
+        catch (e) {
+            if (!impIsHeic(file)) throw e;
+            const conv = await (await impHeicLib())({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+            img = await impLoadImg(Array.isArray(conv) ? conv[0] : conv);
+        }
         const w = img.naturalWidth, h = img.naturalHeight, out = [];
         const chunkH = h / w > 2.6 ? Math.round(w * 2.2) : h;
         for (let y = 0; y < h; y += Math.max(1, chunkH - Math.round(w * 0.25))) {
@@ -7443,17 +7471,18 @@ async function impPrep(file) {
             if (y + ch >= h) break;
         }
         return out;
-    } finally { URL.revokeObjectURL(url); }
+    }
 }
 
 async function impFiles(files) {
-    files = Array.from(files || []).filter(f => /^image\//.test(f.type)).slice(0, 10);
-    if (!files.length) { showToast('Vyber obrázek (JPG/PNG)', 'down', 'ti-alert-circle'); return; }
+    files = Array.from(files || []).filter(f => /^image\//.test(f.type) || impIsHeic(f) || /\.(jpe?g|png|webp)$/i.test(f.name || '')).slice(0, 10);
+    if (!files.length) { showToast('Vyber obrázek (JPG/PNG/HEIC)', 'down', 'ti-alert-circle'); return; }
     impState.step = 'reading'; impState.errors = []; impState.rows = []; impState.preview = null;
+    impState.done = 0; impState.total = files.length; renderImport();
     let images = [];
     for (const f of files) {
         try { images = images.concat(await impPrep(f)); }
-        catch (e) { impState.errors.push(`${f.name}: obrázek nejde otevřít (zkus PNG/JPG).`); }
+        catch (e) { impState.errors.push(`${f.name}: obrázek nejde otevřít${impIsHeic(f) ? ' (převod HEIC selhal – zkontroluj připojení, nebo pošli screenshot jako PNG)' : ' (zkus PNG/JPG)'}.`); }
     }
     impState.total = images.length; impState.done = 0;
     renderImport();
