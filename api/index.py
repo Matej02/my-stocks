@@ -3835,13 +3835,21 @@ def _value_holdings(holdings):
     scan = _ensure_scan_maps(market_scan(allow_step=False) or {}) or {}
     ranks, vms, smap, _n, _m = _scan_maps(scan)
     rows, missing = [], []
+    pxm = scan.get("px_map") or {}
     for t, ls in by_t.items():
+        key = _spx_key(t)
         qt = q.get(t)
-        fx = _fx_czk(qt["currency"]) if qt else None
+        if not qt or not qt.get("price"):
+            sp = pxm.get(key)              # Yahoo z Vercelu občas neodpoví → cena z ranního skenu
+            if sp and sp[0]:
+                qt = {"price": sp[0], "currency": sp[1] or "USD", "chg": sp[2] if len(sp) > 2 else None,
+                      "name": (scan.get("name_map") or {}).get(key)}
+        fx = _fx_czk(qt["currency"]) if qt and qt.get("price") else None
         if not qt or not qt.get("price") or not fx:
             missing.append(t)
-            continue
-        key = _spx_key(t)
+            # bez ceny – titul přesto ukaž (hodnocení a zprávy cenu nepotřebují), jen ho neoceníme
+            qt, fx = {"price": 0.0, "currency": (qt or {}).get("currency") or "USD", "chg": None,
+                      "name": (scan.get("name_map") or {}).get(key), "no_price": True}, 1.0
         kind = "core" if t in CORE_ETFS else ("stock" if key in ranks else "other")
         no_qty = all(l["qty"] is None for l in ls)
         qty = round(sum(l["qty"] or 0 for l in ls), 6)
@@ -3859,7 +3867,7 @@ def _value_holdings(holdings):
                "sector": smap.get(key) or ("ETF" if kind == "core" else ""),
                "tax_free_qty": round(free_q, 6), "tax_free_value_czk": round(free_q * px_czk),
                "unknown_qty": round(unknown_q, 6),
-               "no_qty": no_qty,
+               "no_qty": no_qty or bool(qt.get("no_price")), "no_price": bool(qt.get("no_price")),
                "tax_free": (not no_qty) and unknown_q == 0 and free_q >= qty - 1e-9,
                "tax_next": pending[0] if pending else None,
                "tax_free_from": (pending[-1] if pending else (known[0] and _tax_free_from(known[0]))) if known else None,

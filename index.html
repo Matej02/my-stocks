@@ -1930,7 +1930,7 @@ body.modal-open {overflow:hidden;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.22·e</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.22·f</div>
 
 <div class="container">
   
@@ -6854,7 +6854,8 @@ async function planRefresh() {
         const amt = parseFloat(String(planAmount).replace(/\s/g, '').replace(',', '.'));
         if (planShowDeposit && amt > 0) body.amount_czk = amt;
         const r = await fetch(`${BACKEND_URL}/api/plan`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
-        const d = await r.json();
+        let d;
+        try { d = await r.json(); } catch (e) { throw new Error(`Server teď neodpověděl (HTTP ${r.status}) – tvoje akcie jsou uložené, zkus to za chvíli.`); }
         if (!d.ok) throw new Error(d.error || 'Plán se nepodařilo spočítat.');
         planData = d; planTs = Date.now();
     } catch (e) {
@@ -6975,7 +6976,8 @@ function renderPlan() {
     } else if (planLoading && !d) {
         html += `<div class="mp-progress"><i class="ti ti-loader spin"></i> Oceňuji ${planLots.length} nákupů v Kč a porovnávám s plánem…</div>`;
     } else if (planErr && !d) {
-        html += `<div class="mp-note warn"><i class="ti ti-alert-triangle"></i><span>${mpEsc(planErr)} <a style="color:var(--accent);cursor:pointer" onclick="planRefresh()">Zkusit znovu</a></span></div>`;
+        html += `<div class="mp-note warn"><i class="ti ti-alert-triangle"></i><span>${mpEsc(planErr)} <a style="color:var(--accent);cursor:pointer" onclick="planRefresh()">Zkusit znovu</a></span></div>
+          <div class="mp-sub" style="margin-top:10px">Uložené akcie: ${[...new Set(planLots.map(l => mpBase(l.ticker)))].map(t => '<b>' + mpEsc(t) + '</b>').join(', ')}</div>`;
     } else if (d) {
         html += planKpisHTML(d);
     }
@@ -7119,7 +7121,7 @@ function planRowsHTML(d) {
         const lots = (r.lots || []).length > 1 ? ` · ${r.lots.length} nákupy` : '';
         return `<div class="mp-row">
           <div style="min-width:0"><div class="tk">${mpEsc(mpBase(r.ticker))} ${r.chg != null ? `<span style="font-size:11.5px;font-weight:500;color:var(--${r.chg >= 0 ? 'up' : 'down'})">${r.chg >= 0 ? '+' : ''}${mpPct(r.chg, 1)}</span>` : ''}</div><div class="sm">${mpEsc(r.name)}</div></div>
-          ${r.no_qty ? `<div><div class="num" style="color:var(--text2)">–</div><div class="sm"><a style="color:var(--accent);cursor:pointer" onclick="openLot('${mpEsc(r.ticker)}')">doplň počet kusů</a></div></div>
+          ${r.no_qty ? `<div><div class="num" style="color:var(--text2)">–</div><div class="sm">${r.no_price ? '<span style="color:var(--text3)">cenu teď nemám</span>' : `<a style="color:var(--accent);cursor:pointer" onclick="openLot('${mpEsc(r.ticker)}')">doplň počet kusů</a>`}</div></div>
           <div class="num" style="color:var(--text3)">–</div>`
           : `<div><div class="num">${mpKc(r.value_czk)}</div><div class="sm">${mpQty(r.qty)} ks${lots}</div></div>
           <div class="num">${mpPct(r.weight, 1)}</div>`}
