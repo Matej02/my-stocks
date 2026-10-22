@@ -1930,7 +1930,7 @@ body.modal-open {overflow:hidden;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.22·c</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.22·d</div>
 
 <div class="container">
   
@@ -7444,21 +7444,46 @@ function impHeicLib() {   // převodník HEIC → JPEG, načte se jen když proh
     });
 }
 function impLoadImg(blob) {
+    // URL se uvolní až po vykreslení (impPrep) – Safari jinak obrázek nedekóduje
     const url = URL.createObjectURL(blob);
-    return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; })
-        .finally(() => setTimeout(() => URL.revokeObjectURL(url), 0));
+    return new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => { im._url = url; res(im); };
+        im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('nelze dekódovat')); };
+        im.src = url;
+    });
+}
+function impReadDataURL(blob) {
+    return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('nelze přečíst')); fr.readAsDataURL(blob); });
+}
+async function impDecode(file) {
+    // 1) createImageBitmap (rychlé, iOS 15+), 2) <img> z blobu, 3) <img> z data URL
+    if (window.createImageBitmap) { try { return await createImageBitmap(file); } catch (e) {} }
+    try { return await impLoadImg(file); } catch (e) {}
+    const du = await impReadDataURL(file);
+    return await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('nelze dekódovat')); im.src = du; });
 }
 async function impPrep(file) {
     // zmenšit (a dlouhé screenshoty rozřezat), ať je text čitelný a request malý
-    {
-        let img;
-        try { img = await impLoadImg(file); }                 // Safari / iPhone umí HEIC sám
-        catch (e) {
-            if (!impIsHeic(file)) throw e;
+    let img;
+    try { img = await impDecode(file); }
+    catch (e) {
+        if (impIsHeic(file)) {
             const conv = await (await impHeicLib())({ blob: file, toType: 'image/jpeg', quality: 0.9 });
-            img = await impLoadImg(Array.isArray(conv) ? conv[0] : conv);
+            img = await impDecode(Array.isArray(conv) ? conv[0] : conv);
+        } else {
+            // prohlížeč obrázek neotevře → pošli originál, AI ho přečte sama
+            const du = await impReadDataURL(file);
+            const m = /^data:([^;]*);base64,/.exec(du) || [];
+            const typ = /png/i.test(m[1] || file.name) ? 'png' : (/webp/i.test(m[1] || file.name) ? 'webp' : 'jpeg');
+            const fixed = du.replace(/^data:[^;]*;base64,/, `data:image/${typ};base64,`);
+            if (fixed.length > 3_900_000) throw new Error('obrázek je moc velký');
+            return [fixed];
         }
-        const w = img.naturalWidth, h = img.naturalHeight, out = [];
+    }
+    try {
+        const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height, out = [];
+        if (!w || !h) throw new Error('prázdný obrázek');
         const chunkH = h / w > 2.6 ? Math.round(w * 2.2) : h;
         for (let y = 0; y < h; y += Math.max(1, chunkH - Math.round(w * 0.25))) {
             const ch = Math.min(chunkH, h - y);
@@ -7472,6 +7497,9 @@ async function impPrep(file) {
             if (y + ch >= h) break;
         }
         return out;
+    } finally {
+        if (img && img._url) URL.revokeObjectURL(img._url);
+        if (img && img.close) img.close();
     }
 }
 
@@ -7483,7 +7511,7 @@ async function impFiles(files) {
     let images = [];
     for (const f of files) {
         try { images = images.concat(await impPrep(f)); }
-        catch (e) { impState.errors.push(`${f.name}: obrázek nejde otevřít${impIsHeic(f) ? ' (převod HEIC selhal – zkontroluj připojení, nebo pošli screenshot jako PNG)' : ' (zkus PNG/JPG)'}.`); }
+        catch (e) { impState.errors.push(`${f.name}: obrázek nejde otevřít (${(e && e.message) || 'neznámá chyba'}${impIsHeic(f) ? ', převod HEIC selhal' : ''}).`); }
     }
     impState.total = images.length; impState.done = 0;
     renderImport();
