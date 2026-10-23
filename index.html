@@ -1930,7 +1930,7 @@ body.modal-open {overflow:hidden;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.23·a</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.23·b</div>
 
 <div class="container">
   
@@ -5195,6 +5195,7 @@ function renderAdmin(users, invites) {
             <input id="email-test-to" placeholder="komu poslat test (výchozí: ty)" class="admin-input" style="flex:1; min-width:180px;">
             <button class="btn-primary admin-mk" onclick="adminEmailTest()"><i class="ti ti-send"></i> Poslat test</button>
             <button class="tool-btn" onclick="adminMorningTest()"><i class="ti ti-sun"></i> Ranní souhrn (test)</button>
+            <button class="tool-btn" onclick="adminAiTest()"><i class="ti ti-sparkles"></i> Otestovat AI</button>
         </div>
         <div id="email-test-result" style="font-size:12px; color:var(--text2); margin-bottom:10px;"></div>
         <div id="email-status" style="font-size:12.5px; line-height:1.7; margin-bottom:18px; padding:10px 12px; border-radius:12px; background:var(--surface); border:1px solid var(--border);"><i class="ti ti-loader spin"></i> Zjišťuji stav ranních e-mailů…</div>
@@ -5253,6 +5254,20 @@ async function loadEmailStatus() {
             `<div style="color:var(--text2)">Cron naposledy běžel: <b style="color:var(--text)">${when(run)}</b>${run ? ` (v Praze ${run.prague_hour}:xx, posílá se v ${run.send_hour}:xx)` : ' – pokud tu bude „nikdy" i zítra, cron se nespouští'}</div>` +
             `<div style="color:var(--text2)">Poslední rozesílka: <b style="color:var(--text)">${when(snd)}</b>${snd ? ` · příjemců ${snd.recipients}, odesláno ${snd.sent}, chyb ${snd.failed}${snd.error ? ` · <span style="color:var(--down)">${escapeHtml(snd.error)}</span>` : ''}` : ''}</div>`;
     } catch (e) { box.textContent = 'Stav se nepodařilo zjistit.'; }
+}
+
+async function adminAiTest() {
+    const out = document.getElementById('email-test-result');
+    out.innerHTML = '<i class="ti ti-loader spin"></i> Zkouším AI modely (pár vteřin)…';
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/admin/ai-test`, { method: 'POST', headers: authHeaders() })).json();
+        if (!d.ok) { out.innerHTML = `<span style="color:var(--down)">${escapeHtml(d.error || 'Test se nepodařil.')}</span>`; return; }
+        const rows = (d.models || []).map(m => `<div>${m.ok ? '<span style="color:var(--up)">✓</span>' : '<span style="color:var(--down)">✗</span>'} <b>${escapeHtml(m.model)}</b> – ${m.ok ? 'odpovědělo za ' + (m.ms / 1000).toFixed(1).replace('.', ',') + ' s' : escapeHtml(m.err || '?')}</div>`).join('');
+        const av = Array.isArray(d.available) ? d.available.join(', ') : (d.available || 'neznámé');
+        out.innerHTML = `<div style="margin:6px 0"><b>AI (${escapeHtml(d.provider)})</b>${rows || '<div style="color:var(--down)">žádný model k vyzkoušení</div>'}` +
+            `<div style="color:var(--text3);margin-top:4px">Pro čtení fotek: ${escapeHtml((d.vision || []).join(', ') || '–')}</div>` +
+            `<div style="color:var(--text3);margin-top:4px;word-break:break-word">Nabízí poskytovatel: ${escapeHtml(av)}</div></div>`;
+    } catch (e) { out.innerHTML = '<span style="color:var(--down)">Test se nepodařil (spojení).</span>'; }
 }
 
 async function adminMorningTest() {
@@ -7375,6 +7390,7 @@ function renderImport() {
     }
     if (impState.step === 'reading') {
         body.innerHTML = `<div class="mp-progress"><i class="ti ti-loader spin"></i> Čtu obrázky… ${impState.done} / ${impState.total}</div>
+          ${impState.note ? `<div class="mp-note warn" style="margin-top:0"><i class="ti ti-clock"></i><span>${mpEsc(impState.note)}</span></div>` : ''}
           <div class="cmp-sub">Každý obrázek trvá pár vteřin – AI přečte pozice a appka je ověří proti cenám na burze.</div>`;
         btns.innerHTML = '';
         return;
@@ -7470,13 +7486,13 @@ async function impPrep(file) {
         const chunkH = h / w > 2.6 ? Math.round(w * 2.2) : h;
         for (let y = 0; y < h; y += Math.max(1, chunkH - Math.round(w * 0.25))) {
             const ch = Math.min(chunkH, h - y);
-            const s = Math.min(1, 2000 / Math.max(w, ch));
+            const s = Math.min(1, 1500 / Math.max(w, ch));          // menší obrázek = míň tokenů (bezplatný limit AI)
             const c = document.createElement('canvas');
             c.width = Math.round(w * s); c.height = Math.round(ch * s);
             const ctx = c.getContext('2d');
             ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
             ctx.drawImage(img, 0, y, w, ch, 0, 0, c.width, c.height);
-            out.push(c.toDataURL('image/jpeg', 0.85));
+            out.push(c.toDataURL('image/jpeg', 0.82));
             if (y + ch >= h) break;
         }
         return out;
@@ -7498,20 +7514,33 @@ async function impFiles(files) {
     impState.total = images.length; impState.done = 0;
     renderImport();
     const found = [];
-    let idx = 0;
-    const worker = async () => {
-        while (idx < images.length) {
-            const my = idx++;
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    // po jednom (bezplatný limit AI je malý); při limitu appka počká a zkusí znovu
+    for (let my = 0; my < images.length; my++) {
+        let last = null;
+        for (let attempt = 1; attempt <= 4; attempt++) {
             try {
                 const r = await fetch(`${BACKEND_URL}/api/holdings/import`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ image: images[my] }) });
-                const d = await r.json();
-                if (d.ok) { found.push(...(d.positions || []).map(p => Object.assign(p, { _img: my }))); if (d.preview) impState.preview = d.preview; }
-                else impState.errors.push(`Obrázek ${my + 1}: ${d.error || 'nepodařilo se přečíst'}${d.detail ? ' (' + d.detail + ')' : ''}`);
-            } catch (e) { impState.errors.push(`Obrázek ${my + 1}: spojení selhalo.`); }
-            impState.done++; renderImport();
+                const d = await r.json().catch(() => ({ ok: false, error: `Server neodpověděl (HTTP ${r.status}).` }));
+                if (d.ok) {
+                    found.push(...(d.positions || []).map(p => Object.assign(p, { _img: my })));
+                    if (d.preview) impState.preview = d.preview;
+                    last = null; break;
+                }
+                last = d;
+                if (d.kind === 'limit' && attempt < 4 && (Number(d.retry_after) || 20) <= 90) {
+                    const w = Math.min(Math.max(Math.round(Number(d.retry_after) || 20), 8), 45);
+                    for (let t = w; t > 0; t--) {
+                        impState.note = `Bezplatný limit AI – čekám ${t} s a zkusím obrázek ${my + 1} znovu…`; renderImport(); await sleep(1000);
+                    }
+                    impState.note = ''; continue;
+                }
+                break;
+            } catch (e) { last = { error: 'spojení selhalo' }; if (attempt < 2) { await sleep(2000); continue; } break; }
         }
-    };
-    await Promise.all([worker(), worker()]);
+        if (last) impState.errors.push(`Obrázek ${my + 1}: ${last.error || 'nepodařilo se přečíst'}${last.detail ? ' (' + last.detail + ')' : ''}`);
+        impState.done++; renderImport();
+    }
     impFinish(found);
 }
 

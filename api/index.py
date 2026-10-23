@@ -1872,13 +1872,22 @@ def analysis_enabled():
 
 # Groq modely se po čase vypínají (llama-4 17. 7. 2026, llama-3.3-70b-versatile 16. 8. 2026,
 # qwen3.6-27b 14. 9. 2026) → napevno zadaný model jednou přestane fungovat a všechna AI
-# (analýza, briefing, zprávy k akciím) tiše vypadne. Proto se dostupné modely čtou ze /models,
-# zkouší se po řadě a poslední výsledek je v KV `llm:last` (Admin → stav e-mailů).
-LLM_PREFERRED = {"groq": ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile", "openai/gpt-oss-20b"],
+# (analýza, asistent, briefing, zprávy k akciím) tiše vypadne. Proto se dostupné modely čtou
+# ze /models, zkouší se po řadě a poslední výsledek je v KV `llm:last` (Admin → stav e-mailů).
+# BEZPLATNÝ Groq tarif: každý model má vlastní limit 30 požadavků/min, 8 000 tokenů/min
+# a 200 000 tokenů/den → tři modely po řadě = víc kapacity zdarma; požadavek (prompt + max_tokens)
+# se musí vejít do 8 000 tokenů, proto se max_tokens odvozuje od délky promptu.
+LLM_PREFERRED = {"groq": ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"],
                  "openai": ["gpt-4o-mini"]}
 _LLM_SKIP_RX = re.compile(r"(whisper|guard|tts|orpheus|playai|embed|compound|safeguard|distil|vision|allam|scout|maverick)", re.I)
 _llm_cache = {"ts": 0, "models": None}
-_llm_state = {"err": None, "model": None, "noted": None}
+_llm_state = {"err": None, "model": None, "noted": None, "kind": None, "retry_after": 0}
+LLM_TPM_BUDGET = 7400                      # bezplatný limit 8 000 tokenů/min – rezerva na nepřesný odhad
+
+
+def _est_tokens(text):
+    """Hrubý odhad tokenů (česká diakritika = víc tokenů) – radši nadhodnotit."""
+    return int(len(text or "") / 2.7) + 60
 
 
 def _llm_models(prov, key):
@@ -1904,12 +1913,12 @@ def _llm_models(prov, key):
 
 
 def _llm_extras(model):
-    """Parametry, které zrychlí / uklidí úvahové modely (když je model nezná → HTTP 400 → zopakuje se bez nich)."""
+    """Parametry, které zrychlí / zlevní úvahové modely (neznámý parametr → HTTP 400 → zopakuje se bez nich)."""
     m = model.lower()
     if "gpt-oss" in m:
         return {"reasoning_effort": "low"}
     if "qwen3" in m:
-        return {"reasoning_format": "hidden"}
+        return {"reasoning_effort": "none"}          # bez úvahy = rychlejší a nespotřebuje denní limit tokenů
     return {}
 
 
@@ -1929,18 +1938,80 @@ def _json_from_text(text):
     return None
 
 
-def _llm_note(model, err):
+def _retry_after(r):
+    """Za kolik vteřin to Groq dovolí znovu (hlavička retry-after, jinak „try again in 4.5s" z textu)."""
+    try:
+        v = r.headers.get("retry-after")
+        if v:
+            return float(v)
+    except Exception:
+        pass
+    m = re.search(r"try again in (?:(\d+)h)?\s*(?:(\d+)m)?\s*([\d.]+)s", getattr(r, "text", "") or "")
+    return (int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60 + float(m.group(3))) if m else 0.0
+
+
+def _llm_kind(codes):
+    """Proč AI selhala: limit (bezplatný limit / příliš velký požadavek), auth (neplatný klíč), jinak výpadek."""
+    if not codes:
+        return "down"
+    if all(c in (401, 403) for c in codes):
+        return "auth"                         # každý model odmítl klíč (jeden model bez přístupu = 403 jen u něj)
+    if any(c in (429, 413) for c in codes):
+        return "limit"                        # zkusit za chvíli znovu má smysl
+    return "down"
+
+
+def _llm_note(model, err, kind=None, retry_after=0):
     """Zapíše do KV poslední stav AI (jen při změně), ať je vidět, kdy a proč přestala fungovat."""
-    _llm_state["err"], _llm_state["model"] = err, model
+    _llm_state.update(err=err, model=model, kind=kind, retry_after=retry_after)
     sig = (bool(model), model, (err or "")[:80])
     if _llm_state["noted"] == sig:
         return
     _llm_state["noted"] = sig
     try:
-        kv_set_json("llm:last", {"ts": int(time.time()), "ok": bool(model),
-                                 "model": model, "err": (err or "")[:600] or None})
+        kv_set_json("llm:last", {"ts": int(time.time()), "ok": bool(model), "model": model,
+                                 "err": (err or "")[:600] or None, "kind": kind})
     except Exception:
         pass
+
+
+def _llm_fail_msg(default="Nepodařilo se, zkus to znovu.", admin=False):
+    """Srozumitelná hláška podle toho, proč AI selhala (pro uživatele bez technických detailů)."""
+    k = _llm_state.get("kind")
+    if k == "limit":
+        ra = _llm_state.get("retry_after") or 0
+        msg = (f"Denní bezplatný limit AI je vyčerpaný – obnoví se asi za {int(ra // 60) + 1} min."
+               if ra > 90 else "Bezplatný limit AI je teď vyčerpaný – zkus to za minutu.")
+    elif k == "auth":
+        msg = "AI je dočasně nedostupná – správce musí obnovit přístupový klíč."
+    else:
+        msg = default
+    if admin and _llm_state.get("err"):
+        msg += f" (AI: {_llm_state['err']})"
+    return msg
+
+
+def _llm_post(url, key, model, prompt, jm, extras, timeout, max_tokens, temperature=0.4):
+    """Jedno volání modelu (prompt = text, nebo seznam částí s obrázkem) →
+    (status, obsah | None, chyba | None, retry_after). status 0 = výjimka / časový limit."""
+    payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": temperature,
+               "max_tokens": max_tokens, **extras}
+    if jm:
+        payload["response_format"] = {"type": "json_object"}
+    try:
+        r = requests.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                          data=json.dumps(payload), timeout=timeout)
+    except requests.exceptions.Timeout:
+        return 0, None, f"{model}: časový limit", 0.0
+    except Exception as e:
+        return 0, None, f"{model}: {str(e)[:100]}", 0.0
+    if r.status_code != 200:
+        return r.status_code, None, f"{model}: HTTP {r.status_code} {r.text[:110]}", _retry_after(r)
+    try:
+        content = (((r.json() or {}).get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+    except Exception:
+        content = ""
+    return 200, content, None, 0.0
 
 
 def call_llm(prompt, json_mode=True):
@@ -1949,35 +2020,23 @@ def call_llm(prompt, json_mode=True):
         return None
     url = ("https://api.openai.com/v1/chat/completions" if prov == "openai"
            else "https://api.groq.com/openai/v1/chat/completions")
-    errs = []
+    errs, codes, wait = [], [], 0.0
     deadline = time.time() + 42
+    max_tokens = max(700, min(3500, LLM_TPM_BUDGET - _est_tokens(prompt))) if prov != "openai" else 3500
     for model in _llm_models(prov, key)[:3]:
         extras = _llm_extras(model) if prov != "openai" else {}
         variants = [(json_mode, extras)] + ([(False, {})] if (json_mode or extras) else [])
         for jm, ex in variants:
             budget = deadline - time.time()
             if budget < 4:
-                _llm_note(None, " | ".join(errs[-3:]) or "vypršel čas")
+                _llm_note(None, " | ".join(errs[-3:]) or "vypršel čas", _llm_kind(codes), wait)
                 return None
-            payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.4,
-                       "max_tokens": 3500, **ex}
-            if jm:
-                payload["response_format"] = {"type": "json_object"}
-            try:
-                r = requests.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                                  data=json.dumps(payload), timeout=min(28, budget))
-            except requests.exceptions.Timeout:
-                errs.append(f"{model}: časový limit")
-                _llm_note(None, " | ".join(errs[-3:]))
+            st, content, err, ra = _llm_post(url, key, model, prompt, jm, ex, min(28, budget), max_tokens)
+            if st == 0 and "časový limit" in (err or ""):
+                errs.append(err)
+                _llm_note(None, " | ".join(errs[-3:]), "down", 0)
                 return None
-            except Exception as e:
-                errs.append(f"{model}: {str(e)[:100]}")
-                break
-            if r.status_code == 200:
-                try:
-                    content = (((r.json() or {}).get("choices") or [{}])[0].get("message") or {}).get("content") or ""
-                except Exception:
-                    content = ""
+            if st == 200:
                 if not json_mode:
                     content = re.sub(r"<think>.*?</think>", "", content, flags=re.S).strip()
                     if content:
@@ -1991,13 +2050,15 @@ def call_llm(prompt, json_mode=True):
                     return data
                 errs.append(f"{model}: odpověď není platný JSON")
                 continue                      # zkusit ještě bez JSON režimu
-            errs.append(f"{model}: HTTP {r.status_code} {r.text[:110]}")
-            if r.status_code == 400:
+            errs.append(err)
+            codes.append(st)
+            wait = max(wait, ra)
+            if st == 400:
                 continue                      # model nezná parametr / JSON režim → zopakovat bez nich
-            if r.status_code in (404, 410):
+            if st in (404, 410):
                 _llm_cache["ts"] = 0          # model zmizel → příště znovu načíst seznam
             break                             # jiná chyba (limit, výpadek) → další model
-    _llm_note(None, " | ".join(errs[-3:]) or "žádný dostupný model")
+    _llm_note(None, " | ".join(errs[-3:]) or "žádný dostupný model", _llm_kind(codes), wait)
     return None
 
 
@@ -2665,10 +2726,8 @@ def deep_analysis(ticker):
             facts["suggested_levels"] = levels
         report = call_llm(build_analysis_prompt(facts, model))
         if not report:
-            msg = "Analýzu se nepodařilo vygenerovat, zkus to znovu."
-            if is_admin:                      # admin vidí, proč (model vypnutý, limit, …)
-                msg += f" (AI: {_llm_state.get('err') or 'neznámá chyba'})"
-            return jsonify({"ok": False, "error": msg}), 502
+            return jsonify({"ok": False, "kind": _llm_state.get("kind"),
+                            "error": _llm_fail_msg("Analýzu se nepodařilo vygenerovat, zkus to znovu.", admin=is_admin)}), 502
 
         # Verdikt, jistotu i úrovně bereme VŽDY z výpočtu (no guesses), ne z AI
         report["verdict"] = model["verdict"]
@@ -3809,7 +3868,7 @@ def _fx_czk(cur):
     sym = FX_SYMBOLS.get(c)
     if not sym:
         return None
-    rate = None
+    rate, cached = None, None
     try:
         cached = kv_get_json(f"fx:{c}")
         if cached and time.time() - cached.get("ts", 0) < 3600:
@@ -3825,7 +3884,11 @@ def _fx_czk(cur):
             except Exception:
                 pass
         except Exception:
-            return None
+            # Yahoo z Vercelu občas neodpoví → poslední známý kurz (kurzy se hýbou pomalu), než nic neukázat
+            if cached and cached.get("rate") and time.time() - cached.get("ts", 0) < 14 * 86400:
+                rate = cached["rate"]
+            else:
+                return None
     return rate / 100 if pence else rate
 
 
@@ -4630,8 +4693,7 @@ def api_plan():
 # (rozliší třeba CSPX v Londýně v USD od SXR8 na Xetře v EUR). Fotka se
 # nikam neukládá. Model: env VISION_MODEL (jinak výchozí podle poskytovatele).
 # ---------------------------------------------------------------------------
-VISION_MODELS = {"groq": ["qwen/qwen3.8-27b", "qwen/qwen3.6-27b",
-                          "meta-llama/llama-4-scout-17b-16e-instruct"],
+VISION_MODELS = {"groq": ["qwen/qwen3.8-27b", "meta-models/muse-spark-open"],
                  "openai": ["gpt-4o-mini"]}
 # Groq modely časem vypíná (llama-4 scout/maverick 2026) → seznam se doplní z /models:
 # nejdřív známé vizuální, pak cokoli, co podle názvu bere obrázky.
@@ -4672,41 +4734,60 @@ Odpověz JEN JSON: {"positions": [{"name": "...", "ticker": null, "quantity": nu
 ETF_SUFFIXES = (".DE", ".L", ".AS", ".MI", ".PA", ".SW")
 
 
+_vision_state = {"kind": None, "retry_after": 0.0}
+
+
 def call_vision(image_data_url, prompt=IMPORT_PROMPT):
-    """Vrací (dict | list | None, chyba). Zkusí modely poskytovatele po řadě; když model
-    nebere `response_format` (HTTP 400), zopakuje dotaz bez něj a JSON vytáhne z textu."""
+    """Vrací (dict | list | None, chyba). Zkusí dostupné vizuální modely po řadě. Bezplatný Groq
+    má 8 000 tokenů/min a obrázek jich stojí tisíce → při HTTP 429 s krátkým čekáním se zopakuje
+    jednou hned; delší čekání (`retry_after`) předá klientovi, který to zkusí znovu."""
     prov = (os.environ.get("VISION_PROVIDER") or _llm_creds()[0]).lower()
     key = os.environ.get("VISION_API_KEY") or _llm_creds()[1]
+    _vision_state.update(kind=None, retry_after=0.0)
     if not key:
         return None, "Chybí API klíč pro AI (ANALYSIS_API_KEY)."
     url = ("https://api.openai.com/v1/chat/completions" if prov == "openai"
            else "https://api.groq.com/openai/v1/chat/completions")
     models = ([os.environ["VISION_MODEL"]] if os.environ.get("VISION_MODEL")
               else (_groq_vision_models(key) if prov != "openai" else VISION_MODELS["openai"]))
-    errs = []
-    for model in models:
-        for json_mode in (True, False):
-            payload = {"model": model, "temperature": 0, "max_tokens": 4000,
-                       "messages": [{"role": "user", "content": [
-                           {"type": "text", "text": prompt},
-                           {"type": "image_url", "image_url": {"url": image_data_url}}]}]}
-            if json_mode:
-                payload["response_format"] = {"type": "json_object"}
-            try:
-                r = requests.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                                  data=json.dumps(payload), timeout=25)
-                if r.status_code != 200:
-                    errs.append(f"{model}{'' if json_mode else ' (bez JSON režimu)'}: HTTP {r.status_code} {r.text[:140]}")
-                    if r.status_code == 400 and json_mode:
-                        continue          # zkusit stejný model bez response_format
-                    break                  # jiná chyba → další model
-                content = (((r.json() or {}).get("choices") or [{}])[0].get("message") or {}).get("content") or ""
-                content = re.sub(r"<think>.*?</think>", "", content, flags=re.S)   # Qwen umí vypsat úvahu
-                m = re.search(r"(\{.*\}|\[.*\])", content, re.S)
-                return json.loads(m.group(0) if m else content), None
-            except Exception as e:
-                errs.append(f"{model}: {str(e)[:120]}")
+    content = [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": image_data_url}}]
+    errs, codes, wait = [], [], 0.0
+    deadline = time.time() + 45
+    out_of_time = False
+    for model in models[:3]:
+        extras = {"reasoning_effort": "none"} if (prov != "openai" and "qwen3" in model.lower()) else {}
+        for jm, ex in ((True, extras), (False, {})):
+            st, text, err, ra = 0, None, None, 0.0
+            for attempt in range(2):
+                budget = deadline - time.time()
+                if budget < 6:
+                    out_of_time = True
+                    break
+                st, text, err, ra = _llm_post(url, key, model, content, jm, ex, min(30, budget), 2500, temperature=0)
+                if st == 429 and attempt == 0 and 0 < ra <= 8 and deadline - time.time() > ra + 12:
+                    time.sleep(ra + 0.4)
+                    continue
                 break
+            if out_of_time:
+                break
+            if st == 200:
+                data = _json_from_text(text)
+                if data is not None:
+                    return data, None
+                errs.append(f"{model}: odpověď není platný JSON")
+                continue
+            errs.append(err or f"{model}: bez odpovědi")
+            codes.append(st)
+            wait = max(wait, ra)
+            if st == 400:
+                continue                      # model nezná parametr / JSON režim → zopakovat bez nich
+            if st in (404, 410):
+                _vision_cache["ts"] = 0
+            break
+        if out_of_time:
+            errs.append("vypršel čas")
+            break
+    _vision_state.update(kind=_llm_kind(codes), retry_after=wait)
     return None, " | ".join(errs[-3:])
 
 
@@ -4794,9 +4875,44 @@ def _name_match(a, b):
     if not (ta and tb):
         return False
     ja, jb = "".join(w for w in la if w not in _NAME_STOP), "".join(w for w in lb if w not in _NAME_STOP)
-    if len(ja) >= 4 and (ja in jb or jb in ja):          # „Exxon Mobil" ↔ „ExxonMobil Holdings"
+    if min(len(ja), len(jb)) >= 4 and (ja in jb or jb in ja):          # „Exxon Mobil" ↔ „ExxonMobil Holdings"; „apple" ≠ „PPL"
         return True
     return len(ta & tb) / len(ta) >= 0.6
+
+
+_local_scan_cache = {"ts": 0.0, "scan": None}
+
+
+def _local_scan():
+    """Dnešní sken S&P 500 (jména + poslední ceny) – záloha, když Yahoo z Vercelu neodpoví."""
+    if _local_scan_cache["scan"] is not None and time.time() - _local_scan_cache["ts"] < 600:
+        return _local_scan_cache["scan"]
+    try:
+        sc = _ensure_scan_maps(market_scan(allow_step=False) or {}) or {}
+    except Exception:
+        sc = {}
+    if sc.get("name_map"):
+        _local_scan_cache.update(ts=time.time(), scan=sc)
+    return sc
+
+
+def _scan_candidates(raw_t, name, scan, limit=4):
+    """Kandidáti z našeho skenu podle tickeru nebo jména: [{ticker (Yahoo styl BRK-B), name, price, currency}]."""
+    names, pm = scan.get("name_map") or {}, scan.get("px_map") or {}
+    keys = []
+    k = _spx_key(raw_t) if raw_t else ""
+    if k and k in names:
+        keys.append(k)
+    if name:
+        hits = sorted((len(n), kk) for kk, n in names.items() if kk not in keys and _name_match(name, n))
+        keys += [kk for _l, kk in hits[:limit]]
+    out = []
+    for kk in keys[:limit]:
+        px = pm.get(kk)
+        if px and px[0]:
+            out.append({"ticker": kk.replace(".", "-"), "name": names.get(kk) or kk, "price": px[0],
+                        "currency": px[1] or "USD"})
+    return out
 
 
 def _resolve_position(p):
@@ -4820,6 +4936,8 @@ def _resolve_position(p):
             if x["ticker"].split(".")[0] == raw_t.split(".")[0]:
                 add(**x)
         add(raw_t)
+        if re.match(r"^[A-Z]{1,5}\.[A-Z]$", raw_t):          # BRK.B → Yahoo píše BRK-B
+            add(raw_t.replace(".", "-"))
         if "." not in raw_t:
             for suf in ETF_SUFFIXES[:3]:
                 add(raw_t + suf)
@@ -4841,6 +4959,14 @@ def _resolve_position(p):
         if qty and value_czk:
             c["err"] = abs(qty * px_czk - value_czk) / value_czk
         scored.append(c)
+    if not scored:                         # Yahoo neodpovědělo / titul nezná → zkus náš sken S&P 500
+        for lc in _scan_candidates(raw_t, name, _local_scan()):
+            fx = _fx_czk(lc["currency"])                # bez kurzu rozpoznáme titul, jen ho neoceníme v Kč
+            c = {"ticker": lc["ticker"], "name": lc["name"], "exchange": "S&P 500", "type": "EQUITY", "us": True,
+                 "price": round(lc["price"], 4), "currency": lc["currency"], "px_czk": lc["price"] * fx if fx else None}
+            if qty and value_czk:
+                c["err"] = abs(qty * c["px_czk"] - value_czk) / value_czk if c["px_czk"] else 9.0
+            scored.append(c)
     if not scored:
         return {"name": name or raw_t, "raw_ticker": raw_t, "ticker": None, "qty": qty,
                 "value_czk": round(value_czk) if value_czk else None, "status": "unresolved", "candidates": []}
@@ -4871,11 +4997,11 @@ def _resolve_position(p):
     return {
         "name": name or best["name"], "raw_ticker": raw_t or None, "ticker": best["ticker"],
         "qty": qty, "qty_derived": derived, "value_czk": round(value_czk) if value_czk else None,
-        "implied_czk": round(qty * best["px_czk"]) if qty else None, "status": status, "no_qty": qty is None,
+        "implied_czk": round(qty * best["px_czk"]) if (qty and best.get("px_czk")) else None, "status": status, "no_qty": qty is None,
         "avg_price": _num(p.get("avg_price")),
         "candidates": [{"ticker": c["ticker"], "name": c["name"], "exchange": c["exchange"],
                         "price": c["price"], "currency": c["currency"],
-                        "implied_czk": round(qty * c["px_czk"]) if qty else None}
+                        "implied_czk": round(qty * c["px_czk"]) if (qty and c.get("px_czk")) else None}
                        for c in sorted(scored, key=lambda c: (c is not best, c.get("err", 9)))[:5]],
     }
 
@@ -4903,7 +5029,14 @@ def api_holdings_import():
                 kv_set_json("import:last", {"ts": int(time.time()), "ok": False, "error": err})
             except Exception:
                 pass
-            return jsonify({"ok": False, "error": "Fotku se nepodařilo přečíst.", "detail": err}), 502
+            kind = _vision_state.get("kind")
+            if kind == "limit":
+                ra = round(_vision_state.get("retry_after") or 20)
+                msg = (f"Denní bezplatný limit AI na čtení fotek je vyčerpaný (obnoví se asi za {ra // 60 + 1} min) – "
+                       "seznam akcií zatím napiš jako text." if ra > 90
+                       else "Bezplatný limit AI je právě vyčerpaný – zkusím to znovu za chvíli.")
+                return jsonify({"ok": False, "kind": "limit", "retry_after": ra, "error": msg, "detail": err}), 429
+            return jsonify({"ok": False, "kind": kind, "error": "Fotku se nepodařilo přečíst.", "detail": err}), 502
         raw = _vision_positions(data)
         if not raw:
             preview = json.dumps(data, ensure_ascii=False)[:300]
@@ -6815,7 +6948,7 @@ def ai_brief():
               '"top_picks":[{"ticker":"X","reason":"krátký pádný důvod k nákupu"}]}. Max 2 tipy. Česky.')
     out = call_llm(prompt)
     if not isinstance(out, dict):
-        return jsonify({"ok": False, "error": "Nepodařilo se, zkus to znovu."}), 502
+        return jsonify({"ok": False, "error": _llm_fail_msg(admin=user in admin_users())}), 502
     return jsonify({"ok": True, "summary": out.get("summary", ""), "top_picks": out.get("top_picks", [])})
 
 
@@ -6832,7 +6965,7 @@ def ai_eval():
               '"buy":[{"ticker":"X","reason":"proč přikoupit/koupit","upside":"+15%"}]}. Max 3 v každé sekci. Česky.')
     out = call_llm(prompt)
     if not isinstance(out, dict):
-        return jsonify({"ok": False, "error": "Nepodařilo se, zkus to znovu."}), 502
+        return jsonify({"ok": False, "error": _llm_fail_msg(admin=user in admin_users())}), 502
     return jsonify({"ok": True, "summary": out.get("summary", ""),
                     "sell": out.get("sell", []), "buy": out.get("buy", [])})
 
@@ -6852,7 +6985,7 @@ def ai_chat():
               "Nepoužívej markdown ani hvězdičky. Na konci krátce připomeň, že nejde o investiční doporučení.")
     answer = call_llm(prompt, json_mode=False)
     if not answer:
-        return jsonify({"ok": False, "error": "Nepodařilo se, zkus to znovu."}), 502
+        return jsonify({"ok": False, "error": _llm_fail_msg(admin=user in admin_users())}), 502
     return jsonify({"ok": True, "answer": answer})
 
 
@@ -8451,6 +8584,44 @@ def admin_email_status():
                     "last_send_weekly": kv_get_json("cron:send:weekly"), "send_hour": SEND_HOUR_PRAGUE,
                     "ai_enabled": analysis_enabled(), "news_status": kv_get_json("news:digest:status"),
                     "import_last": kv_get_json("import:last"), "llm_last": kv_get_json("llm:last")})
+
+
+@app.route("/api/admin/ai-test", methods=["POST"])
+def admin_ai_test():
+    """Rychlá diagnostika AI: které modely poskytovatel nabízí a který opravdu odpoví (a za jak dlouho)."""
+    admin = _auth_admin()
+    if not admin:
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    prov, key = _llm_creds()
+    if not key:
+        return jsonify({"ok": False, "error": "Na Vercelu chybí ANALYSIS_API_KEY."}), 503
+    url = ("https://api.openai.com/v1/chat/completions" if prov == "openai"
+           else "https://api.groq.com/openai/v1/chat/completions")
+    _llm_cache["ts"] = 0
+    _vision_cache["ts"] = 0
+    models = _llm_models(prov, key)
+    avail = None
+    if prov != "openai":
+        try:
+            r = requests.get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"}, timeout=6)
+            if r.status_code == 200:
+                avail = sorted(m.get("id") for m in (r.json() or {}).get("data", []) if m.get("id"))
+            else:
+                avail = f"HTTP {r.status_code} {r.text[:120]}"
+        except Exception as e:
+            avail = f"chyba: {str(e)[:100]}"
+    out = []
+    for model in models[:4]:
+        t0 = time.time()
+        extras = _llm_extras(model) if prov != "openai" else {}
+        st, text, err, _ra = _llm_post(url, key, model, 'Vrať POUZE JSON: {"ok": true, "slovo": "ahoj"}', True, extras, 15, 200)
+        if st == 400:
+            st, text, err, _ra = _llm_post(url, key, model, 'Vrať POUZE JSON: {"ok": true, "slovo": "ahoj"}', False, {}, 15, 200)
+        good = st == 200 and _json_from_text(text) is not None
+        out.append({"model": model, "ok": good, "status": st, "ms": int((time.time() - t0) * 1000),
+                    "err": None if good else (err or "odpověď není platný JSON")})
+    vision = _groq_vision_models(key) if prov != "openai" else VISION_MODELS["openai"]
+    return jsonify({"ok": True, "provider": prov, "available": avail, "models": out, "vision": vision})
 
 
 @app.route("/api/admin/weekly-test", methods=["POST"])
