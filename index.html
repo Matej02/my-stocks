@@ -1930,7 +1930,7 @@ body.modal-open {overflow:hidden;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.22·f</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.23·a</div>
 
 <div class="container">
   
@@ -5246,6 +5246,7 @@ async function loadEmailStatus() {
             ok(d.cron_secret, 'Ranní cron má heslo (CRON_SECRET)', 'na Vercelu chybí CRON_SECRET – bez něj cron nic neudělá') +
             ok(d.me.morning, `Ty máš ranní souhrn zapnutý (${escapeHtml(d.me.email)})`, 'zapni ho v Profil → Notifikace') +
             ok(d.ai_enabled, 'AI shrnutí zpráv zapnuté (ANALYSIS_API_KEY)', 'bez klíče briefing ukazuje jen čísla a témata, ne vysvětlení příčin') +
+            (d.llm_last ? `<div style="color:var(--text2)">Poslední volání AI: <b style="color:var(--text)">${when(d.llm_last)}</b> · ${d.llm_last.ok ? 'model <b style="color:var(--up)">' + escapeHtml(d.llm_last.model || '?') + '</b>' : '<span style="color:var(--down)">selhalo: ' + escapeHtml(d.llm_last.err || '?') + '</span>'}</div>` : '') +
             (d.import_last ? `<div style="color:var(--text2)">Poslední import z fotky/textu: <b style="color:var(--text)">${when(d.import_last)}</b> · ${d.import_last.ok ? `přečteno ${d.import_last.read || 0}, nalezeno ${d.import_last.resolved || 0}${d.import_last.note ? ' · <span style="color:var(--amber)">' + escapeHtml(d.import_last.note) + '</span>' : ''}` : '<span style="color:var(--down)">chyba: ' + escapeHtml(d.import_last.error || '?') + '</span>'}</div>` : '') +
             (d.news_status ? `<div style="color:var(--text2)">Poslední briefing: <b style="color:var(--text)">${when(d.news_status)}</b> · nálada ${escapeHtml(d.news_status.mood || '')} · AI ${d.news_status.ai ? 'ano' : 'ne (' + escapeHtml(d.news_status.ai_status || '?') + ')'}</div>` : '') +
             `<div style="color:var(--text2)">Odběratelé: ranní ${d.recipients.morning}, sobotní ${d.recipients.weekly}</div>` +
@@ -7355,7 +7356,7 @@ function renderImport() {
     if (impState.step === 'pick') {
         body.innerHTML = `<div class="cmp-sub" style="margin-bottom:12px">Appka z obrázku přečte <b>názvy akcií</b> (a počty kusů, když jsou vidět) a každou ověří proti burze. Počty kusů nejsou povinné – stačí vědět, co vlastníš. Než se cokoli uloží, všechno zkontroluješ.</div>
           <label class="mp-drop" id="imp-drop"><i class="ti ti-photo-up"></i><b>Vyber screenshoty</b> nebo je sem přetáhni<br><span style="font-size:12px">JPG / PNG / HEIC (iPhone), klidně víc najednou</span>
-            <input type="file" id="imp-file" accept="image/*,.heic,.heif" multiple style="display:none" onchange="impFiles(this.files)"></label>
+            <input type="file" id="imp-file" accept="${impAccept()}" multiple style="display:none" onchange="impFiles(this.files)"></label>
           <ul class="mp-tips">
             <li>Trading 212 → <b>Portfolio</b> (Investice) → seznam pozic. Vyfoť celý seznam, při scrollování klidně s překryvem.</li>
             <li>Nejlepší je, když je u pozic vidět <b>počet kusů</b> i <b>hodnota v Kč</b> – podle hodnoty appka pozná správnou burzu (např. CSPX v USD vs. SXR8 v EUR).</li>
@@ -7433,35 +7434,15 @@ function impCheckHTML(r) {
     return t;
 }
 
+// iOS: s `image/*` Safari fotku z knihovny sám převede na JPEG; s `.heic` v accept by poslal originál. Jinde `.heic` přidáme, ať ho výběr souborů nabídne.
+const impAccept = () => (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) ? 'image/*' : 'image/*,.heic,.heif';
 const impIsHeic = f => /image\/hei[cf]/i.test(f.type) || /\.hei[cf]$/i.test(f.name || '');
-let _heicLib = null;
-function impHeicLib() {   // převodník HEIC → JPEG, načte se jen když prohlížeč HEIC sám neumí (Chrome, Android, Windows)
-    if (window.heic2any) return Promise.resolve(window.heic2any);
-    return _heicLib = _heicLib || new Promise((res, rej) => {
-        const sc = document.createElement('script');
-        sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js';
-        sc.onload = () => window.heic2any ? res(window.heic2any) : rej(new Error('heic'));
-        sc.onerror = () => { _heicLib = null; rej(new Error('heic')); };
-        document.head.appendChild(sc);
-    });
-}
-function impLoadImg(blob) {
-    // URL se uvolní až po vykreslení (impPrep) – Safari jinak obrázek nedekóduje
-    const url = URL.createObjectURL(blob);
-    return new Promise((res, rej) => {
-        const im = new Image();
-        im.onload = () => { im._url = url; res(im); };
-        im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('nelze dekódovat')); };
-        im.src = url;
-    });
-}
 function impReadDataURL(blob) {
     return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('nelze přečíst')); fr.readAsDataURL(blob); });
 }
 async function impDecode(file) {
-    // 1) createImageBitmap (rychlé, iOS 15+), 2) <img> z blobu, 3) <img> z data URL
+    // CSP (img-src) blokuje <img src="blob:…"> → 1) createImageBitmap (iOS 15+, Chrome), 2) <img> z data URL
     if (window.createImageBitmap) { try { return await createImageBitmap(file); } catch (e) {} }
-    try { return await impLoadImg(file); } catch (e) {}
     const du = await impReadDataURL(file);
     return await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('nelze dekódovat')); im.src = du; });
 }
@@ -7471,8 +7452,8 @@ async function impPrep(file) {
     try { img = await impDecode(file); }
     catch (e) {
         if (impIsHeic(file)) {
-            const conv = await (await impHeicLib())({ blob: file, toType: 'image/jpeg', quality: 0.9 });
-            img = await impDecode(Array.isArray(conv) ? conv[0] : conv);
+            // převod HEIC v prohlížeči by vyžadoval povolit eval/worker v CSP → nedělá se; Safari/iOS HEIC čtou samy
+            throw new Error('tenhle prohlížeč formát HEIC neumí – otevři appku v Safari, nebo vyber JPG/PNG');
         } else {
             // prohlížeč obrázek neotevře → pošli originál, AI ho přečte sama
             const du = await impReadDataURL(file);
@@ -7500,7 +7481,6 @@ async function impPrep(file) {
         }
         return out;
     } finally {
-        if (img && img._url) URL.revokeObjectURL(img._url);
         if (img && img.close) img.close();
     }
 }
@@ -7513,7 +7493,7 @@ async function impFiles(files) {
     let images = [];
     for (const f of files) {
         try { images = images.concat(await impPrep(f)); }
-        catch (e) { impState.errors.push(`${f.name}: obrázek nejde otevřít (${(e && e.message) || 'neznámá chyba'}${impIsHeic(f) ? ', převod HEIC selhal' : ''}).`); }
+        catch (e) { impState.errors.push(`${f.name}: obrázek nejde otevřít (${(e && e.message) || 'neznámá chyba'}).`); }
     }
     impState.total = images.length; impState.done = 0;
     renderImport();

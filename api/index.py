@@ -1870,30 +1870,135 @@ def analysis_enabled():
     return bool(os.environ.get("ANALYSIS_API_KEY"))
 
 
+# Groq modely se po čase vypínají (llama-4 17. 7. 2026, llama-3.3-70b-versatile 16. 8. 2026,
+# qwen3.6-27b 14. 9. 2026) → napevno zadaný model jednou přestane fungovat a všechna AI
+# (analýza, briefing, zprávy k akciím) tiše vypadne. Proto se dostupné modely čtou ze /models,
+# zkouší se po řadě a poslední výsledek je v KV `llm:last` (Admin → stav e-mailů).
+LLM_PREFERRED = {"groq": ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile", "openai/gpt-oss-20b"],
+                 "openai": ["gpt-4o-mini"]}
+_LLM_SKIP_RX = re.compile(r"(whisper|guard|tts|orpheus|playai|embed|compound|safeguard|distil|vision|allam|scout|maverick)", re.I)
+_llm_cache = {"ts": 0, "models": None}
+_llm_state = {"err": None, "model": None, "noted": None}
+
+
+def _llm_models(prov, key):
+    env = (os.environ.get("ANALYSIS_MODEL") or "").strip()
+    pref = LLM_PREFERRED.get(prov) or LLM_PREFERRED["groq"]
+    base = ([env] if env else []) + [m for m in pref if m != env]
+    if prov == "openai":
+        return base
+    if _llm_cache["models"] and time.time() - _llm_cache["ts"] < 6 * 3600:
+        return _llm_cache["models"]
+    try:
+        r = requests.get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"}, timeout=6)
+        ids = [m.get("id") for m in (r.json() or {}).get("data", []) if m.get("id") and m.get("active", True)]
+    except Exception:
+        return base
+    if not ids:
+        return base
+    avail = [m for m in base if m in ids]
+    extra = sorted(m for m in ids if m not in base and not _LLM_SKIP_RX.search(m))
+    models = (avail + extra)[:4] or base
+    _llm_cache.update(ts=time.time(), models=models)
+    return models
+
+
+def _llm_extras(model):
+    """Parametry, které zrychlí / uklidí úvahové modely (když je model nezná → HTTP 400 → zopakuje se bez nich)."""
+    m = model.lower()
+    if "gpt-oss" in m:
+        return {"reasoning_effort": "low"}
+    if "qwen3" in m:
+        return {"reasoning_format": "hidden"}
+    return {}
+
+
+def _json_from_text(text):
+    text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.S).strip()
+    for cand in (text, re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip()):
+        try:
+            return json.loads(cand)
+        except Exception:
+            pass
+    m = re.search(r"\{.*\}", text, re.S)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except Exception:
+            pass
+    return None
+
+
+def _llm_note(model, err):
+    """Zapíše do KV poslední stav AI (jen při změně), ať je vidět, kdy a proč přestala fungovat."""
+    _llm_state["err"], _llm_state["model"] = err, model
+    sig = (bool(model), model, (err or "")[:80])
+    if _llm_state["noted"] == sig:
+        return
+    _llm_state["noted"] = sig
+    try:
+        kv_set_json("llm:last", {"ts": int(time.time()), "ok": bool(model),
+                                 "model": model, "err": (err or "")[:600] or None})
+    except Exception:
+        pass
+
+
 def call_llm(prompt, json_mode=True):
     prov, key = _llm_creds()
     if not key:
         return None
-    if prov == "openai":
-        url = "https://api.openai.com/v1/chat/completions"
-        model = os.environ.get("ANALYSIS_MODEL", "gpt-4o-mini")
-    else:
-        url = "https://api.groq.com/openai/v1/chat/completions"
-        model = os.environ.get("ANALYSIS_MODEL", "llama-3.3-70b-versatile")
-    payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.4}
-    if json_mode:
-        payload["response_format"] = {"type": "json_object"}
-    try:
-        r = requests.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                          data=json.dumps(payload), timeout=28)
-        if r.status_code != 200:
-            return None
-        content = (((r.json() or {}).get("choices") or [{}])[0].get("message") or {}).get("content")
-        if not json_mode:
-            return content
-        return json.loads(content)
-    except Exception:
-        return None
+    url = ("https://api.openai.com/v1/chat/completions" if prov == "openai"
+           else "https://api.groq.com/openai/v1/chat/completions")
+    errs = []
+    deadline = time.time() + 42
+    for model in _llm_models(prov, key)[:3]:
+        extras = _llm_extras(model) if prov != "openai" else {}
+        variants = [(json_mode, extras)] + ([(False, {})] if (json_mode or extras) else [])
+        for jm, ex in variants:
+            budget = deadline - time.time()
+            if budget < 4:
+                _llm_note(None, " | ".join(errs[-3:]) or "vypršel čas")
+                return None
+            payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.4,
+                       "max_tokens": 3500, **ex}
+            if jm:
+                payload["response_format"] = {"type": "json_object"}
+            try:
+                r = requests.post(url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                                  data=json.dumps(payload), timeout=min(28, budget))
+            except requests.exceptions.Timeout:
+                errs.append(f"{model}: časový limit")
+                _llm_note(None, " | ".join(errs[-3:]))
+                return None
+            except Exception as e:
+                errs.append(f"{model}: {str(e)[:100]}")
+                break
+            if r.status_code == 200:
+                try:
+                    content = (((r.json() or {}).get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+                except Exception:
+                    content = ""
+                if not json_mode:
+                    content = re.sub(r"<think>.*?</think>", "", content, flags=re.S).strip()
+                    if content:
+                        _llm_note(model, None)
+                        return content
+                    errs.append(f"{model}: prázdná odpověď")
+                    break
+                data = _json_from_text(content)
+                if data is not None:
+                    _llm_note(model, None)
+                    return data
+                errs.append(f"{model}: odpověď není platný JSON")
+                continue                      # zkusit ještě bez JSON režimu
+            errs.append(f"{model}: HTTP {r.status_code} {r.text[:110]}")
+            if r.status_code == 400:
+                continue                      # model nezná parametr / JSON režim → zopakovat bez nich
+            if r.status_code in (404, 410):
+                _llm_cache["ts"] = 0          # model zmizel → příště znovu načíst seznam
+            break                             # jiná chyba (limit, výpadek) → další model
+    _llm_note(None, " | ".join(errs[-3:]) or "žádný dostupný model")
+    return None
 
 
 def _perf_windows(closes):
@@ -2560,7 +2665,10 @@ def deep_analysis(ticker):
             facts["suggested_levels"] = levels
         report = call_llm(build_analysis_prompt(facts, model))
         if not report:
-            return jsonify({"ok": False, "error": "Analýzu se nepodařilo vygenerovat, zkus to znovu."}), 502
+            msg = "Analýzu se nepodařilo vygenerovat, zkus to znovu."
+            if is_admin:                      # admin vidí, proč (model vypnutý, limit, …)
+                msg += f" (AI: {_llm_state.get('err') or 'neznámá chyba'})"
+            return jsonify({"ok": False, "error": msg}), 502
 
         # Verdikt, jistotu i úrovně bereme VŽDY z výpočtu (no guesses), ne z AI
         report["verdict"] = model["verdict"]
@@ -8342,7 +8450,7 @@ def admin_email_status():
                     "last_run_morning": kv_get_json("cron:run:morning"), "last_send_morning": kv_get_json("cron:send:morning"),
                     "last_send_weekly": kv_get_json("cron:send:weekly"), "send_hour": SEND_HOUR_PRAGUE,
                     "ai_enabled": analysis_enabled(), "news_status": kv_get_json("news:digest:status"),
-                    "import_last": kv_get_json("import:last")})
+                    "import_last": kv_get_json("import:last"), "llm_last": kv_get_json("llm:last")})
 
 
 @app.route("/api/admin/weekly-test", methods=["POST"])
