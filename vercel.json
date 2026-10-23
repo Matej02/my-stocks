@@ -98,6 +98,14 @@
     {
       "path": "/api/cron/weekly-digest",
       "schedule": "0 7 * * 6"
+    },
+    {
+      "path": "/api/cron/daily",
+      "schedule": "55 5 * * *"
+    },
+    {
+      "path": "/api/cron/daily",
+      "schedule": "25 6 * * *"
     }
   ]
 }

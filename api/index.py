@@ -2937,7 +2937,7 @@ def track_record():
     """Agregovaná úspěšnost dosavadních verdiktů (re-fetch aktuálních cen)."""
     try:
         model = _model_record()
-        verdicts = kv_lrange("verdicts", -200, -1)
+        verdicts = kv_lrange("verdicts", -400, -1)
         if not verdicts:
             return jsonify({"ok": True, "count": 0, "items": [], "stats": {}, "model": model})
         # Aktuální ceny (unikátní tickery)
@@ -8564,6 +8564,16 @@ def cron_weekly_digest():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+def _scan_brief():
+    """Poslední hotový sken v kostce (pro Admin: je dnešní sken hotový?)."""
+    try:
+        sc = kv_get_json("scan:last") or {}
+        return {"date": sc.get("date"), "updated": sc.get("updated"), "scanned": sc.get("scanned"),
+                "signals": len(sc.get("signals") or []), "today": sc.get("date") == _today_iso()}
+    except Exception:
+        return None
+
+
 @app.route("/api/admin/email-status")
 def admin_email_status():
     """Proč (ne)chodí ranní/týdenní e-maily – vše na jednom místě."""
@@ -8583,7 +8593,10 @@ def admin_email_status():
                     "last_run_morning": kv_get_json("cron:run:morning"), "last_send_morning": kv_get_json("cron:send:morning"),
                     "last_send_weekly": kv_get_json("cron:send:weekly"), "send_hour": SEND_HOUR_PRAGUE,
                     "ai_enabled": analysis_enabled(), "news_status": kv_get_json("news:digest:status"),
-                    "import_last": kv_get_json("import:last"), "llm_last": kv_get_json("llm:last")})
+                    "import_last": kv_get_json("import:last"), "llm_last": kv_get_json("llm:last"),
+                    "daily_last": kv_get_json("auto:last"), "scan_last": _scan_brief(),
+                    "verdict_count": len(kv_lrange("verdicts", -400, -1) or []),
+                    "paper_count": len(kv_lrange("paper:trades", -400, -1) or [])})
 
 
 @app.route("/api/admin/ai-test", methods=["POST"])
@@ -8638,6 +8651,149 @@ def admin_weekly_test():
         ok = send_email(admin, "📊 Týdenní shrnutí – MY ADVANTAGE (TEST)",
                         build_weekly_digest_html(admin, top_signals, top_opps))
         return jsonify({"ok": ok, "sent_to": admin, "error": _LAST_EMAIL_ERROR["msg"]})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# DENNÍ AUTOMATIKA (2026-10). Track record v „Doporučení“ se dřív plnil jen ručně spuštěnou
+# hloubkovou analýzou (proto tam zůstal červen). Teď to jednou denně udělá appka sama:
+#  1) dokončí dnešní sken S&P 500 (z něj se zapisuje živý záznam signálů),
+#  2) vytvoří verdikty (stejný deterministický model jako hloubková analýza, jen bez AI textu)
+#     pro to, co appka dnes doporučuje: signály dne + koš tipů. Titul s verdiktem z posledních
+#     10 dnů se nezapisuje znovu, takže se záznam nenafukuje opakováním.
+# Spouští to cron (5:55 a 6:25 UTC) a jako záloha první přihlášení admina za den. Každý verdikt
+# se ukládá hned, takže přerušené spuštění nic neztratí a další volání pokračuje.
+# ---------------------------------------------------------------------------
+AUTO_BUDGET_S = float(os.environ.get("AUTO_BUDGET_S") or 30)
+AUTO_PER_RUN = 8              # Finnhub zdarma: 60 volání/min, jeden titul jich chce ~7
+AUTO_SIGNALS = 5
+AUTO_BASKET = 10
+AUTO_DUP_DAYS = 10
+
+
+def _auto_universe(scan):
+    """[(ticker ve stylu Yahoo, zdroj)] – signály dne a koš tipů, bez duplicit."""
+    out, seen = [], set()
+    for sg in (scan.get("signals") or [])[:AUTO_SIGNALS]:
+        t = (sg.get("ticker") or "").replace(".", "-")
+        if t and t not in seen:
+            seen.add(t)
+            out.append((t, "signal"))
+    try:
+        for k, _src in _mix_basket(scan, AUTO_BASKET):
+            t = k.replace(".", "-")
+            if t not in seen and len([1 for _t, s_ in out if s_ == "basket"]) < AUTO_BASKET:
+                seen.add(t)
+                out.append((t, "basket"))
+    except Exception:
+        pass
+    return out
+
+
+def _auto_verdict(ticker, src):
+    """Verdikt + plán (cíl/stop/horizont) z dat – stejný zápis, jaký dělá hloubková analýza."""
+    facts = gather_facts(ticker)
+    if not facts.get("price"):
+        return None
+    model = compute_verdict_model(facts)
+    levels = compute_levels(facts, horizon=10) or {}
+    return {"ticker": facts["ticker"], "ts": int(time.time()), "verdict": model["verdict"], "price": facts.get("price"),
+            "target": levels.get("target_price"), "currency": facts.get("currency"), "stop": levels.get("stop_loss"),
+            "horizon_days": levels.get("horizon_days", 10), "score": model.get("score"), "user": "auto", "src": src}
+
+
+def _daily_auto(budget_s=None):
+    """Jeden krok denní automatiky → stav dne {done, added, total, stage, …}. Opakovatelné: bez práce vrátí stav."""
+    budget = budget_s or AUTO_BUDGET_S
+    t0 = time.time()
+    date = _today_iso()
+    key = f"auto:day:{date}"
+    st = kv_get_json(key) or {}
+    if st.get("done"):
+        return st
+    lock = kv_get_json(f"auto:lock:{date}") or 0
+    if time.time() - (lock if isinstance(lock, (int, float)) else 0) < 45:
+        return dict(st, busy=True)                 # jiné spuštění právě pracuje (cron × přihlášení admina)
+    kv_set_json(f"auto:lock:{date}", time.time())
+    st.update(date=date)
+    for k, v in (("added", 0), ("tried", []), ("fails", {}), ("verdicts", {})):
+        st.setdefault(k, v)
+    try:
+        scan = kv_get_json(f"scan:{date}") or _scan_step(max(8, budget - 10))
+        if not scan:                               # sken ještě běží → další volání pokračuje
+            st.update(stage="scan", scan=False, ts=int(time.time()))
+            kv_set_json(key, st)
+            return st
+        st.update(scan=True, scan_signals=len(scan.get("signals") or []))
+        uni = _auto_universe(_ensure_scan_maps(scan))
+        try:
+            recent = kv_lrange("verdicts", -600, -1) or []
+        except Exception:
+            recent = []
+        cutoff = time.time() - AUTO_DUP_DAYS * 86400
+        have = {v.get("ticker") for v in recent if (v.get("ts") or 0) > cutoff}
+        st["total"] = len(uni)
+        st["skipped"] = len([1 for t, _s in uni if t in have and t not in st["tried"]])
+        todo = [(t, sr) for t, sr in uni if t not in have and t not in st["tried"]]
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutTimeout
+        ex = ThreadPoolExecutor(max_workers=2)
+        try:
+            futs = [(t, sr, ex.submit(_auto_verdict, t, sr)) for t, sr in todo[:AUTO_PER_RUN]]
+            for t, sr, fut in futs:
+                try:
+                    rec = fut.result(timeout=max(1.0, budget - (time.time() - t0)))
+                except FutTimeout:
+                    continue                       # nestihlo se → příště
+                except Exception:
+                    rec = None
+                if rec:
+                    kv_rpush("verdicts", rec)
+                    st["added"] += 1
+                    st["verdicts"][t] = rec["verdict"]
+                    st["tried"].append(t)
+                else:
+                    st["fails"][t] = st["fails"].get(t, 0) + 1
+                    if st["fails"][t] >= 2:
+                        st["tried"].append(t)      # dvakrát se nepovedlo → dnes už ne
+                kv_set_json(key, st)               # průběh hned – přežije i přerušené spuštění
+        finally:
+            ex.shutdown(wait=False)
+        st["done"] = not [1 for t, _sr in todo if t not in st["tried"]]
+        st.update(stage="done" if st["done"] else "verdicts", ts=int(time.time()))
+        kv_set_json(key, st)
+        kv_set_json("auto:last", {k: st.get(k) for k in ("date", "ts", "added", "total", "skipped", "done", "scan", "scan_signals")})
+        return st
+    finally:
+        try:
+            kv_set_json(f"auto:lock:{date}", 0)
+        except Exception:
+            pass
+
+
+@app.route("/api/cron/daily")
+def cron_daily():
+    """Denní automatika (sken → verdikty pro track record). Běží 2× denně, bezpečně opakovatelné."""
+    err = _cron_auth()
+    if err:
+        return err
+    try:
+        st = _daily_auto()
+        return jsonify({"ok": True, "done": bool(st.get("done")), "added": st.get("added"), "stage": st.get("stage")})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/daily", methods=["POST"])
+def admin_daily():
+    """Denní automatika po přihlášení admina (1× za den) nebo ručně z Admin panelu. Volá se opakovaně, dokud není hotovo."""
+    if not _auth_admin():
+        return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
+    try:
+        st = _daily_auto()
+        return jsonify({"ok": True, "done": bool(st.get("done")), "busy": bool(st.get("busy")), "added": st.get("added", 0),
+                        "total": st.get("total"), "skipped": st.get("skipped"), "stage": st.get("stage"),
+                        "scan": st.get("scan"), "verdicts": st.get("verdicts") or {}})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
