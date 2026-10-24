@@ -1374,12 +1374,10 @@ def notifications():
             return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
         if request.method == "POST":
             body = request.get_json(silent=True) or {}
-            rec["notif"] = {
-                "morning": bool(body.get("morning")),
-                "weekly": bool(body.get("weekly")),
-            }
+            old = rec.get("notif") or {}
+            rec["notif"] = {k: (bool(body[k]) if k in body else bool(old.get(k))) for k in ("morning", "weekly", "alerts")}
             kv_set_json(f"user:{user}", rec)
-        return jsonify({"ok": True, "notif": rec.get("notif", {"morning": False, "weekly": False})})
+        return jsonify({"ok": True, "notif": rec.get("notif", {"morning": False, "weekly": False, "alerts": False})})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
@@ -1867,7 +1865,7 @@ def _llm_creds():
 
 
 def analysis_enabled():
-    return bool(os.environ.get("ANALYSIS_API_KEY"))
+    return bool(os.environ.get("ANALYSIS_API_KEY") or _fallback_providers())
 
 
 # Groq modely se po čase vypínají (llama-4 17. 7. 2026, llama-3.3-70b-versatile 16. 8. 2026,
@@ -2016,26 +2014,30 @@ def _llm_post(url, key, model, prompt, jm, extras, timeout, max_tokens, temperat
 
 def call_llm(prompt, json_mode=True):
     prov, key = _llm_creds()
-    if not key:
+    if not key and not _fallback_providers():
         return None
     url = ("https://api.openai.com/v1/chat/completions" if prov == "openai"
            else "https://api.groq.com/openai/v1/chat/completions")
     errs, codes, wait = [], [], 0.0
     deadline = time.time() + 42
     max_tokens = max(700, min(3500, LLM_TPM_BUDGET - _est_tokens(prompt))) if prov != "openai" else 3500
-    for model in _llm_models(prov, key)[:3]:
+    stop = False
+    for model in (_llm_models(prov, key)[:3] if key else []):
+        if stop:
+            break
         extras = _llm_extras(model) if prov != "openai" else {}
         variants = [(json_mode, extras)] + ([(False, {})] if (json_mode or extras) else [])
         for jm, ex in variants:
             budget = deadline - time.time()
             if budget < 4:
-                _llm_note(None, " | ".join(errs[-3:]) or "vypršel čas", _llm_kind(codes), wait)
-                return None
+                stop = True
+                break
             st, content, err, ra = _llm_post(url, key, model, prompt, jm, ex, min(28, budget), max_tokens)
             if st == 0 and "časový limit" in (err or ""):
                 errs.append(err)
-                _llm_note(None, " | ".join(errs[-3:]), "down", 0)
-                return None
+                codes.append(0)
+                stop = True                       # Groq neodpovídá → rovnou zálohy
+                break
             if st == 200:
                 if not json_mode:
                     content = re.sub(r"<think>.*?</think>", "", content, flags=re.S).strip()
@@ -2058,8 +2060,97 @@ def call_llm(prompt, json_mode=True):
             if st in (404, 410):
                 _llm_cache["ts"] = 0          # model zmizel → příště znovu načíst seznam
             break                             # jiná chyba (limit, výpadek) → další model
+    res, used = _fallback_call(prompt, json_mode, deadline, errs, codes, max_tokens=max_tokens)
+    if res is not None:
+        _llm_note(used, None)
+        return res
     _llm_note(None, " | ".join(errs[-3:]) or "žádný dostupný model", _llm_kind(codes), wait)
     return None
+
+
+
+# ---------------------------------------------------------------------------
+# ZÁLOŽNÍ BEZPLATNÍ POSKYTOVATELÉ AI. Když Groq nestačí (bezplatný limit, výpadek, vypnutý model),
+# zkusí se další – stačí na Vercelu nastavit klíč (všechny mají bezplatný tarif bez karty):
+#   GEMINI_API_KEY (aistudio.google.com – umí i obrázky), CEREBRAS_API_KEY, OPENROUTER_API_KEY.
+# Modely se zjišťují z jejich /models (stejně jako u Groq), takže vypnutý model nic nerozbije.
+# ---------------------------------------------------------------------------
+AI_FALLBACKS = (
+    {"id": "gemini", "env": "GEMINI_API_KEY", "base": "https://generativelanguage.googleapis.com/v1beta/openai", "vision": True},
+    {"id": "cerebras", "env": "CEREBRAS_API_KEY", "base": "https://api.cerebras.ai/v1", "vision": False},
+    {"id": "openrouter", "env": "OPENROUTER_API_KEY", "base": "https://openrouter.ai/api/v1", "vision": True},
+)
+_FB_DEFAULT = {"gemini": (["gemini-flash-latest", "gemini-2.5-flash"], ["gemini-flash-latest", "gemini-2.5-flash"]),
+               "cerebras": (["gpt-oss-120b", "llama-3.3-70b"], []),
+               "openrouter": (["meta-llama/llama-3.3-70b-instruct:free", "deepseek/deepseek-chat-v3-0324:free"],
+                              ["qwen/qwen2.5-vl-72b-instruct:free", "meta-llama/llama-4-maverick:free"])}
+_fb_cache = {}
+
+
+def _fallback_providers(vision=False):
+    return [dict(p, key=os.environ.get(p["env"])) for p in AI_FALLBACKS
+            if os.environ.get(p["env"]) and (p["vision"] or not vision)]
+
+
+def _fb_models(prov, vision=False):
+    """Vybere 2 modely poskytovatele (text / obrázky) z jeho /models; kešováno 6 h."""
+    pid = prov["id"]
+    c = _fb_cache.get(pid)
+    if not c or time.time() - c["ts"] > 6 * 3600:
+        text, vis = list(_FB_DEFAULT[pid][0]), list(_FB_DEFAULT[pid][1])
+        try:
+            r = requests.get(prov["base"] + "/models", headers={"Authorization": f"Bearer {prov['key']}"}, timeout=6)
+            data = (r.json() or {}).get("data") or [] if r.status_code == 200 else []
+            ids = [(m.get("id") or "").replace("models/", "") for m in data if m.get("id")]
+            if pid == "gemini" and ids:
+                fl = [i for i in ids if re.match(r"^gemini-(flash-latest|\d+(\.\d+)?-flash)$", i)]
+                fl.sort(key=lambda i: (i != "gemini-flash-latest", [-float(x) for x in re.findall(r"\d+(?:\.\d+)?", i)[:1]]))
+                lite = sorted(i for i in ids if re.match(r"^gemini-(flash-lite-latest|\d+(\.\d+)?-flash-lite)$", i))
+                text = vis = (fl + lite)[:3] or text
+            elif pid == "cerebras" and ids:
+                pref = ["gpt-oss-120b", "qwen-3-235b-a22b-instruct-2507", "llama-3.3-70b", "qwen-3-32b", "llama3.1-8b"]
+                text = [i for i in pref if i in ids] + [i for i in ids if i not in pref and "embed" not in i]
+            elif pid == "openrouter" and data:
+                free = [m for m in data if str(m.get("id", "")).endswith(":free")]
+                fam = ("llama-3.3-70b", "deepseek", "qwen", "gemini", "mistral", "gpt-oss", "llama")
+                rank = lambda m: next((i for i, f in enumerate(fam) if f in m["id"]), 99)
+                text = [m["id"] for m in sorted(free, key=rank)] or text
+                vis = [m["id"] for m in sorted(free, key=rank)
+                       if "image" in (((m.get("architecture") or {}).get("input_modalities")) or [])] or vis
+        except Exception:
+            pass
+        c = _fb_cache[pid] = {"ts": time.time(), "text": text[:3], "vision": vis[:3]}
+    return c["vision"] if vision else c["text"]
+
+
+def _fallback_call(prompt, json_mode, deadline, errs, codes, vision=False, max_tokens=3500, temperature=0.4):
+    """Zkusí záložní poskytovatele po řadě. Vrací (výsledek, "poskytovatel:model") nebo (None, None)."""
+    for prov in _fallback_providers(vision):
+        url = prov["base"] + "/chat/completions"
+        for model in _fb_models(prov, vision)[:2]:
+            for jm in ((True, False) if json_mode else (False,)):
+                budget = deadline - time.time()
+                if budget < 4:
+                    return None, None
+                st, content, err, ra = _llm_post(url, prov["key"], model, prompt, jm, {}, min(28, budget), max_tokens, temperature)
+                if st == 200:
+                    content = re.sub(r"<think>.*?</think>", "", content or "", flags=re.S).strip()
+                    if not json_mode:
+                        if content:
+                            return content, f"{prov['id']}:{model}"
+                        errs.append(f"{prov['id']}:{model}: prázdná odpověď")
+                        break
+                    data = _json_from_text(content)
+                    if data is not None:
+                        return data, f"{prov['id']}:{model}"
+                    errs.append(f"{prov['id']}:{model}: odpověď není platný JSON")
+                    continue
+                errs.append(f"{prov['id']}:{(err or '')[:140]}")
+                codes.append(st)
+                if st == 400 and jm:
+                    continue
+                break
+    return None, None
 
 
 def _perf_windows(closes):
@@ -3960,13 +4051,15 @@ def _clean_holdings(raw):
         bm = (h.get("buy_month") or "").strip()
         bm = bm if re.match(r"^\d{4}-(0[1-9]|1[0-2])$", bm) else None
         k = (t, bm)
+        size = h.get("size") if h.get("size") in ("S", "M", "L") else None
         if k in merged:
             a0 = merged[k]["qty"]
             merged[k]["qty"] = (round(a0 + qty, 6) if (a0 is not None and qty is not None)
                                 else (a0 if a0 is not None else (round(qty, 6) if qty is not None else None)))
+            merged[k]["size"] = merged[k].get("size") or size
         else:
             merged[k] = {"ticker": t, "qty": round(qty, 6) if qty is not None else None, "buy_month": bm,
-                         "name": str(h.get("name") or "")[:80]}
+                         "name": str(h.get("name") or "")[:80], "size": size}
     out = list(merged.values())
     quantified = {l["ticker"] for l in out if l["qty"] is not None}
     out = [l for l in out if l["qty"] is not None or l["ticker"] not in quantified]   # známý počet má přednost
@@ -4040,6 +4133,7 @@ def _value_holdings(holdings):
                "unknown_qty": round(unknown_q, 6),
                "no_qty": no_qty or bool(qt.get("no_price")), "no_price": bool(qt.get("no_price")),
                "itype": (qt.get("type") or "").upper(),
+               "size": next((l.get("size") for l in ls if l.get("size")), None),
                "tax_free": (not no_qty) and unknown_q == 0 and free_q >= qty - 1e-9,
                "tax_next": pending[0] if pending else None,
                "tax_free_from": (pending[-1] if pending else (known[0] and _tax_free_from(known[0]))) if known else None,
@@ -4210,7 +4304,12 @@ def _picks(scan, n, held=(), flags=None):
     n = 6 if n == 6 else 10
     flags = flags or {}
     basket, new, paused = [], [], []
-    for t, src in _mix_basket(scan, n):
+    try:
+        mb = _month_basket(scan)
+    except Exception:
+        mb = None
+    order = [(k, src) for k, src in (mb or {}).get("order") or []] or _mix_basket(scan, n)
+    for t, src in order:
         fl = flags.get(t.replace(".", "-"))
         if fl and fl.get("pause"):
             paused.append({"ticker": t.replace(".", "-"), "reason": ((fl.get("reasons") or [{}])[0]).get("reason")})
@@ -4222,7 +4321,7 @@ def _picks(scan, n, held=(), flags=None):
         if len(basket) >= n and len(new) >= n:
             break
     return {"n": n, "basket": basket, "new": new, "paused": paused[:3], "stats": PICKS_STATS[n],
-            "mix": bool(scan.get("mom_rank_map"))}
+            "mix": bool(scan.get("mom_rank_map")), "since": (mb or {}).get("date"), "month": (mb or {}).get("month")}
 
 
 _NOT_STOCK = ("ETF", "MUTUALFUND", "CRYPTOCURRENCY", "CURRENCY", "INDEX", "FUTURE")
@@ -4253,11 +4352,11 @@ def _verdict_eval(ticker):
         return None
 
 
-def _extra_evals(rows, scan, budget_s=10.0):
-    """{ticker: {verdict, score}} pro držené akcie, které S&P 500 sken nehodnotí (evropské, menší firmy…)."""
+def _extra_evals(rows, scan, eu=None, budget_s=10.0):
+    """{ticker: {verdict, score}} pro držené akcie, které nehodnotí S&P 500 sken ani evropský žebříček."""
     mix = scan.get("mix_rank_map") or {}
     todo = [r["ticker"] for r in rows if r["kind"] == "other" and _spx_key(r["ticker"]) not in mix
-            and (r.get("itype") or "EQUITY") not in _NOT_STOCK][:8]
+            and (r.get("itype") or "EQUITY") not in _NOT_STOCK and not (eu and _eu_match(r, eu)[1])][:8]
     out = {}
     if not todo:
         return out
@@ -4278,17 +4377,20 @@ def _extra_evals(rows, scan, budget_s=10.0):
     return out
 
 
-def _evaluate_holdings(rows, scan, basket_set, extra=None):
+def _evaluate_holdings(rows, scan, basket_set, extra=None, eu=None):
     """Hodnocení každé držené akcie: pořadí mezi S&P 500, momentum, P/E, verdikt (a váha, když jsou známé kusy).
     Titul mimo S&P 500 dostane orientační hodnocení z modelu hloubkové analýzy (`extra`)."""
     mix, mk, rk = scan.get("mix_rank_map") or {}, scan.get("mom_rank_map") or {}, scan.get("rank_map") or {}
     n_uni = max(len(mix), 1)
     out, counts = [], {"strong": 0, "hold": 0, "weak": 0, "na": 0}
+    aw, sized = _approx_weights(rows) if not FEATURE_QTY else ({}, False)
     for r in rows:
         key = _spx_key(r["ticker"])
         mom, pe = (scan.get("mom_map") or {}).get(key), (scan.get("pe_map") or {}).get(key)
         e = {"ticker": r["ticker"], "rank": mix.get(key), "of": n_uni, "mom_pct": mom, "pe": pe,
-             "weight": r.get("weight"), "no_qty": r.get("no_qty"), "warn": []}
+             "weight": r.get("weight"), "no_qty": r.get("no_qty"), "warn": [], "in_basket": key in basket_set,
+             "size": r.get("size"), "approx_weight": round(aw.get(r["ticker"], 0) * 100, 1) if sized else None}
+        eu_key, eu_row = (_eu_match(r, eu) if (eu and key not in mix and r["kind"] != "core") else (None, None))
         if r["kind"] == "core":
             e["level"], e["verdict"] = "na", "Indexový fond"
             e["why"] = "Široký index – stabilní základ. Pokud chceš jen akcie, nedokupuj ho a nové peníze dávej do tipů."
@@ -4311,6 +4413,20 @@ def _evaluate_holdings(rows, scan, basket_set, extra=None):
                 e["level"], e["verdict"] = "weak", "Slabší – nedokupuj"
                 e["why"] = ("Horší polovina S&P 500 – drahá nebo bez momenta. Neprodávej kvůli tomu, "
                             "jen nové peníze dávej do silnějších tipů.")
+        elif eu_row:
+            pct = eu_row["rank"] / max(eu.get("n") or 1, 1)
+            e.update(rank=eu_row["rank"], of=eu.get("n"), mom_pct=eu_row.get("mom"), source="eu", eu_ticker=eu_key,
+                     pct_better=eu_row.get("pct_better"))
+            if pct <= 0.20:
+                e["level"], e["verdict"] = "strong", "Silná – drž"
+                e["why"] = "Mezi nejsilnějšími 20 % velkých evropských firem podle momenta – drž a nech běžet."
+            elif pct <= 0.50:
+                e["level"], e["verdict"] = "hold", "Drž"
+                e["why"] = "Lepší polovina velkých evropských firem podle momenta. Nic neměň."
+            else:
+                e["level"], e["verdict"] = "weak", "Slabší – nedokupuj"
+                e["why"] = "Horší polovina velkých evropských firem podle momenta. Neprodávej kvůli tomu, jen nové peníze dávej jinam."
+            e["why"] += " Evropu hodnotím jen podle momenta (hodnotu bez dat z výkazů neumím poctivě změřit)."
         elif (extra or {}).get(r["ticker"]):
             x = extra[r["ticker"]]
             lvl = {"Koupit": "strong", "Držet": "hold", "Prodat": "weak"}.get(x.get("verdict"), "hold")
@@ -4328,6 +4444,8 @@ def _evaluate_holdings(rows, scan, basket_set, extra=None):
             e["why"] = "Pro tenhle titul teď nemám dost dat (ceny nebo fundamenty se nenačetly) – zkus to za chvíli."
         if r.get("weight") and r["weight"] >= HOLD_CONC_PCT and r["kind"] != "core":
             e["warn"].append(f"Tvoří {_pc(r['weight'], 0)} % portfolia – velké riziko jedné firmy.")
+        elif sized and aw.get(r["ticker"], 0) >= CONC_WARN and r["kind"] != "core" and len(rows) >= 3:
+            e["warn"].append(f"Velká pozice – odhadem {_pc(aw[r['ticker']] * 100, 0)} % portfolia (podle velikostí, které jsi zadal). Velké riziko jedné firmy.")
         if (r.get("flag") or {}).get("pause"):
             e["warn"].append("Vážná zpráva: " + (((r["flag"].get("reasons") or [{}])[0]).get("reason") or ""))
         counts[e["level"]] = counts.get(e["level"], 0) + 1
@@ -4338,7 +4456,7 @@ def _evaluate_holdings(rows, scan, basket_set, extra=None):
         headline = "Tvoje akcie jsou mimo S&P 500 nebo indexové fondy – hodnotím u nich zprávy a riziko."
     elif weak > strong:
         headline = f"Víc slabších než silných akcií ({weak} vs {strong}). Nové peníze dávej do tipů níž, slabé nedokupuj."
-    elif strong >= max(1, ranked_n // 2):
+    elif strong * 2 >= ranked_n and weak * 4 <= ranked_n:
         headline = f"Portfolio je v dobré kondici: {strong} z {ranked_n} hodnocených akcií patří k nejsilnějším."
     else:
         headline = f"Smíšené: {strong} silných, {counts['hold']} na držení, {weak} slabších."
@@ -4711,6 +4829,412 @@ def api_holdings():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ---------------------------------------------------------------------------
+# MOJE AKCIE (2026-10, portfolio bez počtu kusů – viz FEATURE_QTY):
+#  * koš tipů se zmrazí na měsíc (výzkum počítal s měsíční obměnou) a z cen při zmrazení
+#    se počítá jeho ŽIVÝ výkon proti S&P 500 (SPY), řetězený přes měsíce,
+#  * výkon tvých akcií od chvíle, kdy jsou v appce (rovnoměrně, nebo podle velikosti),
+#  * velikost pozice jedním klikem (malá/střední/velká) → odhad vah, koncentrace a sektorů,
+#  * denní snímek hodnocení a „co se změnilo od včera" – s tolerancí u hranic pořadí,
+#    ať jeden den šumu kolem hranice nehlásí změnu tam a zpátky,
+#  * evropské velké firmy: žebříček podle momenta (hodnotu bez SEC dat neumíme poctivě změřit).
+# ---------------------------------------------------------------------------
+FEATURE_QTY = (os.environ.get("FEATURE_QTY") or "off").lower() == "on"
+SIZE_W = {"S": 1.0, "M": 2.0, "L": 4.0}
+SIZE_CZ = {"S": "malá", "M": "střední", "L": "velká"}
+CONC_WARN = 0.30
+SECTOR_WARN = 0.50
+CHANGE_MARGIN = 0.02
+LEVEL_ORDER = {"weak": 0, "hold": 1, "strong": 2}
+EU_UNIVERSE = (
+    "SAP.DE SIE.DE ALV.DE DTE.DE MBG.DE BMW.DE BAS.DE BAYN.DE ADS.DE MUV2.DE DBK.DE IFX.DE "
+    "RWE.DE EOAN.DE VOW3.DE DB1.DE HEN3.DE DHL.DE MRK.DE FRE.DE BEI.DE CON.DE HNR1.DE RHM.DE "
+    "MTX.DE SY1.DE ZAL.DE PAH3.DE DTG.DE ENR.DE CBK.DE VNA.DE SHL.DE QIA.DE P911.DE HEI.DE "
+    "BNR.DE MC.PA OR.PA RMS.PA TTE.PA SAN.PA AIR.PA SU.PA BNP.PA AI.PA EL.PA KER.PA "
+    "CS.PA DG.PA SAF.PA RI.PA BN.PA GLE.PA ACA.PA CAP.PA DSY.PA VIE.PA ENGI.PA ORA.PA "
+    "HO.PA ML.PA SGO.PA LR.PA PUB.PA ERF.PA AC.PA RNO.PA EN.PA BVI.PA ASML.AS ADYEN.AS "
+    "INGA.AS PRX.AS HEIA.AS AD.AS PHIA.AS WKL.AS ASM.AS BESI.AS UMG.AS NN.AS ABN.AS KPN.AS "
+    "RAND.AS AKZA.AS MT.AS NESN.SW NOVN.SW UBSG.SW ZURN.SW ABBN.SW CFR.SW SIKA.SW LONN.SW GIVN.SW "
+    "ALC.SW HOLN.SW SREN.SW PGHN.SW SCMN.SW GEBN.SW LOGN.SW SLHN.SW KNIN.SW STMN.SW AZN.L HSBA.L "
+    "SHEL.L ULVR.L BP.L RIO.L GSK.L REL.L DGE.L BATS.L LSEG.L BARC.L LLOY.L NWG.L "
+    "AAL.L GLEN.L RR.L BA.L NG.L CPG.L TSCO.L PRU.L IMB.L EXPN.L VOD.L HLN.L "
+    "STAN.L ABF.L BT-A.L LGEN.L SSE.L III.L SGE.L AV.L ANTO.L IHG.L BNZL.L WPP.L "
+    "SMIN.L RKT.L ENEL.MI ISP.MI UCG.MI ENI.MI RACE.MI STLAM.MI G.MI STMMI.MI PRY.MI MONC.MI "
+    "TIT.MI LDO.MI SRG.MI TRN.MI MB.MI BMED.MI NEXI.MI CPR.MI PST.MI ITX.MC SAN.MC IBE.MC "
+    "BBVA.MC TEF.MC AMS.MC CABK.MC FER.MC REP.MC AENA.MC CLNX.MC ELE.MC IAG.MC GRF.MC NOVO-B.CO "
+    "DSV.CO MAERSK-B.CO ORSTED.CO VWS.CO CARL-B.CO COLO-B.CO PNDORA.CO GMAB.CO NSIS-B.CO ATCO-A.ST VOLV-B.ST INVE-B.ST "
+    "ERIC-B.ST SEB-A.ST SAND.ST ASSA-B.ST HM-B.ST ESSITY-B.ST EQNR.OL DNB.OL NHY.OL TEL.OL MOWI.OL NOKIA.HE "
+    "SAMPO.HE NESTE.HE KNEBV.HE UPM.HE ABI.BR KBC.BR UCB.BR ARGX.BR SOLB.BR OMV.VI EBS.VI VER.VI "
+    "RYA.IR KRZ.IR EDP.LS GALP.LS JMT.LS PKO.WA PZU.WA PKN.WA CDR.WA LPP.WA ALE.WA DNP.WA "
+    "PEO.WA KGH.WA CEZ.PR KOMB.PR MONET.PR ERBAG.PR KOFOL.PR TABAK.PR VIG.PR PEN.PR "
+).split()
+
+
+def _holdings_for_eval(lots):
+    """Bez kusů (FEATURE_QTY off): jeden záznam na titul, bez kusů a měsíců nákupu, s velikostí pozice."""
+    if FEATURE_QTY:
+        return lots or []
+    out = {}
+    for l in (lots or []):
+        if not isinstance(l, dict):
+            continue
+        t = (l.get("ticker") or "").strip().upper()
+        if not t:
+            continue
+        o = out.setdefault(t, {"ticker": t, "qty": None, "buy_month": None, "name": l.get("name") or "", "size": None})
+        if not o["size"] and l.get("size") in SIZE_W:
+            o["size"] = l["size"]
+    return list(out.values())
+
+
+def _spy_price():
+    """Cena SPY (S&P 500) pro srovnání výkonu – kešováno 15 min, při výpadku poslední známá."""
+    c = None
+    try:
+        c = kv_get_json("spy:px")
+        if c and time.time() - c.get("ts", 0) < 900:
+            return c.get("px")
+    except Exception:
+        pass
+    try:
+        q = (_quotes(["SPY"]) or {}).get("SPY") or {}
+        if q.get("price"):
+            kv_set_json("spy:px", {"ts": time.time(), "px": q["price"]})
+            return q["price"]
+    except Exception:
+        pass
+    return (c or {}).get("px")
+
+
+def _month_basket(scan):
+    """Koš tipů zmrazený na kalendářní měsíc (pořadí 30 kandidátů jako rezerva za pozastavené)
+    + ceny a SPY v den zmrazení – z toho se počítá živý záznam koše."""
+    date = (scan or {}).get("date") or _today_iso()
+    month = date[:7]
+    key = f"basket:{month}"
+    try:
+        b = kv_get_json(key)
+        if b and b.get("order"):
+            return b
+    except Exception:
+        pass
+    if not (scan.get("rank_map") or scan.get("mom_rank_map")):
+        return None
+    order = [[k, src] for k, src in _mix_basket(scan, 10)[:30]]
+    if not order:
+        return None
+    pm = scan.get("px_map") or {}
+    b = {"month": month, "date": date, "order": order, "spy": _spy_price(),
+         "px": {k: (pm.get(k) or [None])[0] for k, _s in order}}
+    try:
+        kv_set_json(key, b)
+        idx = kv_get_json("basket:index") or []
+        if month not in idx:
+            kv_set_json("basket:index", sorted(idx + [month])[-36:])
+    except Exception:
+        pass
+    return b
+
+
+def _close_at(path, date_iso):
+    """Poslední zavírací cena v den `date_iso` nebo dřív z dráhy [(ts, close)]."""
+    try:
+        end = datetime.strptime(date_iso, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp() + 86400
+    except Exception:
+        return None
+    last = None
+    for ts, c in path or []:
+        if ts < end:
+            last = c
+        else:
+            break
+    return last
+
+
+def _basket_perf(n=10):
+    """Živý záznam koše tipů: měsíční koše (prvních n v pořadí), rovnoměrně, řetězeno přes měsíce,
+    proti SPY za stejné období. Kešováno 3 h."""
+    n = 6 if n == 6 else 10
+    ck = f"basketperf:{n}:{_today_iso()}"
+    try:
+        c = kv_get_json(ck)
+        if c and time.time() - c.get("ts", 0) < 3 * 3600:
+            return c
+    except Exception:
+        pass
+    try:
+        months = kv_get_json("basket:index") or []
+        baskets = [b for b in (kv_get_json(f"basket:{m}") for m in months) if b and b.get("order")]
+    except Exception:
+        baskets = []
+    if not baskets:
+        return None
+    first = baskets[0]["date"]
+    try:
+        age = (datetime.now(timezone.utc).date() - datetime.strptime(first, "%Y-%m-%d").date()).days
+    except Exception:
+        age = 0
+    rng = "1y" if age < 330 else ("2y" if age < 700 else "5y")
+    tick = sorted({k.replace(".", "-") for b in baskets for k, _s in b["order"][:n]} | {"SPY"})
+    prices, paths = _price_paths(tick, rng)
+    def _prev_day(d):     # ceny v koši jsou z ranního skenu = zavření PŘEDCHOZÍHO obchodního dne
+        return (datetime.strptime(d, "%Y-%m-%d").date() - timedelta(days=1)).isoformat()
+    tot, spy_tot, periods = 1.0, 1.0, []
+    for i, b in enumerate(baskets):
+        end = _prev_day(baskets[i + 1]["date"]) if i + 1 < len(baskets) else None
+        rets = []
+        for k, _s in b["order"][:n]:
+            y = k.replace(".", "-")
+            p0 = (b.get("px") or {}).get(k)
+            p1 = _close_at(paths.get(y), end) if end else prices.get(y)
+            if p0 and p1:
+                rets.append(p1 / p0 - 1)
+        if not rets:
+            continue
+        r = sum(rets) / len(rets)
+        s0 = _close_at(paths.get("SPY"), _prev_day(b["date"])) or b.get("spy")
+        s1 = _close_at(paths.get("SPY"), end) if end else prices.get("SPY")
+        rs = (s1 / s0 - 1) if (s0 and s1) else 0.0
+        tot *= 1 + r
+        spy_tot *= 1 + rs
+        periods.append({"month": b["month"], "since": b["date"], "until": end, "ret": round(r * 100, 2),
+                        "spy": round(rs * 100, 2), "n": len(rets)})
+    if not periods:
+        return None
+    out = {"ts": int(time.time()), "n": n, "since": periods[0]["since"], "ret": round((tot - 1) * 100, 2),
+           "spy": round((spy_tot - 1) * 100, 2), "periods": periods}
+    try:
+        kv_set_json(ck, out)
+    except Exception:
+        pass
+    return out
+
+
+def _holdings_perf(user, rows):
+    """Výnos tvých akcií od chvíle, kdy jsou v appce (cena při přidání → dnes, v měně akcie),
+    proti SPY za stejnou dobu. Bez kusů rovnoměrně; se zadanou velikostí vážené (malá 1, střední 2, velká 4)."""
+    if not user:
+        return None
+    try:
+        meta = kv_get_json(f"hmeta:{user}") or {}
+    except Exception:
+        meta = {}
+    spy = _spy_price()
+    today = _today_iso()
+    changed, cur = False, set()
+    for r in rows:
+        t = r["ticker"]
+        cur.add(t)
+        if t not in meta and r.get("price") and not r.get("no_price") and spy:
+            meta[t] = {"since": today, "px": r["price"], "spy": spy}
+            changed = True
+    for t in list(meta):
+        if t not in cur:
+            meta.pop(t)
+            changed = True
+    if changed:
+        try:
+            kv_set_json(f"hmeta:{user}", meta)
+        except Exception:
+            pass
+    sized = any(r.get("size") for r in rows)
+    items, sw, sr, ss, since = {}, 0.0, 0.0, 0.0, []
+    for r in rows:
+        m = meta.get(r["ticker"])
+        if not m or not r.get("price") or r.get("no_price") or not m.get("px"):
+            continue
+        ret = r["price"] / m["px"] - 1
+        b = (spy / m["spy"] - 1) if (spy and m.get("spy")) else None
+        items[r["ticker"]] = {"since": m["since"], "ret": round(ret * 100, 2), "spy": round(b * 100, 2) if b is not None else None}
+        w = SIZE_W.get(r.get("size") or "M", 2.0) if sized else 1.0
+        sw += w
+        sr += w * ret
+        ss += w * (b or 0.0)
+        since.append(m["since"])
+    if not sw:
+        return {"items": {}, "n": 0}
+    return {"since": min(since), "ret": round(sr / sw * 100, 2), "spy": round(ss / sw * 100, 2),
+            "weighted": sized, "n": len(items), "items": items}
+
+
+def _approx_weights(rows):
+    """Odhad vah bez kusů: z velikostí (malá/střední/velká), nezadaná = střední. ({ticker: podíl}, zadané?)"""
+    sized = any(r.get("size") for r in rows)
+    w = {r["ticker"]: SIZE_W.get(r.get("size") or "M", 2.0) for r in rows}
+    tot = sum(w.values()) or 1.0
+    return {t: v / tot for t, v in w.items()}, sized
+
+
+def _sector_mix(rows, scan):
+    """Sektory portfolia: podle velikostí (je-li zadaná aspoň jedna), jinak podle počtu akcií."""
+    aw, sized = _approx_weights(rows)
+    smap = scan.get("sector_map") or {}
+    mix = {}
+    for r in rows:
+        sec = r.get("sector") or smap.get(_spx_key(r["ticker"])) or ("ETF" if r.get("kind") == "core" or (r.get("itype") or "") in ("ETF", "MUTUALFUND") else "Ostatní")
+        mix[sec] = mix.get(sec, 0.0) + (aw[r["ticker"]] if sized else 1.0 / max(len(rows), 1))
+    items = sorted(({"sector": k, "pct": round(v * 100, 1)} for k, v in mix.items()), key=lambda x: -x["pct"])
+    warn = None
+    if items and items[0]["sector"] not in ("ETF", "Ostatní"):
+        top = items[0]
+        if (sized and top["pct"] >= SECTOR_WARN * 100) or (not sized and len(rows) >= 4 and top["pct"] >= 60):
+            name = SECTOR_CZ.get(top["sector"], top["sector"])
+            warn = (f"{name} tvoří odhadem {_pc(top['pct'], 0)} % portfolia – hodně sázíš na jedno odvětví."
+                    if sized else f"{name}: {round(top['pct'] * len(rows) / 100)} z {len(rows)} tvých akcií – hodně sázíš na jedno odvětví.")
+    return {"items": items, "sized": sized, "warn": warn}
+
+
+# ---- evropské velké firmy: žebříček podle momenta 12-1 (denně, kešováno) ----
+def _eu_one(t):
+    try:
+        d = yahoo_chart(t, "1y", "1d")
+        meta = d.get("meta") or {}
+        cl = [c for c in (((d.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []) if c]
+        if len(cl) < 200:
+            return t, None
+        px = meta.get("regularMarketPrice") or cl[-1]
+        prev = _prev_close(cl, meta)
+        return t, {"price": px, "currency": meta.get("currency") or "EUR", "name": meta.get("longName") or meta.get("shortName") or t,
+                   "mom": round((cl[-22] / cl[0] - 1) * 100, 1), "chg": round((px - prev) / prev * 100, 2) if (px and prev) else None}
+    except Exception:
+        return t, None
+
+
+def _eu_scan(budget_s=20.0, allow_step=True):
+    """{"date", "n", "rows": {ticker: {price, currency, name, mom, rank, pct_better}}} – hotový dnešní, jinak poslední.
+    Průběh se ukládá do KV, takže doběhne i přes víc krátkých spuštění."""
+    date = _today_iso()
+    try:
+        done = kv_get_json(f"euscan:{date}")
+        if done:
+            return done
+        last = kv_get_json("euscan:last")
+    except Exception:
+        last = None
+    if not allow_step:
+        return last
+    hkey = _pk(f"eurows:{date}")
+    have = {}
+    if cloud_enabled():
+        try:
+            raw = _kv_cmd("HGETALL", hkey) or []
+            for i in range(0, len(raw) - 1, 2):
+                have[raw[i]] = json.loads(raw[i + 1])
+        except Exception:
+            pass
+    todo = [t for t in EU_UNIVERSE if t not in have]
+    t0 = time.time()
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        while todo and time.time() - t0 < budget_s:
+            batch, todo = todo[:40], todo[40:]
+            args = []
+            for t, row in ex.map(_eu_one, batch):
+                have[t] = row or {}
+                args += [t, json.dumps(row or {})]
+            if cloud_enabled():
+                try:
+                    _kv_cmd("HSET", hkey, *args)
+                    _kv_cmd("EXPIRE", hkey, 3 * 86400)
+                except Exception:
+                    pass
+    if todo:
+        return last
+    rows = {t: r for t, r in have.items() if r and r.get("mom") is not None}
+    ranked = sorted(rows, key=lambda t: -rows[t]["mom"])
+    n = len(ranked)
+    for i, t in enumerate(ranked):
+        rows[t]["rank"] = i + 1
+        rows[t]["pct_better"] = int(round((1 - i / max(n, 1)) * 100))
+    out = {"date": date, "n": n, "rows": rows}
+    try:
+        kv_set_json(f"euscan:{date}", out)
+        kv_set_json("euscan:last", out)
+    except Exception:
+        pass
+    return out
+
+
+def _eu_match(row, eu):
+    """Najde drženou akcii v evropském žebříčku: přesný ticker, jinak stejná firma podle jména (SAP ↔ SAP.DE)."""
+    rows = (eu or {}).get("rows") or {}
+    t = row["ticker"].upper()
+    if t in rows:
+        return t, rows[t]
+    nm = row.get("name") or ""
+    if len(nm) >= 3:
+        for k, r in rows.items():
+            if _name_match(nm, r.get("name")):
+                return k, r
+    return None, None
+
+
+def _eval_changes(user, ev, record=True):
+    """Uloží dnešní snímek hodnocení a vrátí změny proti poslednímu dřívějšímu dni.
+    Změna o jeden stupeň kvůli pořadí se hlásí, jen když pořadí přelezlo hranici aspoň o 2 % univerza
+    (šum kolem hranice se nehlásí); změna o dva stupně a vstup/výstup z koše tipů vždy."""
+    if not user or not ev:
+        return None
+    today = _today_iso()
+    try:
+        hist = kv_get_json(f"evalhist:{user}") or {}
+    except Exception:
+        hist = {}
+    snap = {}
+    for e in ev.get("items") or []:
+        snap[e["ticker"]] = {"l": e.get("level"), "v": e.get("verdict"), "r": e.get("rank"), "of": e.get("of"),
+                             "b": 1 if e.get("in_basket") else 0, "src": e.get("source") or "spx"}
+    prev_dates = sorted(d for d in hist if d < today)
+    prev_d = prev_dates[-1] if prev_dates else None
+    prev = hist.get(prev_d) or {}
+    if record and hist.get(today) != snap:
+        hist[today] = snap
+        for d in sorted(hist)[:-21]:
+            hist.pop(d, None)
+        try:
+            kv_set_json(f"evalhist:{user}", hist)
+        except Exception:
+            pass
+    items = []
+    for t, s in snap.items():
+        p = prev.get(t)
+        if not p:
+            continue
+        lp, ls = LEVEL_ORDER.get(p.get("l")), LEVEL_ORDER.get(s.get("l"))
+        base = t.split(".")[0]
+        if lp is not None and ls is not None and lp != ls:
+            jump = abs(lp - ls)
+            basket_move = p.get("b") != s.get("b")
+            ok = jump >= 2 or basket_move
+            if not ok and s.get("r") and s.get("of") and s.get("src") in ("spx", "eu"):
+                pct = s["r"] / s["of"]
+                lo = min(lp, ls)
+                bounds = (0.10, 0.50) if s.get("src") == "spx" else (0.20, 0.50)
+                bound = bounds[1] if lo == 0 else bounds[0]
+                ok = abs(pct - bound) >= CHANGE_MARGIN
+            if s.get("src") == "model" and jump < 2:
+                ok = False
+            if ok:
+                down = ls < lp
+                if down:
+                    advice = ("nové peníze do ní teď nedávej – prodávat kvůli tomu ale nemusíš." if s["l"] == "weak"
+                              else "drž ji, nové peníze dávej spíš do silnějších.")
+                else:
+                    advice = ("nové peníze sem dávají smysl." if s.get("b") else "zlepšila se v pořadí.")
+                items.append({"ticker": t, "base": base, "dir": "down" if down else "up", "kind": "level",
+                              "from": p.get("v"), "to": s.get("v"), "text": f"{base}: {p.get('v')} → {s.get('v')} – {advice}"})
+                continue
+        if p.get("b") != s.get("b") and s.get("l") == p.get("l") == "strong":
+            if s.get("b"):
+                items.append({"ticker": t, "base": base, "dir": "up", "kind": "basket", "from": p.get("v"), "to": s.get("v"),
+                              "text": f"{base}: nově v koši tipů – nové peníze sem dávají smysl."})
+            else:
+                items.append({"ticker": t, "base": base, "dir": "down", "kind": "basket", "from": p.get("v"), "to": s.get("v"),
+                              "text": f"{base}: vypadla z koše tipů – drž ji, nové peníze dávej do aktuálního koše."})
+    items.sort(key=lambda x: (x["dir"] != "down", x["base"]))
+    return {"since": prev_d, "items": items}
+
+
 @app.route("/api/plan", methods=["POST"])
 def api_plan():
     """Celý dlouhodobý plán z pozic: ocenění, cíl, stavy pozic, rentgen a
@@ -4725,6 +5249,8 @@ def api_plan():
     saved = (kv_get_json(f"holdings:{user}") or {}).get("risk") if user else None
     risk = _lt_risk(body.get("risk") or saved or (_user_risk(user) if user else None))
     try:
+        if not FEATURE_QTY:
+            holdings = _holdings_for_eval(holdings or [])
         rows, total, missing, scan = _value_holdings(holdings or [])
         plan = _build_plan(rows, risk, scan)
         held = {_spx_key(r["ticker"]) for r in rows}
@@ -4735,12 +5261,26 @@ def api_plan():
             flags = {}
         picks = _picks(scan, int(_num(body.get("picks_n")) or 10), held, flags)
         try:
-            extra = _extra_evals(rows, scan)
+            eu = _eu_scan(allow_step=False)          # jen hotový žebříček – počítá ho denní automatika
+        except Exception:
+            eu = None
+        try:
+            extra = _extra_evals(rows, scan, eu)
         except Exception:
             extra = {}
+        ev = _evaluate_holdings(rows, scan, {_spx_key(p["ticker"]) for p in picks["basket"]}, extra, eu)
         out = {"ok": True, "rows": rows, "total_czk": round(total), "missing": missing, "plan": plan,
-               "xray": _xray(rows, total, scan), "scan_date": scan.get("date"), "picks": picks,
-               "evaluation": _evaluate_holdings(rows, scan, {_spx_key(p["ticker"]) for p in picks["basket"]}, extra)}
+               "xray": _xray(rows, total, scan), "scan_date": scan.get("date"), "picks": picks, "evaluation": ev,
+               "feature_qty": FEATURE_QTY}
+        if not FEATURE_QTY:
+            out["sectors"] = _sector_mix(rows, scan)
+            for k, fn in (("basket_perf", lambda: _basket_perf(picks["n"])),
+                          ("changes", lambda: _eval_changes(user, ev) if user else None),
+                          ("perf", lambda: _holdings_perf(user, rows) if user else None)):
+                try:
+                    out[k] = fn()
+                except Exception:
+                    out[k] = None
         amount = _num(body.get("amount_czk"))
         if amount and 0 < amount < 1e10:
             out["deposit"] = (_allocate_basket(amount, rows, picks) if risk == "maximum"
@@ -4816,12 +5356,12 @@ def call_vision(image_data_url, prompt=IMPORT_PROMPT):
     prov = (os.environ.get("VISION_PROVIDER") or _llm_creds()[0]).lower()
     key = os.environ.get("VISION_API_KEY") or _llm_creds()[1]
     _vision_state.update(kind=None, retry_after=0.0)
-    if not key:
+    if not key and not _fallback_providers(vision=True):
         return None, "Chybí API klíč pro AI (ANALYSIS_API_KEY)."
     url = ("https://api.openai.com/v1/chat/completions" if prov == "openai"
            else "https://api.groq.com/openai/v1/chat/completions")
     models = ([os.environ["VISION_MODEL"]] if os.environ.get("VISION_MODEL")
-              else (_groq_vision_models(key) if prov != "openai" else VISION_MODELS["openai"]))
+              else (_groq_vision_models(key) if prov != "openai" else VISION_MODELS["openai"])) if key else []
     content = [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": image_data_url}}]
     errs, codes, wait = [], [], 0.0
     deadline = time.time() + 45
@@ -4859,6 +5399,10 @@ def call_vision(image_data_url, prompt=IMPORT_PROMPT):
         if out_of_time:
             errs.append("vypršel čas")
             break
+    if not out_of_time:
+        res, _used = _fallback_call(content, True, deadline, errs, codes, vision=True, max_tokens=2500, temperature=0)
+        if res is not None:
+            return res, None
     _vision_state.update(kind=_llm_kind(codes), retry_after=wait)
     return None, " | ".join(errs[-3:])
 
@@ -5028,6 +5572,10 @@ def _resolve_position(p):
         if "." not in raw_t:
             for suf in ETF_SUFFIXES[:3]:
                 add(raw_t + suf)
+    isin = (str(p.get("isin") or "")).strip().upper()
+    if _ISIN_RX.match(isin) and len(cands) < 8:
+        for x in _yahoo_search(isin, 6)[:4]:              # ISIN (z CSV) = jednoznačná identita titulu
+            add(**x)
     if name and len(cands) < 6:
         for x in _yahoo_search(name, 6)[:5]:
             add(**x)
@@ -5058,12 +5606,18 @@ def _resolve_position(p):
                 "value_czk": round(value_czk) if value_czk else None, "status": "unresolved", "candidates": []}
     base = raw_t.split(".")[0] if raw_t else ""
 
+    suf = _ISIN_SUFFIX.get(isin[:2]) if _ISIN_RX.match(isin) else None
+    pxc = (str(p.get("px_currency") or "")).upper()
+
     def pref(c):
         # Tatáž akcie na víc burzách má v Kč skoro stejnou hodnotu → vezmi
-        # „domovskou" kótaci: US (model zná S&P 500 pod US tickerem), přesný
-        # ticker ze screenshotu, Xetra/Londýn, a až pak regionální burzy.
+        # „domovskou" kótaci: z CSV podle země ISIN a měny, jinak US (model zná S&P 500
+        # pod US tickerem), přesný ticker ze screenshotu, Xetra/Londýn, a až pak regionální burzy.
         t = c["ticker"]
-        return (0 if (c["us"] and c["type"] == "EQUITY") else 1,
+        home = 0 if (suf is not None and ((suf == "" and "." not in t) or (suf and t.endswith(suf)))) else 1
+        cur = 0 if (pxc and (c.get("currency") or "").upper() == pxc) else 1
+        return (home if suf is not None else 0, cur if pxc else 0,
+                0 if (c["us"] and c["type"] == "EQUITY") else 1,
                 0 if (base and t.split(".")[0] == base) else 1,
                 0 if t in CORE_ETFS else 1,
                 0 if ("." not in t or t.endswith((".DE", ".L"))) else 1)
@@ -5092,6 +5646,87 @@ def _resolve_position(p):
     }
 
 
+# ---- Import z CSV (Trading 212 → Historie → Export; nebo jakýkoli seznam s Ticker/Name/ISIN) ----
+_CSV_COLS = {
+    "action": ("action", "akce", "typ", "type", "transaction type", "operation"),
+    "ticker": ("ticker", "symbol", "instrument code", "kód", "kod"),
+    "name": ("name", "název", "nazev", "instrument", "security", "company", "společnost"),
+    "isin": ("isin",),
+    "shares": ("no. of shares", "shares", "quantity", "qty", "počet", "pocet", "počet akcií", "množství", "units", "kusy", "ks"),
+    "currency": ("currency (price / share)", "currency", "měna", "mena"),
+}
+_ISIN_RX = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}\d$")
+# země z ISIN → přípona burzy na Yahoo (ETF z Irska/Lucemburku se kótují všude – tam rozhodne měna)
+_ISIN_SUFFIX = {"US": "", "NL": ".AS", "DE": ".DE", "FR": ".PA", "GB": ".L", "CH": ".SW", "IT": ".MI", "ES": ".MC",
+                "DK": ".CO", "SE": ".ST", "NO": ".OL", "FI": ".HE", "BE": ".BR", "AT": ".VI", "PT": ".LS", "PL": ".WA",
+                "CZ": ".PR"}
+
+
+def _parse_broker_csv(text):
+    """CSV → (pozice [{name, ticker, isin, quantity, currency}], info). Historie obchodů (Action + No. of shares):
+    nákupy − prodeje (vč. splitů) po titulech, drží se to, co zbylo. Bez sloupce akce: seznam pozic / titulů."""
+    import csv, io
+    text = (text or "").lstrip("﻿")
+    sample = text[:4096]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+    except Exception:
+        dialect = csv.excel
+    rd = csv.reader(io.StringIO(text), dialect)
+    rows = [r for r in rd if any((c or "").strip() for c in r)][:20000]
+    if len(rows) < 2:
+        return [], {"error": "Soubor je prázdný nebo nemá hlavičku."}
+    head = [(h or "").strip().lower() for h in rows[0]]
+    col = {}
+    for k, names in _CSV_COLS.items():
+        for i, h in enumerate(head):
+            if h in names or (k == "shares" and h.startswith("no. of shares")):
+                col.setdefault(k, i)
+    if "ticker" not in col and "name" not in col and "isin" not in col:
+        return [], {"error": "V souboru jsem nenašel sloupec Ticker, Name ani ISIN."}
+    def cell(r, k):
+        i = col.get(k)
+        return (r[i] if i is not None and i < len(r) else "").strip()
+    pos, order = {}, []
+    kind = "history" if "action" in col else ("holdings" if "shares" in col else "list")
+    for r in rows[1:]:
+        tk, nm, isin = cell(r, "ticker").upper(), cell(r, "name"), cell(r, "isin").upper()
+        if not (tk or nm or isin):
+            continue
+        key = isin if _ISIN_RX.match(isin) else (tk or nm.lower())
+        sh = _num(cell(r, "shares").replace(" ", "").replace(",", ".")) if "shares" in col else None
+        sign = 1
+        if kind == "history":
+            a = cell(r, "action").lower()
+            if re.search(r"sell|prodej|split close|transfer out|výběr akci", a):
+                sign = -1
+            elif not re.search(r"buy|nákup|nakup|koup|split open|distribution|transfer in|bonus|spin|merger", a):
+                continue                                   # dividendy, vklady, úroky…
+        p = pos.get(key)
+        if not p:
+            p = pos[key] = {"name": nm, "ticker": tk, "isin": isin if _ISIN_RX.match(isin) else "", "net": 0.0,
+                            "currency": cell(r, "currency").upper() or None, "seen": 0}
+            order.append(key)
+        p["name"] = p["name"] or nm
+        p["ticker"] = p["ticker"] or tk
+        p["seen"] += 1
+        if sh is not None:
+            p["net"] += sign * abs(sh)
+        elif kind != "list":
+            p["net"] += sign * 1.0                         # řádek bez kusů – stačí vědět, že nákup byl
+    held, sold, negative = [], 0, 0
+    for k in order:
+        p = pos[k]
+        if kind == "list" or p["net"] > 1e-6 or (kind != "history" and p["seen"]):
+            held.append({"name": p["name"] or p["ticker"], "ticker": p["ticker"], "isin": p["isin"],
+                         "quantity": round(p["net"], 6) if p["net"] > 1e-6 else None, "px_currency": p["currency"]})
+        elif p["net"] < -1e-6:
+            negative += 1
+        else:
+            sold += 1
+    return held[:80], {"kind": kind, "rows": len(rows) - 1, "held": len(held), "sold": sold, "negative": negative}
+
+
 @app.route("/api/holdings/import", methods=["POST"])
 def api_holdings_import():
     """Jeden screenshot (data URL, klient ho zmenší) NEBO vložený text se seznamem
@@ -5102,8 +5737,21 @@ def api_holdings_import():
         return jsonify({"ok": False, "error": "Moc importů za hodinu, zkus to později."}), 429
     body = request.get_json(silent=True) or {}
     text, img = (body.get("text") or "").strip(), body.get("image") or ""
-    note, preview = None, None
-    if text:
+    csv_text = body.get("csv") or ""
+    note, preview, csv_info = None, None, None
+    if csv_text:
+        if len(csv_text) > 3_000_000:
+            return jsonify({"ok": False, "error": "Soubor je moc velký (max ~3 MB)."}), 400
+        raw, csv_info = _parse_broker_csv(csv_text)
+        if csv_info.get("error"):
+            return jsonify({"ok": False, "error": csv_info["error"]}), 400
+        if not FEATURE_QTY:
+            for p_ in raw:
+                p_["quantity"] = None               # počty kusů zatím nebereme (viz FEATURE_QTY)
+        data = None
+        if not raw:
+            note = "V souboru nezbyl žádný držený titul (všechno prodáno, nebo export nezačíná prvním nákupem)."
+    elif text:
         raw = _parse_text_list(text[:4000])
         data = None
     else:
@@ -5138,12 +5786,12 @@ def api_holdings_import():
     with ThreadPoolExecutor(max_workers=6) as ex:
         res = list(ex.map(safe, raw))
     try:
-        kv_set_json("import:last", {"ts": int(time.time()), "ok": True, "mode": "text" if text else "image",
+        kv_set_json("import:last", {"ts": int(time.time()), "ok": True, "mode": "csv" if csv_text else ("text" if text else "image"),
                                     "read": len(raw), "resolved": sum(1 for r in res if r.get("ticker")),
                                     "note": note, "preview": preview})
     except Exception:
         pass
-    return jsonify({"ok": True, "positions": res, "read": len(raw), "note": note, "preview": preview,
+    return jsonify({"ok": True, "positions": res, "read": len(raw), "note": note, "preview": preview, "csv": csv_info,
                     "account_currency": (data or {}).get("account_currency") if isinstance(data, dict) else None})
 
 
@@ -7056,6 +7704,62 @@ def ai_eval():
                     "sell": out.get("sell", []), "buy": out.get("buy", [])})
 
 
+@app.route("/api/ai/portfolio-comment", methods=["POST"])
+def ai_portfolio_comment():
+    """Krátký lidský komentář k hodnocení TVÝCH akcií (Doporučení). AI jen vysvětluje data z appky –
+    stejné hodnocení jako Moje portfolio; když by doporučila prodej, komentář se zahodí. Kešováno den."""
+    user, err = _ai_gate("elite")
+    if err:
+        return err
+    ue = _user_eval_saved(user)
+    if not ue:
+        return jsonify({"ok": True, "comment": None})
+    ev = ue["ev"]
+    ch = _eval_changes(user, ev, record=False) or {}
+    perf = _holdings_perf(user, ue["rows"]) or {}
+    lines = []
+    for e in ev["items"]:
+        bits = [e["ticker"].split(".")[0], e.get("verdict") or ""]
+        if e.get("rank") and e.get("of"):
+            bits.append(f"pořadí {e['rank']} z {e['of']} ({'Evropa, momentum' if e.get('source') == 'eu' else 'S&P 500'})")
+        if e.get("mom_pct") is not None:
+            bits.append(f"za rok {e['mom_pct']:+.0f} %")
+        if e.get("pe"):
+            bits.append(f"P/E {e['pe']:.0f}")
+        if e.get("in_basket"):
+            bits.append("je v koši tipů")
+        lines.append(" · ".join(bits))
+    facts = {"headline": ev.get("headline"), "akcie": lines,
+             "zmeny": [c["text"] for c in (ch.get("items") or [])][:6],
+             "vykon": (f"od {perf['since']}: {perf['ret']:+.1f} % vs S&P 500 {perf['spy']:+.1f} %" if perf.get("n") else None),
+             "tipy": [p_["ticker"] for p_ in ue["picks"]["basket"][:5]]}
+    fkey = hashlib.md5(json.dumps(facts, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12]
+    ck = f"aicomment:{user}:{_today_iso()}:{fkey}"
+    try:
+        c = kv_get_json(ck)
+        if c:
+            return jsonify({"ok": True, "comment": c.get("text"), "cached": True})
+    except Exception:
+        pass
+    prompt = ("Jsi střízlivý průvodce pro začínajícího investora. Napiš ČESKY 3–4 krátké věty (bez markdownu, bez odrážek), "
+              "které shrnou stav jeho akcií podle DAT níže: co je silné, co slabší a kam dávat NOVÉ peníze. "
+              "Pravidla: používej jen uvedená data a čísla; nic nepředpovídej; NIKDY nedoporučuj prodej (prodávat podle "
+              "tohoto hodnocení nedoporučujeme); slabší akcie = jen je nedokupovat; zmiň změny od včera, pokud nějaké jsou; "
+              "nepiš disclaimer.\n\nDATA:\n" + json.dumps(facts, ensure_ascii=False, indent=1))
+    text = call_llm(prompt, json_mode=False)
+    if not text:
+        return jsonify({"ok": False, "error": _llm_fail_msg("Komentář teď nejde vytvořit.", admin=user in admin_users())}), 502
+    text = re.sub(r"[*#_`>]+", "", text).strip()
+    text = re.sub(r"\s*\n+\s*", " ", text)[:900]
+    if re.search(r"(?<!ne)(prodej|prodat|prodáv|prodal|zbav\w* se|sell)", text, re.I):
+        return jsonify({"ok": True, "comment": None, "dropped": True})     # AI by radila prodej → radši nic
+    try:
+        kv_set_json(ck, {"text": text, "ts": int(time.time())})
+    except Exception:
+        pass
+    return jsonify({"ok": True, "comment": text})
+
+
 @app.route("/api/ai/chat", methods=["POST"])
 def ai_chat():
     user, err = _ai_gate("elite")
@@ -8130,6 +8834,8 @@ def _portfolio_email_html(email, mark_sent=False):
     lots = hrec.get("holdings") or []
     if not lots:
         return "", None
+    if not FEATURE_QTY:
+        lots = _holdings_for_eval(lots)
     rows, total, missing, scan = _value_holdings(lots)
     if not rows:
         return "", None
@@ -8138,7 +8844,7 @@ def _portfolio_email_html(email, mark_sent=False):
     held = [r for r in rows if r["kind"] != "core"]
     nq = [r for r in rows if r.get("no_qty")]
     names_only = not total                      # uživatel zná jen názvy akcií (počty kusů zatím nezadává)
-    picks, ev = None, None
+    picks, ev, chg, perf = None, None, None, None
     if names_only or risk == "maximum":
         try:
             held_keys = {_spx_key(r["ticker"]) for r in rows}
@@ -8148,10 +8854,16 @@ def _portfolio_email_html(email, mark_sent=False):
                 flags = {}
             picks = _picks(scan, 10, held_keys, flags)
             try:
-                extra = _extra_evals(rows, scan)
+                eu = _eu_scan(allow_step=False)
+            except Exception:
+                eu = None
+            try:
+                extra = _extra_evals(rows, scan, eu)
             except Exception:
                 extra = {}
-            ev = _evaluate_holdings(rows, scan, {_spx_key(p["ticker"]) for p in picks["basket"]}, extra)
+            ev = _evaluate_holdings(rows, scan, {_spx_key(p["ticker"]) for p in picks["basket"]}, extra, eu)
+            chg = _eval_changes(email, ev)
+            perf = _holdings_perf(email, rows) if names_only else None
         except Exception:
             picks, ev = None, None
     # změna za poslední obchodní den (z pohybu ceny; nové nákupy ji nezkreslí)
@@ -8185,9 +8897,26 @@ def _portfolio_email_html(email, mark_sent=False):
         else:
             body = f"<b>{', '.join(_html_escape(r['ticker'].split('.')[0]) for r in rows[:12])}</b>"
             head = foot = ""
-        html = ("<h3 style='font-size:16px;margin:22px 0 8px'>🧭 Tvoje akcie</h3>"
+        chg_html = ""
+        for c in ((chg or {}).get("items") or [])[:6]:
+            col = "#FFB347" if c["dir"] == "down" else "#00C853"
+            chg_html += (f"<div style='padding:7px 0;border-top:1px solid #23262f;font-size:14px;line-height:1.5'>"
+                         f"<b style='color:{col}'>{'▼' if c['dir'] == 'down' else '▲'}</b> {_html_escape(c['text'])}</div>")
+        if chg_html:
+            chg_html = ("<div style='padding:10px 14px;border-radius:12px;background:rgba(255,179,71,0.08);border:1px solid rgba(255,179,71,0.3);"
+                        "margin:0 0 10px'><div style='font-size:13px;font-weight:700;margin-bottom:2px'>Co se změnilo od včera</div>"
+                        f"{chg_html}</div>")
+        perf_html = ""
+        if perf and perf.get("n"):
+            pc = "#00C853" if perf["ret"] >= perf.get("spy", 0) else "#FFB347"
+            d = perf["since"]
+            perf_html = (f"<div style='font-size:13px;color:#9ba1b0;margin-top:8px'>Tvoje akcie od {int(d[8:10])}. {int(d[5:7])}.: "
+                         f"<b style='color:{pc}'>{'+' if perf['ret'] >= 0 else ''}{_pc(perf['ret'], 1)} %</b> · S&amp;P 500 "
+                         f"{'+' if perf['spy'] >= 0 else ''}{_pc(perf['spy'], 1)} % "
+                         f"({'podle velikostí' if perf.get('weighted') else 'rovnoměrně'})</div>")
+        html = ("<h3 style='font-size:16px;margin:22px 0 8px'>🧭 Tvoje akcie</h3>" + chg_html +
                 "<div style='background:#12141c;border:1px solid #23262f;border-radius:12px;padding:12px 16px;margin-bottom:10px'>"
-                f"{head}{body}{foot}</div>")
+                f"{head}{body}{perf_html}{foot}</div>")
     if total and nq:
         html += (f"<div style='color:#9ba1b0;font-size:12px;margin:0 0 8px'>U {len(nq)} {'akcie' if len(nq) == 1 else 'akcií'} neznám počet kusů "
                  f"({_html_escape(', '.join(r['ticker'].split('.')[0] for r in nq[:6]))}), proto nejsou v hodnotě.</div>")
@@ -8281,6 +9010,9 @@ def _portfolio_email_html(email, mark_sent=False):
                       f"za ≈ {_kc(a0['amount_czk'])} (bez daně).")
         elif plan.get("paused"):
             action = "Dnes: nic neprodávej; u pozastavených titulů se jen nedokupuje."
+        elif names_only and ev and [c for c in ((chg or {}).get("items") or []) if c["dir"] == "down"]:
+            c0 = [c for c in chg["items"] if c["dir"] == "down"][0]
+            action = f"Dnes: {c0['base']} se zhoršila ({c0['to']}) – nové peníze do ní teď nedávej, prodávat nemusíš."
         elif names_only and ev:
             action = "Dnes: nemusíš nic dělat. Nové peníze dávej jen do silných akcií a koše tipů."
         else:
@@ -8725,15 +9457,16 @@ def admin_ai_test():
     if not admin:
         return jsonify({"ok": False, "error": "Přístup jen pro admina."}), 403
     prov, key = _llm_creds()
-    if not key:
-        return jsonify({"ok": False, "error": "Na Vercelu chybí ANALYSIS_API_KEY."}), 503
+    if not key and not _fallback_providers():
+        return jsonify({"ok": False, "error": "Na Vercelu chybí ANALYSIS_API_KEY (ani záložní GEMINI_API_KEY / CEREBRAS_API_KEY / OPENROUTER_API_KEY)."}), 503
     url = ("https://api.openai.com/v1/chat/completions" if prov == "openai"
            else "https://api.groq.com/openai/v1/chat/completions")
     _llm_cache["ts"] = 0
     _vision_cache["ts"] = 0
-    models = _llm_models(prov, key)
+    _fb_cache.clear()
+    models = _llm_models(prov, key) if key else []
     avail = None
-    if prov != "openai":
+    if prov != "openai" and key:
         try:
             r = requests.get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"}, timeout=6)
             if r.status_code == 200:
@@ -8752,8 +9485,27 @@ def admin_ai_test():
         good = st == 200 and _json_from_text(text) is not None
         out.append({"model": model, "ok": good, "status": st, "ms": int((time.time() - t0) * 1000),
                     "err": None if good else (err or "odpověď není platný JSON")})
-    vision = _groq_vision_models(key) if prov != "openai" else VISION_MODELS["openai"]
-    return jsonify({"ok": True, "provider": prov, "available": avail, "models": out, "vision": vision})
+    vision = (_groq_vision_models(key) if prov != "openai" else VISION_MODELS["openai"]) if key else []
+    fbs = []
+    for fp in AI_FALLBACKS:
+        item = {"id": fp["id"], "env": fp["env"], "configured": bool(os.environ.get(fp["env"])), "vision": fp["vision"]}
+        if item["configured"]:
+            pv = dict(fp, key=os.environ.get(fp["env"]))
+            item["models"], item["vision_models"] = _fb_models(pv), (_fb_models(pv, vision=True) if fp["vision"] else [])
+            t0 = time.time()
+            m0 = (item["models"] or [None])[0]
+            if m0:
+                st, text, err, _ra = _llm_post(pv["base"] + "/chat/completions", pv["key"], m0,
+                                               'Vrať POUZE JSON: {"ok": true, "slovo": "ahoj"}', True, {}, 15, 200)
+                if st == 400:
+                    st, text, err, _ra = _llm_post(pv["base"] + "/chat/completions", pv["key"], m0,
+                                                   'Vrať POUZE JSON: {"ok": true, "slovo": "ahoj"}', False, {}, 15, 200)
+                good = st == 200 and _json_from_text(text) is not None
+                item["test"] = {"model": m0, "ok": good, "status": st, "ms": int((time.time() - t0) * 1000),
+                                "err": None if good else (err or "odpověď není platný JSON")}
+        fbs.append(item)
+    return jsonify({"ok": True, "provider": prov if key else None, "available": avail, "models": out, "vision": vision,
+                    "fallbacks": fbs})
 
 
 @app.route("/api/admin/weekly-test", methods=["POST"])
@@ -8800,7 +9552,9 @@ def _auto_universe(scan):
             seen.add(t)
             out.append((t, "signal"))
     try:
-        for k, _src in _mix_basket(scan, AUTO_BASKET):
+        mb = _month_basket(scan)
+        order = [(k, s_) for k, s_ in (mb or {}).get("order") or []] or _mix_basket(scan, AUTO_BASKET)
+        for k, _src in order:
             t = k.replace(".", "-")
             if t not in seen and len([1 for _t, s_ in out if s_ == "basket"]) < AUTO_BASKET:
                 seen.add(t)
@@ -8822,6 +9576,73 @@ def _auto_verdict(ticker, src):
             "horizon_days": levels.get("horizon_days", 10), "score": model.get("score"), "user": "auto", "src": src}
 
 
+def _user_eval_saved(user):
+    """Hodnocení ULOŽENÝCH akcií uživatele – stejně jako /api/plan (bez kusů, koš měsíce, Evropa).
+    Pro denní snímek, upozornění, ranní e-mail a AI komentář. None, když nic nemá."""
+    hrec = kv_get_json(f"holdings:{user}") or {}
+    lots = hrec.get("holdings") or []
+    if not lots:
+        return None
+    if not FEATURE_QTY:
+        lots = _holdings_for_eval(lots)
+    rows, total, missing, scan = _value_holdings(lots)
+    if not rows:
+        return None
+    held = {_spx_key(r["ticker"]) for r in rows}
+    try:
+        flags = _red_flags([t.replace(".", "-") for t, _s in _mix_basket(scan, 10)[:40]])
+    except Exception:
+        flags = {}
+    picks = _picks(scan, 10, held, flags)
+    try:
+        eu = _eu_scan(allow_step=False)
+    except Exception:
+        eu = None
+    try:
+        extra = _extra_evals(rows, scan, eu)
+    except Exception:
+        extra = {}
+    ev = _evaluate_holdings(rows, scan, {_spx_key(p["ticker"]) for p in picks["basket"]}, extra, eu)
+    return {"rows": rows, "total": total, "scan": scan, "picks": picks, "ev": ev, "hrec": hrec}
+
+
+def _alert_email_html(changes):
+    downs = [c for c in changes if c["dir"] == "down"]
+    ups = [c for c in changes if c["dir"] == "up"]
+    li = lambda c, col: (f"<div style='padding:9px 0;border-top:1px solid #23262f;font-size:14px;line-height:1.5'>"
+                         f"<b style='color:{col}'>●</b> {_html_escape(c['text'])}</div>")
+    body = ("<p style='line-height:1.6;margin:0 0 10px'>Od včera se změnilo hodnocení tvých akcií:</p>"
+            + "".join(li(c, "#FFB347") for c in downs) + "".join(li(c, "#00C853") for c in ups)
+            + "<p style='color:#9ba1b0;font-size:12px;line-height:1.5;margin-top:14px'>Hodnocení říká, kam dávat nové peníze – "
+              "prodávat podle něj nedoporučuji. Detail v appce: Moje portfolio.</p>"
+            + f"<p style='margin-top:16px'><a href='{APP_URL}' style='color:#FF7A00'>Otevřít MY ADVANTAGE</a></p>")
+    return _email_shell("Změna hodnocení tvých akcií", body)
+
+
+def _user_daily(user):
+    """Denní snímek hodnocení uživatele (i když appku neotevře) + upozornění e-mailem, když se
+    některá jeho akcie zhoršila a má zapnutá upozornění (bez ranního souhrnu – ten změny obsahuje)."""
+    ue = _user_eval_saved(user)
+    if not ue:
+        return {"skipped": True}
+    ch = _eval_changes(user, ue["ev"]) or {}
+    try:
+        _holdings_perf(user, ue["rows"])            # sleduj výkon od teď, i když appku neotevře
+    except Exception:
+        pass
+    downs = [c for c in ch.get("items") or [] if c["dir"] == "down"]
+    sent = False
+    if downs:
+        n = ((kv_get_json(f"user:{user}") or {}).get("notif") or {})
+        key = f"alert:sent:{user}:{_today_iso()}"
+        if n.get("alerts") and not n.get("morning") and digest_sending_enabled() and not kv_get_json(key):
+            names = ", ".join(c["base"] for c in downs[:3])
+            sent = send_email(user, f"⚠ Změna hodnocení: {names}", _alert_email_html(ch["items"]))
+            if sent:
+                kv_set_json(key, 1)
+    return {"changes": len(ch.get("items") or []), "downs": len(downs), "alert_sent": sent}
+
+
 def _daily_auto(budget_s=None):
     """Jeden krok denní automatiky → stav dne {done, added, total, stage, …}. Opakovatelné: bez práce vrátí stav."""
     budget = budget_s or AUTO_BUDGET_S
@@ -8829,7 +9650,7 @@ def _daily_auto(budget_s=None):
     date = _today_iso()
     key = f"auto:day:{date}"
     st = kv_get_json(key) or {}
-    if st.get("done"):
+    if st.get("done") and st.get("users_done"):      # „hotovo" ze starší verze (bez Evropy a uživatelů) se dopočítá
         return st
     lock = kv_get_json(f"auto:lock:{date}") or 0
     if time.time() - (lock if isinstance(lock, (int, float)) else 0) < 45:
@@ -8878,10 +9699,42 @@ def _daily_auto(budget_s=None):
                 kv_set_json(key, st)               # průběh hned – přežije i přerušené spuštění
         finally:
             ex.shutdown(wait=False)
-        st["done"] = not [1 for t, _sr in todo if t not in st["tried"]]
-        st.update(stage="done" if st["done"] else "verdicts", ts=int(time.time()))
+        st["verdicts_done"] = not [1 for t, _sr in todo if t not in st["tried"]]
+        # Evropské velké firmy (žebříček podle momenta) – resumovatelné
+        left = budget - (time.time() - t0)
+        if st["verdicts_done"] and not st.get("eu_done") and left > 6:
+            eu = _eu_scan(budget_s=max(4.0, left - 4))
+            st["eu_done"] = bool(eu and eu.get("date") == date)
+            st["eu_n"] = (eu or {}).get("n")
+        # Denní snímek hodnocení každého uživatele s akciemi + upozornění na zhoršení
+        st.setdefault("users", [])
+        if st["verdicts_done"] and st.get("eu_done") and not st.get("users_done"):
+            try:
+                users = [u for u in (kv_smembers("users") or [])[:500] if u not in st["users"]]
+            except Exception:
+                users = []
+            for u in users:
+                if budget - (time.time() - t0) < 5:
+                    break
+                try:
+                    r_ = _user_daily(u)
+                    if r_.get("alert_sent"):
+                        st["alerts"] = st.get("alerts", 0) + 1
+                    if r_.get("changes"):
+                        st["user_changes"] = st.get("user_changes", 0) + r_["changes"]
+                except Exception:
+                    pass
+                st["users"].append(u)
+                kv_set_json(key, st)
+            else:
+                st["users_done"] = True
+        st["done"] = bool(st["verdicts_done"] and st.get("eu_done") and st.get("users_done"))
+        st.update(stage="done" if st["done"] else ("verdicts" if not st["verdicts_done"] else ("eu" if not st.get("eu_done") else "users")),
+                  ts=int(time.time()))
         kv_set_json(key, st)
-        kv_set_json("auto:last", {k: st.get(k) for k in ("date", "ts", "added", "total", "skipped", "done", "scan", "scan_signals")})
+        kv_set_json("auto:last", {k: st.get(k) for k in ("date", "ts", "added", "total", "skipped", "done", "scan", "scan_signals",
+                                                         "eu_n", "alerts", "user_changes", "stage")})
+        st["users_n"] = len(st.get("users") or [])
         return st
     finally:
         try:

@@ -1696,7 +1696,7 @@ body.modal-open {overflow:hidden;}
 
 /* ===== Hodnocení portfolia a tipy ===== */
 .mp-pill-sep {font-size:11.5px; color:var(--text3); margin:0 2px 0 6px; align-self:center;}
-.mp-stocks {display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:12px; margin-top:12px;}
+.mp-stocks {display:grid; grid-template-columns:repeat(auto-fill, minmax(min(330px, 100%), 1fr)); gap:12px; margin-top:12px;}
 .mp-stock {background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:13px 14px; min-width:0;}
 .mp-stock.strong {border-color:rgba(0,230,118,0.32);}
 .mp-stock.weak {border-color:rgba(255,179,71,0.32);}
@@ -1716,6 +1716,42 @@ body.modal-open {overflow:hidden;}
 .mp-bar-l {font-size:11.5px; color:var(--text3); margin:4px 0 6px;}
 .mp-bar-l b {color:var(--text2);}
 .mp-rv.names, .mp-rv-hd.names {grid-template-columns:22px minmax(0,1.6fr) minmax(0,1.3fr);}
+.mp-chg-row {display:flex; gap:10px; align-items:flex-start; padding:9px 0; border-top:1px solid var(--border); font-size:13.5px; line-height:1.5;}
+.mp-chg-row:first-of-type {border-top:none;}
+.mp-chg-row .ar {font-size:12px; margin-top:2px;}
+.mp-chg-row {color:var(--text);}
+.mp-chg-row.is-down .ar {color:var(--amber);}
+.mp-chg-row.is-up .ar {color:var(--up);}
+.mp-chg-none {font-size:13.5px; color:var(--text2); display:flex; gap:8px; align-items:center;}
+.mp-chg-none i {color:var(--up);}
+.mp-chg-since {font-size:12px; color:var(--text3); font-weight:500; font-family:var(--fb);}
+.mp-sec {margin-top:12px; padding-top:12px; border-top:1px solid var(--border);}
+.mp-sec-bar {display:flex; height:10px; border-radius:6px; overflow:hidden; background:rgba(255,255,255,0.06); margin-bottom:8px;}
+.mp-sec-bar i {display:block; height:100%;}
+.mp-size {display:flex; align-items:center; gap:6px; margin-top:10px; font-size:11.5px; color:var(--text3); flex-wrap:wrap;}
+.mp-size button {background:transparent; border:1px solid var(--border); color:var(--text2); border-radius:8px; padding:3px 9px; font-size:11.5px; cursor:pointer; font-family:var(--fb);}
+.mp-size button.on {border-color:var(--accent); color:var(--accent); background:var(--accent-soft);}
+.mp-stock-perf {font-size:12px; color:var(--text2); margin-top:6px;}
+.rec-head {margin:0 0 14px;}
+.rec-head h2 {font-family:var(--fh); font-size:22px; display:flex; gap:8px; align-items:center; margin:0 0 4px;}
+.rec-head h2 i {color:var(--accent);}
+.rec-perf-row {display:grid; grid-template-columns:minmax(0,1.4fr) auto auto; gap:4px 14px; align-items:baseline; padding:10px 0; border-top:1px solid var(--border);}
+.rec-perf-row:first-of-type {border-top:none;}
+.rec-perf-row .l {font-size:13.5px; font-weight:600;}
+.rec-perf-row .v {font-family:var(--fh); font-size:18px; font-weight:700;}
+.rec-perf-row .b {font-size:12.5px; color:var(--text2);}
+.rec-perf-row .n {grid-column:1 / -1; font-size:11.5px; color:var(--text3);}
+.rec-pick {padding:10px 0; border-top:1px solid var(--border); cursor:pointer;}
+.rec-pick:first-of-type {border-top:none;}
+.rec-pick:hover b {color:var(--accent);}
+.rec-ai {background:var(--accent-soft); border:1px solid var(--border-accent); border-radius:14px; padding:12px 14px; margin:0 0 16px; font-size:14px; line-height:1.55;}
+.rec-ai .t {font-weight:700; font-size:13px; margin-bottom:4px; display:flex; gap:6px; align-items:center;}
+.rec-ai .t i {color:var(--accent);}
+.rec-ai .n {font-size:11.5px; color:var(--text3); margin-top:6px;}
+.rec-ai.loading, .rec-ai.muted {background:var(--surface); border-color:var(--border); color:var(--text2); font-size:13px;}
+@media (max-width:640px) { .rec-perf-row {grid-template-columns:minmax(0,1fr) auto;} .rec-perf-row .b {grid-column:1 / -1;} }
+.mp-bperf {display:flex; gap:8px; align-items:flex-start; font-size:12.5px; color:var(--text2); margin:0 0 12px; line-height:1.5;}
+.mp-bperf i {color:var(--accent); margin-top:2px;}
 .mp-verdict {display:inline-block; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:8px; white-space:nowrap;}
 .mp-verdict.strong {background:var(--up-glow); color:var(--up);}
 .mp-verdict.hold {background:var(--elev2); color:var(--text);}
@@ -1723,7 +1759,7 @@ body.modal-open {overflow:hidden;}
 .mp-verdict.na {background:var(--elev2); color:var(--text3);}
 .mp-ev-why {font-size:12px; color:var(--text2); margin-top:4px; line-height:1.45;}
 .mp-ev-line {display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:13.5px; margin:6px 0;}
-.mp-picks {display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:10px;}
+.mp-picks {display:grid; grid-template-columns:repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap:10px;}
 .mp-pick {background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 14px; cursor:pointer; transition:border-color .2s;}
 .mp-pick:hover {border-color:var(--border-accent);}
 .mp-pick-h {display:flex; align-items:center; justify-content:space-between; gap:8px; font-family:var(--fh); font-size:16px;}
@@ -1956,7 +1992,7 @@ body.modal-open {overflow:hidden;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.24·a</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.24·b</div>
 
 <div class="container">
   
@@ -2042,7 +2078,7 @@ body.modal-open {overflow:hidden;}
   <!-- IMPORT POZIC Z FOTKY -->
   <div class="pl-modal" id="importModal">
     <div class="pl-modal-box mp-modal-box">
-      <h3 style="margin-bottom:.6rem;"><i class="ti ti-camera" style="color:var(--accent)"></i> Nahrát portfolio ze screenshotu</h3>
+      <h3 style="margin-bottom:.6rem;"><i class="ti ti-camera" style="color:var(--accent)"></i> Nahrát portfolio</h3>
       <div id="imp-body"></div>
       <div class="pl-modal-btns" id="imp-btns"></div>
     </div>
@@ -2256,6 +2292,12 @@ body.modal-open {overflow:hidden;}
           <span class="level-lbl"><i class="ti ti-mail"></i> Ranní souhrn e-mailem:</span>
           <label class="switch"><input type="checkbox" id="notif-morning" onchange="saveNotif()"><span class="slider"></span></label>
           <span style="font-size:12px; color:var(--text2);">pohyby + tipy + hodnocení každé ráno</span>
+        </div>
+
+        <div class="level-row" id="notif-alert-row" style="display:none;">
+          <span class="level-lbl"><i class="ti ti-alert-triangle"></i> Upozornit na zhoršení mé akcie:</span>
+          <label class="switch"><input type="checkbox" id="notif-alerts" onchange="saveNotif()"><span class="slider"></span></label>
+          <span style="font-size:12px; color:var(--text2);">e-mail, když tvoje akcie klesne v hodnocení (s ranním souhrnem je to rovnou v něm)</span>
         </div>
 
         <div class="level-row" id="notif-week-row" style="display:none;">
@@ -2566,30 +2608,8 @@ body.modal-open {overflow:hidden;}
     <!-- SEKCE: AI ANALÝZA -->
     <div class="dash-section" id="section-ai" style="display:none;">
     <div id="ai-lock" style="display:none;"></div>
-    <!-- PORTFOLIO HODNOCENÍ: CO PRODAT / PŘIKOUPIT -->
-    <div class="port-eval-box" id="port-eval-box" style="display:none;">
-      <div class="port-eval-header"><i class="ti ti-chart-arrows-vertical"></i> Hodnocení Portfolia — Co prodat a přikoupit</div>
-      <div class="port-eval-summary" id="port-eval-summary"><i class="ti ti-loader spin"></i> Analyzuji portfolio...</div>
-      <div class="port-eval-grid">
-        <div class="eval-sell-col">
-          <div class="eval-col-header"><i class="ti ti-arrow-down-circle"></i> PRODAT / SNÍŽIT</div>
-          <div id="eval-sell-list"><div class="port-eval-loading"><i class="ti ti-loader spin"></i></div></div>
-        </div>
-        <div class="eval-buy-col">
-          <div class="eval-col-header"><i class="ti ti-arrow-up-circle"></i> PŘIKOUPIT / KOUPIT</div>
-          <div id="eval-buy-list"><div class="port-eval-loading"><i class="ti ti-loader spin"></i></div></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="ai-dashboard-box" id="ai-dashboard-brief" style="display:none;">
-      <div class="ai-brief-header"><i class="ti ti-bulb"></i> Přehled trhu & doporučení k nákupu</div>
-      <div class="ai-brief-content" id="ai-brief-text">
-        <i class="ti ti-loader spin"></i> Analyzuji tvé portfolio pro dnešní den...
-      </div>
-      <div class="ai-picks-grid" id="ai-picks-grid">
-        </div>
-    </div>
+    <!-- DOPORUČENÍ = totéž hodnocení jako Moje portfolio (dřív samostatné AI nad watchlistem, které si mohlo odporovat) -->
+    <div id="rec-root"></div>
 
     <!-- TRACK RECORD: úspěšnost dosavadních verdiktů -->
     <div class="track-box" id="track-box" style="display:none;">
@@ -3218,7 +3238,6 @@ async function serverAI(path, body) {
 async function loadWatchlist() {
     const watchGrid = document.getElementById('watch-grid');
     const badge = document.getElementById('live-badge');
-    const dbrief = document.getElementById('ai-dashboard-brief');
     const rbtn = document.getElementById('refresh-btn');
     const rico = document.getElementById('refresh-ico');
     if (rico) rico.classList.add('spin');
@@ -3227,7 +3246,6 @@ async function loadWatchlist() {
     if(myStocks.length === 0) {
         watchGrid.innerHTML = '';
         document.getElementById('watch-empty').style.display = 'block';
-        dbrief.style.display = 'none';
         if (rico) rico.classList.remove('spin');
         if (rbtn) rbtn.disabled = false;
         return;
@@ -3247,9 +3265,6 @@ async function loadWatchlist() {
         if (typeof renderOverviewPortfolio === 'function') renderOverviewPortfolio();
         if (typeof renderOverviewEvents === 'function') renderOverviewEvents();
 
-        // AI Analýza trhu (Čistý JSON!)
-        generateDashboardBrief(data.results);
-        generatePortfolioEval(data.results);
         loadExitSignals();  // „Co zvážit k prodeji" (rule-based, Pro)
 
         if(!autoRefreshTimer) {
@@ -3320,13 +3335,13 @@ function switchTab(name) {
         const lock = document.getElementById('ai-lock');
         if (!hasFeature('elite')) {
             lock.innerHTML = lockedCardHTML('Doporučení', 'elite',
-                'Přehled trhu, doporučení „co prodat/přikoupit", asistent k akciím a track record verdiktů.');
+                'Hodnocení každé tvé akcie, co se změnilo od včera, živý výkon tvých akcií i koše tipů, shrnutí od AI a track record verdiktů.');
             lock.style.display = 'block';
-            document.getElementById('port-eval-box').style.display = 'none';
-            document.getElementById('ai-dashboard-brief').style.display = 'none';
+            document.getElementById('rec-root').innerHTML = '';
             document.getElementById('track-box').style.display = 'none';
         } else {
             lock.style.display = 'none';
+            renderRecommendations();
             loadTrackRecord();
         }
     }
@@ -4469,6 +4484,12 @@ function renderProfileView() {
         nrow.style.display = (authToken && hasAccess) ? 'flex' : 'none';
         document.getElementById('notif-morning').checked = !!(myNotif && myNotif.morning);
     }
+    const narow = document.getElementById('notif-alert-row');
+    if (narow) {
+        narow.style.display = (authToken && hasAccess) ? 'flex' : 'none';
+        const aEl = document.getElementById('notif-alerts');
+        if (aEl) aEl.checked = !!(myNotif && myNotif.alerts);
+    }
     const nwrow = document.getElementById('notif-week-row');
     if (nwrow) {
         nwrow.style.display = (authToken && hasAccess) ? 'flex' : 'none';
@@ -4955,10 +4976,12 @@ async function saveNotif() {
     const morning = !!document.getElementById('notif-morning').checked;
     const weeklyEl = document.getElementById('notif-weekly');
     const weekly = !!(weeklyEl && weeklyEl.checked);
-    myNotif = { morning, weekly };
+    const alertsEl = document.getElementById('notif-alerts');
+    const alerts = !!(alertsEl && alertsEl.checked);
+    myNotif = { morning, weekly, alerts };
     try {
         await fetch(`${BACKEND_URL}/api/notifications`, {
-            method: 'POST', headers: authHeaders(), body: JSON.stringify({ morning, weekly })
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ morning, weekly, alerts })
         });
         showToast('Nastavení notifikací uloženo', 'up', 'ti-mail');
     } catch (e) { showToast('Nepodařilo se uložit', 'down', 'ti-x'); }
@@ -5274,7 +5297,7 @@ let dailyKickRunning = false;
 async function adminDailyKick(manual) {
     if (dailyKickRunning || !(authToken && mySub && mySub.is_admin)) return;
     const today = new Date().toISOString().slice(0, 10);          // UTC den = stejný jako na serveru
-    let last = null; try { last = localStorage.getItem('ma_daily_kick'); } catch (e) {}
+    let last = null; try { last = localStorage.getItem('ma_daily_kick2'); } catch (e) {}
     if (!manual && last === today) return;
     dailyKickRunning = true;
     const out = manual ? document.getElementById('bt-result') : null;
@@ -5292,7 +5315,7 @@ async function adminDailyKick(manual) {
     }
     dailyKickRunning = false;
     if (done) {
-        try { localStorage.setItem('ma_daily_kick', today); } catch (e) {}
+        try { localStorage.setItem('ma_daily_kick2', today); } catch (e) {}
         signalsLoaded = false;
         if (added) showToast(`Denní aktualizace hotová: +${added} ${added === 1 ? 'verdikt' : (added < 5 ? 'verdikty' : 'verdiktů')} v track recordu`, 'up', 'ti-refresh');
         if (typeof activeTab !== 'undefined' && activeTab === 'ai') loadTrackRecord();
@@ -5319,7 +5342,7 @@ async function loadEmailStatus() {
             ok(d.me.morning, `Ty máš ranní souhrn zapnutý (${escapeHtml(d.me.email)})`, 'zapni ho v Profil → Notifikace') +
             ok(d.ai_enabled, 'AI shrnutí zpráv zapnuté (ANALYSIS_API_KEY)', 'bez klíče briefing ukazuje jen čísla a témata, ne vysvětlení příčin') +
             (d.scan_last ? ok(d.scan_last.today, `Dnešní sken S&amp;P 500 hotový (${d.scan_last.scanned || '?'} titulů, ${d.scan_last.signals} signálů, ${escapeHtml(d.scan_last.date || '?')})`, 'poslední hotový sken je ze dne ' + escapeHtml(d.scan_last.date || '?') + ' – spusť „Denní aktualizace“ dole') : '') +
-            (d.daily_last ? `<div style="color:var(--text2)">Denní automatika: <b style="color:var(--text)">${when(d.daily_last)}</b> · ${d.daily_last.done ? '<span style="color:var(--up)">hotovo</span>' : '<span style="color:var(--amber)">rozpracováno</span>'} · nových verdiktů ${d.daily_last.added || 0}${d.daily_last.skipped ? ` (${d.daily_last.skipped} už mělo čerstvý)` : ''}</div>` : '<div style="color:var(--amber)">Denní automatika zatím neběžela – spustí se sama (cron nebo přihlášení admina), nebo ji spusť ručně dole.</div>') +
+            (d.daily_last ? `<div style="color:var(--text2)">Denní automatika: <b style="color:var(--text)">${when(d.daily_last)}</b> · ${d.daily_last.done ? '<span style="color:var(--up)">hotovo</span>' : '<span style="color:var(--amber)">rozpracováno (' + escapeHtml(d.daily_last.stage || '') + ')</span>'} · nových verdiktů ${d.daily_last.added || 0}${d.daily_last.skipped ? ` (${d.daily_last.skipped} už mělo čerstvý)` : ''}${d.daily_last.eu_n ? ` · Evropa ${d.daily_last.eu_n} firem` : ''}${d.daily_last.user_changes ? ` · změn u uživatelů ${d.daily_last.user_changes}` : ''}${d.daily_last.alerts ? ` · upozornění odesláno ${d.daily_last.alerts}` : ''}</div>` : '<div style="color:var(--amber)">Denní automatika zatím neběžela – spustí se sama (cron nebo přihlášení admina), nebo ji spusť ručně dole.</div>') +
             `<div style="color:var(--text2)">Track record: <b style="color:var(--text)">${d.verdict_count || 0}</b> verdiktů · živý záznam signálů: <b style="color:var(--text)">${d.paper_count || 0}</b> obchodů</div>` +
             (d.llm_last ? `<div style="color:var(--text2)">Poslední volání AI: <b style="color:var(--text)">${when(d.llm_last)}</b> · ${d.llm_last.ok ? 'model <b style="color:var(--up)">' + escapeHtml(d.llm_last.model || '?') + '</b>' : '<span style="color:var(--down)">selhalo: ' + escapeHtml(d.llm_last.err || '?') + '</span>'}</div>` : '') +
             (d.import_last ? `<div style="color:var(--text2)">Poslední import z fotky/textu: <b style="color:var(--text)">${when(d.import_last)}</b> · ${d.import_last.ok ? `přečteno ${d.import_last.read || 0}, nalezeno ${d.import_last.resolved || 0}${d.import_last.note ? ' · <span style="color:var(--amber)">' + escapeHtml(d.import_last.note) + '</span>' : ''}` : '<span style="color:var(--down)">chyba: ' + escapeHtml(d.import_last.error || '?') + '</span>'}</div>` : '') +
@@ -5338,9 +5361,16 @@ async function adminAiTest() {
         if (!d.ok) { out.innerHTML = `<span style="color:var(--down)">${escapeHtml(d.error || 'Test se nepodařil.')}</span>`; return; }
         const rows = (d.models || []).map(m => `<div>${m.ok ? '<span style="color:var(--up)">✓</span>' : '<span style="color:var(--down)">✗</span>'} <b>${escapeHtml(m.model)}</b> – ${m.ok ? 'odpovědělo za ' + (m.ms / 1000).toFixed(1).replace('.', ',') + ' s' : escapeHtml(m.err || '?')}</div>`).join('');
         const av = Array.isArray(d.available) ? d.available.join(', ') : (d.available || 'neznámé');
-        out.innerHTML = `<div style="margin:6px 0"><b>AI (${escapeHtml(d.provider)})</b>${rows || '<div style="color:var(--down)">žádný model k vyzkoušení</div>'}` +
+        const fbHint = { gemini: 'zdarma na aistudio.google.com → Get API key (umí i fotky; v bezplatném tarifu může Google data použít ke zlepšování služeb)',
+                         cerebras: 'zdarma na cloud.cerebras.ai → API Keys', openrouter: 'zdarma na openrouter.ai → Keys (modely „:free")' };
+        const fbs = (d.fallbacks || []).map(f => f.configured
+            ? `<div>${f.test && f.test.ok ? '<span style="color:var(--up)">✓</span>' : '<span style="color:var(--down)">✗</span>'} záloha <b>${escapeHtml(f.id)}</b> – ${f.test ? (f.test.ok ? escapeHtml(f.test.model) + ' odpověděl za ' + (f.test.ms / 1000).toFixed(1).replace('.', ',') + ' s' : escapeHtml(f.test.err || '?')) : 'bez modelu'}${f.vision_models && f.vision_models.length ? ' · fotky: ' + escapeHtml(f.vision_models[0]) : ''}</div>`
+            : `<div style="color:var(--text3)">○ záloha <b>${escapeHtml(f.id)}</b> není nastavená – klíč ${escapeHtml(f.env)} ${escapeHtml(fbHint[f.id] || '')}</div>`).join('');
+        out.innerHTML = `<div style="margin:6px 0"><b>AI (${escapeHtml(d.provider || 'bez Groq')})</b>${rows || '<div style="color:var(--text3)">hlavní klíč (Groq) není nastavený</div>'}` +
             `<div style="color:var(--text3);margin-top:4px">Pro čtení fotek: ${escapeHtml((d.vision || []).join(', ') || '–')}</div>` +
-            `<div style="color:var(--text3);margin-top:4px;word-break:break-word">Nabízí poskytovatel: ${escapeHtml(av)}</div></div>`;
+            `<div style="margin-top:6px">${fbs}</div>` +
+            `<div style="color:var(--text3);margin-top:4px">Zálohy se použijí samy, když Groq narazí na bezplatný limit nebo nefunguje. Klíč nastavíš ve Vercelu → Settings → Environment Variables a dáš Redeploy.</div>` +
+            (d.provider ? `<div style="color:var(--text3);margin-top:4px;word-break:break-word">Nabízí Groq: ${escapeHtml(av)}</div>` : '') + `</div>`;
     } catch (e) { out.innerHTML = '<span style="color:var(--down)">Test se nepodařil (spojení).</span>'; }
 }
 
@@ -5854,36 +5884,6 @@ function renderPortfolioSummary(results) {
         <div class="pf-stat"><div class="l">Nejhorší</div><div class="v" style="font-size:15px">${worst.ticker} <span style="color:${col(worst.change_pct)};font-size:13px">${chg(worst.change_pct)}</span></div></div>`;
 }
 
-async function generateDashboardBrief(watchlistData) {
-    const briefBox = document.getElementById('ai-dashboard-brief');
-    const briefText = document.getElementById('ai-brief-text');
-    const picksGrid = document.getElementById('ai-picks-grid');
-    if (!hasFeature('elite')) { briefBox.style.display = 'none'; return; }
-
-    briefBox.style.display = 'block';
-    briefText.innerHTML = '<i class="ti ti-loader spin"></i> Analyzuji portfolio...';
-    picksGrid.innerHTML = '';
-
-    const aiData = await serverAI('brief', { stocks: watchlistData });
-    if (!aiData.ok) {
-        briefText.innerHTML = `<span style="color:var(--down)">${aiData.error || 'Nepodařilo se, zkus to znovu.'}</span>`;
-        picksGrid.innerHTML = '';
-        return;
-    }
-    briefText.innerHTML = aiData.summary || '';
-    picksGrid.innerHTML = '';
-    (aiData.top_picks || []).forEach(pick => {
-        picksGrid.innerHTML += `
-            <div class="pick-card" onclick="loadStockDetail('${pick.ticker}')">
-                <div class="pick-top">
-                    <div class="pick-ticker">${pick.ticker}</div>
-                    <div class="pick-badge">DOPORUČUJE SE KOUPIT</div>
-                </div>
-                <div class="pick-reason">${pick.reason}</div>
-            </div>`;
-    });
-}
-
 // --- DETAIL AKCIE S OVLÁDÁNÍM GRAFU ---
 function setChartType(type) {
     chartType = type;
@@ -6202,6 +6202,75 @@ function toggleWatchlist() {
 
 // --- AUTO-AI ANALÝZA V DETAILU ---
 // --- PORTFOLIO HODNOCENÍ: CO PRODAT / PŘIKOUPIT (server-side AI) ---
+// ---------- Doporučení: stejné hodnocení jako Moje portfolio + změny, výkon, tipy, AI shrnutí ----------
+let recComment = { key: '', html: '' };
+function renderRecommendations() {
+    const root = document.getElementById('rec-root');
+    if (!root) return;
+    const d = planData;
+    if (!planLots.length) {
+        root.innerHTML = `<div class="mp-card"><h4><i class="ti ti-bulb"></i> Doporučení pro tvoje akcie</h4>
+            <div class="mp-sub">Doporučení vychází z akcií, které vlastníš. Nahraj je v <b>Moje portfolio</b> (screenshot, CSV z Trading 212 nebo seznam) a uvidíš tady hodnocení každé, co se změnilo od včera a jak se jim daří.</div>
+            <button class="tool-btn primary" onclick="switchTab('portfolio')"><i class="ti ti-briefcase"></i> Otevřít Moje portfolio</button></div>` + (d && d.picks ? recPicksHTML(d) : '');
+        if (!d && !planLoading) planRefresh();
+        return;
+    }
+    if (!d) {
+        root.innerHTML = `<div class="mp-card"><div class="mp-progress"><i class="ti ti-loader spin"></i> Hodnotím tvoje akcie…</div></div>`;
+        if (!planLoading) planRefresh();
+        return;
+    }
+    root.innerHTML = `<div class="rec-head"><h2><i class="ti ti-bulb"></i> Doporučení pro tvoje akcie</h2>
+          <div class="mp-sub">Stejné hodnocení jako v Moje portfolio – jedno místo pravdy. Říká, kam dávat <b>nové peníze</b>; prodávat podle něj nedoporučuji.</div></div>
+        <div id="rec-ai">${recComment.html}</div>
+        ${planChangesHTML(d)}
+        ${planEvalHTML(d)}
+        <div style="margin:-8px 0 18px"><button class="tool-btn" onclick="switchTab('portfolio')"><i class="ti ti-list-details"></i> Detail každé akcie v Moje portfolio</button></div>
+        ${recPerfHTML(d)}
+        ${recPicksHTML(d)}`;
+    loadRecComment(d);
+}
+
+function recPerfHTML(d) {
+    const pf = d.perf, bp = d.basket_perf;
+    if (!(pf && pf.n) && !bp) return '';
+    const row = (lbl, x, note) => `<div class="rec-perf-row"><div class="l">${lbl}</div>
+        <div class="v" style="color:var(--${x.ret >= x.spy ? 'up' : 'amber'})">${mpSigned(x.ret)}</div>
+        <div class="b">S&amp;P 500 ${mpSigned(x.spy)}</div><div class="n">${note}</div></div>`;
+    return `<div class="mp-card"><h4><i class="ti ti-activity"></i> Výkon – živý záznam</h4>
+        ${pf && pf.n ? row(`Tvoje akcie od ${mpDate(pf.since)}`, pf, pf.weighted ? 'vážené podle velikostí, které jsi zadal' : 'rovnoměrně – každá akcie stejně') : ''}
+        ${bp ? row(`Koš tipů od ${mpDate(bp.since)}`, bp, `koš ${bp.n} akcií, měsíčně obměněný`) : ''}
+        <div class="mp-sub" style="margin:8px 0 0">Počítáno z cen při přidání do appky (v měně akcie), bez poplatků a dividend. Krátké období je hlavně náhoda – vypovídací hodnotu to má po měsících.</div></div>`;
+}
+
+function recPicksHTML(d) {
+    const pk = d.picks;
+    if (!pk || !(pk.new || []).length) return '';
+    const items = pk.new.slice(0, 5).map(p => `<div class="rec-pick" onclick="loadStockDetail('${mpEsc(p.ticker)}')">
+        <b>${mpEsc(mpBase(p.ticker))}</b> <span class="mp-pick-src ${p.source}">${p.source === 'vm' ? 'Levná + roste' : 'Silné momentum'}</span>
+        <div class="mp-sub" style="margin:2px 0 0">${mpEsc(p.name)} – ${mpEsc(p.why)}</div></div>`).join('');
+    return `<div class="mp-card"><h4><i class="ti ti-target-arrow"></i> Co koupit teď (z koše tipů, co ještě nemáš)</h4>${items}
+        <button class="tool-btn" style="margin-top:10px" onclick="switchTab('portfolio'); setTimeout(()=>{const e=document.getElementById('mp-picks'); if(e) e.scrollIntoView({behavior:'smooth',block:'start'});},200)"><i class="ti ti-coins"></i> Celý koš a kam s penězi</button></div>`;
+}
+
+async function loadRecComment(d) {
+    const el = document.getElementById('rec-ai');
+    if (!el || !authToken) return;
+    const key = new Date().toISOString().slice(0, 10) + '|' + JSON.stringify(((d.evaluation || {}).items || []).map(e => [e.ticker, e.level])) + '|' + ((d.changes || {}).items || []).length;
+    if (recComment.key === key) return;
+    recComment = { key, html: '' };
+    el.innerHTML = `<div class="rec-ai loading"><i class="ti ti-loader spin"></i> AI shrnuje tvoje akcie…</div>`;
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/ai/portfolio-comment`, { method: 'POST', headers: authHeaders() });
+        const j = await r.json().catch(() => ({}));
+        recComment.html = j.ok && j.comment
+            ? `<div class="rec-ai"><div class="t"><i class="ti ti-sparkles"></i> Shrnutí od AI</div><div>${mpEsc(j.comment)}</div><div class="n">AI jen převypráví data níže – nic si nevymýšlí a prodej nedoporučuje.</div></div>`
+            : (j.error ? `<div class="rec-ai muted"><i class="ti ti-info-circle"></i> ${mpEsc(j.error)}</div>` : '');
+    } catch (e) { recComment.html = ''; }
+    const el2 = document.getElementById('rec-ai');
+    if (el2) el2.innerHTML = recComment.html;
+}
+
 async function loadTrackRecord() {
     const box = document.getElementById('track-box');
     const statsEl = document.getElementById('track-stats');
@@ -6267,51 +6336,6 @@ function trackListHTML(items) {
                 </div>
                 ${exitTxt}</div>`;
         }).join('');
-}
-
-async function generatePortfolioEval(watchlistData) {
-    const box = document.getElementById('port-eval-box');
-    const summaryEl = document.getElementById('port-eval-summary');
-    const sellList = document.getElementById('eval-sell-list');
-    const buyList = document.getElementById('eval-buy-list');
-    if (!hasFeature('elite')) { box.style.display = 'none'; return; }
-
-    box.style.display = 'block';
-    summaryEl.innerHTML = '<i class="ti ti-loader spin"></i> Analyzuji portfolio...';
-    sellList.innerHTML = '<div class="port-eval-loading"><i class="ti ti-loader spin"></i></div>';
-    buyList.innerHTML = '<div class="port-eval-loading"><i class="ti ti-loader spin"></i></div>';
-
-    const data = await serverAI('eval', { stocks: watchlistData });
-    if (!data.ok) {
-        summaryEl.innerHTML = `<span style="color:var(--down)">${data.error || 'Nepodařilo se, zkus to znovu.'}</span>`;
-        sellList.innerHTML = ''; buyList.innerHTML = '';
-        return;
-    }
-    summaryEl.innerHTML = data.summary || '';
-    const nameByTk = {};
-    (watchlistData || []).forEach(s => { if (s && s.ticker) nameByTk[s.ticker] = s.name; });
-
-    sellList.innerHTML = '';
-    (data.sell || []).forEach(item => {
-        sellList.innerHTML += `
-        <div class="eval-ticker-pill" onclick="loadStockDetail('${item.ticker}')">
-            <div style="min-width:0"><div class="eval-ticker-name">${escapeHtml(niceName(item.ticker, nameByTk[item.ticker]))} <span style="font-size:11px;color:var(--text2);font-weight:400">${item.ticker}</span></div><div class="eval-ticker-reason">${escapeHtml(item.reason || '')}</div></div>
-            <span class="eval-ticker-badge">${item.urgency || 'ZVÁŽIT'}</span>
-        </div>`;
-    });
-    if(!data.sell || data.sell.length === 0)
-        sellList.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0;">Žádná jasná doporučení k prodeji.</div>';
-
-    buyList.innerHTML = '';
-    (data.buy || []).forEach(item => {
-        buyList.innerHTML += `
-        <div class="eval-ticker-pill" onclick="loadStockDetail('${item.ticker}')">
-            <div style="min-width:0"><div class="eval-ticker-name">${escapeHtml(niceName(item.ticker, nameByTk[item.ticker]))} <span style="font-size:11px;color:var(--text2);font-weight:400">${item.ticker}</span></div><div class="eval-ticker-reason">${escapeHtml(item.reason || '')}</div></div>
-            <span class="eval-ticker-badge">${item.upside || '↑'}</span>
-        </div>`;
-    });
-    if(!data.buy || data.buy.length === 0)
-        buyList.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0;">Žádná jasná doporučení k nákupu.</div>';
 }
 
 // ============ CENOVÁ UPOZORNĚNÍ ============
@@ -6867,7 +6891,7 @@ const MP_SECTOR_CZ = {
     'Information Technology': 'Technologie', 'Health Care': 'Zdravotnictví', 'Financials': 'Finance',
     'Consumer Discretionary': 'Zbytná spotřeba', 'Consumer Staples': 'Základní spotřeba',
     'Communication Services': 'Komunikace a média', 'Industrials': 'Průmysl', 'Energy': 'Energetika',
-    'Materials': 'Suroviny', 'Utilities': 'Energetické sítě', 'Real Estate': 'Nemovitosti',
+    'Materials': 'Suroviny', 'Utilities': 'Energetické sítě', 'Real Estate': 'Nemovitosti', 'Ostatní': 'Ostatní (sektor neznám)',
 };
 const MP_RISK = {
     conservative: { label: 'Opatrný', desc: 'Jádro 80 % + 10 akcií po 2 %. Nejklidnější varianta, pořád s akciovým výběrem navíc.' },
@@ -6887,6 +6911,9 @@ const mpMonth = ym => ym ? ym.slice(5, 7).replace(/^0/, '') + '/' + ym.slice(0, 
 const mpBase = t => String(t || '').replace(/\.(DE|L|AS|MI|PA|SW|MU|SG|HM|F)$/i, '');
 const mpQty = q => (q == null) ? '–' : Number(q).toLocaleString('cs-CZ', { maximumFractionDigits: q < 1 ? 4 : (q < 100 ? 3 : 1) });
 const mpEsc = s => (typeof escapeHtml === 'function') ? escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const mpDate = iso => iso ? `${parseInt(iso.slice(8, 10), 10)}. ${parseInt(iso.slice(5, 7), 10)}.` : '';
+const MP_MONTH_CZ = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
+const mpSigned = (v, d = 1) => (v == null || isNaN(v)) ? '–' : (v >= 0 ? '+' : '') + mpPct(v, d);
 const mpThisMonth = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
 
 function saveLots(sync = true) {
@@ -6959,6 +6986,7 @@ async function planRefresh() {
     planLoading = false;
     renderPlan();
     renderOverviewPlan();
+    if (typeof activeTab !== 'undefined' && activeTab === 'ai' && hasFeature('elite')) renderRecommendations();
     if (FEATURE_QTY && planData && planData.rows && planData.rows.length) planLoadStress();
     planLoadTipNews();
 }
@@ -7099,8 +7127,51 @@ function renderPlan() {
 // ---------- portfolio bez počtu kusů: seznam akcií + hodnocení každé z nich ----------
 function planNamesOnly() {
     const seen = new Map();
-    planLots.forEach(l => { if (l && l.ticker && !seen.has(l.ticker)) seen.set(l.ticker, { ticker: l.ticker, qty: null, buy_month: null, name: l.name || '' }); });
+    planLots.forEach(l => {
+        if (!l || !l.ticker) return;
+        const o = seen.get(l.ticker) || { ticker: l.ticker, qty: null, buy_month: null, name: l.name || '', size: null };
+        if (!o.size && l.size) o.size = l.size;
+        seen.set(l.ticker, o);
+    });
     return [...seen.values()];
+}
+let planSizeT = null;
+function planSetSize(ticker, k) {
+    const cur = (planLots.find(l => l.ticker === ticker && l.size) || {}).size || null;
+    const nv = cur === k ? null : k;                      // klik na aktivní = zrušit
+    planLots = planLots.map(l => l.ticker === ticker ? Object.assign({}, l, { size: nv }) : l);
+    saveLots();
+    if (planData && planData.rows) planData.rows.forEach(r => { if (r.ticker === ticker) r.size = nv; });
+    renderPlan();
+    clearTimeout(planSizeT);
+    planSizeT = setTimeout(() => planRefresh(), 700);     // přepočítá odhad vah, koncentraci a výkon
+}
+
+function planChangesHTML(d) {
+    const ch = d && d.changes;
+    if (!ch) return '';
+    const items = ch.items || [];
+    if (!ch.since) return `<div class="mp-card mp-chg"><h4><i class="ti ti-history"></i> Co se změnilo od včera</h4>
+        <div class="mp-sub" style="margin:0">Dnes jsem si uložil výchozí stav – změny hodnocení tvých akcií začnu hlídat od zítřka. Když se některá zhorší, uvidíš to tady${myNotif && myNotif.alerts ? ' i v e-mailu' : ' (a v e-mailu, když si upozornění zapneš v profilu)'}.</div></div>`;
+    if (!items.length) return `<div class="mp-card mp-chg"><h4><i class="ti ti-history"></i> Co se změnilo od včera</h4>
+        <div class="mp-chg-none"><i class="ti ti-circle-check"></i> Od ${mpDate(ch.since)} se hodnocení tvých akcií nezměnilo.</div></div>`;
+    return `<div class="mp-card mp-chg"><h4><i class="ti ti-history"></i> Co se změnilo od včera <span class="mp-chg-since">(od ${mpDate(ch.since)})</span></h4>
+      ${items.map(c => `<div class="mp-chg-row is-${c.dir}"><span class="ar">${c.dir === 'down' ? '▼' : '▲'}</span><div>${mpEsc(c.text)}</div></div>`).join('')}
+      <div class="mp-sub" style="margin:8px 0 0">Malé posuny kolem hranice nehlásím – jen změny, které něco znamenají.</div></div>`;
+}
+
+function planSectorsHTML(d) {
+    const sm = d && d.sectors;
+    if (!sm || !(sm.items || []).length) return '';
+    const cols = ['var(--accent)', 'var(--up)', '#8FB0FF', 'var(--amber)', '#C792EA', '#5CD6C0', 'var(--text3)'];
+    const top = sm.items.slice(0, 6);
+    const nm = x => mpEsc(MP_SECTOR_CZ[x] || x);
+    return `<div class="mp-sec">
+        <div class="mp-sec-bar">${top.map((x, i) => `<i style="width:${x.pct}%;background:${cols[i % cols.length]}" title="${nm(x.sector)} ${mpPct(x.pct, 0)}"></i>`).join('')}</div>
+        <div class="mp-legend">${top.map((x, i) => `<span><i class="mp-dot" style="background:${cols[i % cols.length]}"></i>${nm(x.sector)} <b>${mpPct(x.pct, 0)}</b></span>`).join('')}</div>
+        <div class="mp-sub" style="margin:4px 0 0">${sm.sized ? 'Podle velikostí pozic, které jsi zadal (odhad).' : 'Podle počtu akcií – přesnější bude, když u akcií zadáš velikost (malá / střední / velká).'}</div>
+        ${sm.warn ? `<div class="mp-flag" style="margin-top:6px">⚠ ${mpEsc(sm.warn)}</div>` : ''}
+      </div>`;
 }
 function planRemove(ticker) {
     if (!confirm(`Odebrat ${mpBase(ticker)} z portfolia?`)) return;
@@ -7142,7 +7213,7 @@ function renderPlanNames(root) {
         html += planNamesKpisHTML(d);
     }
     html += `</div>`;
-    if (d && d.rows && d.rows.length) { html += planEvalHTML(d); html += planNamesHTML(d); }
+    if (d && d.rows && d.rows.length) { html += planChangesHTML(d); html += planEvalHTML(d); html += planNamesHTML(d); }
     if (d && d.picks) html += planPicksHTML(d);
     html += planDepositHTML(d);
     if (d) html += planWhyHTML(d);
@@ -7155,8 +7226,9 @@ function planNamesKpisHTML(d) {
     return `<div class="mp-kpis">
         <div class="mp-kpi"><div class="l">Moje akcie</div><div class="v">${n}</div><div class="s">${rated} hodnoceno${n - rated > 0 ? `, ${n - rated} bez hodnocení` : ''}</div></div>
         <div class="mp-kpi"><div class="l">Silné</div><div class="v" style="color:var(--up)">${c.strong || 0}</div><div class="s">přikupuj / drž</div></div>
-        <div class="mp-kpi"><div class="l">Drž</div><div class="v">${c.hold || 0}</div><div class="s">nic neměň</div></div>
-        <div class="mp-kpi"><div class="l">Slabší</div><div class="v" style="color:${c.weak ? 'var(--amber)' : 'var(--text)'}">${c.weak || 0}</div><div class="s">${c.weak ? 'nedokupuj' : 'žádná'}</div></div>
+        <div class="mp-kpi"><div class="l">Slabší</div><div class="v" style="color:${c.weak ? 'var(--amber)' : 'var(--text)'}">${c.weak || 0}</div><div class="s">${c.weak ? 'nedokupuj' : 'žádná'}${c.hold ? ` · drž ${c.hold}` : ''}</div></div>
+        ${d.perf && d.perf.n ? `<div class="mp-kpi"><div class="l">Od přidání (${mpDate(d.perf.since)})</div><div class="v" style="color:var(--${d.perf.ret >= d.perf.spy ? 'up' : 'amber'})">${mpSigned(d.perf.ret)}</div><div class="s">S&amp;P 500 ${mpSigned(d.perf.spy)} · ${d.perf.weighted ? 'podle velikostí' : 'rovnoměrně'}</div></div>`
+          : `<div class="mp-kpi"><div class="l">Drž</div><div class="v">${c.hold || 0}</div><div class="s">nic neměň</div></div>`}
       </div>`;
 }
 
@@ -7175,10 +7247,15 @@ function planNamesHTML(d) {
         if (ev.mom_pct != null) bits.push(`za rok ${ev.mom_pct >= 0 ? '+' : ''}${mpPct(ev.mom_pct, 0)}`);
         const price = r.price && !r.no_price ? `${mpQty(r.price)} ${mpEsc(r.currency || '')}` : '';
         const bar = ev.pct_better != null
-            ? `<div class="mp-bar ${ev.level}"><i style="width:${ev.pct_better}%"></i></div><div class="mp-bar-l">Lepší než <b>${ev.pct_better} %</b> akcií v S&amp;P 500 · celkově #${ev.rank} z ${ev.of}</div>`
+            ? `<div class="mp-bar ${ev.level}"><i style="width:${ev.pct_better}%"></i></div><div class="mp-bar-l">Lepší než <b>${ev.pct_better} %</b> ${ev.source === 'eu' ? 'velkých evropských akcií (podle momenta)' : 'akcií v S&amp;P 500'} · #${ev.rank} z ${ev.of}</div>`
             : (ev.score != null ? `<div class="mp-bar ${ev.level}"><i style="width:${Math.max(0, Math.min(100, ev.score))}%"></i></div><div class="mp-bar-l">Orientační skóre <b>${ev.score}</b>/100 (technika, valuace, růst, analytici)</div>` : '');
         const flag = r.flag ? `<div class="mp-flag">${r.flag.pause ? '⏸ Nákup pozastaven' : '⚠'} – ${mpEsc(((r.flag.reasons || [])[0] || {}).reason || '')}</div>` : '';
         const news = r.status !== 'core' ? planTipNewsHTML(r.ticker, 'hold', 'plan') : '';
+        if (ev.approx_weight != null) bits.push(`~${mpPct(ev.approx_weight, 0)} portfolia (odhad)`);
+        const pi = d.perf && d.perf.items && d.perf.items[r.ticker];
+        const perfL = pi ? `<div class="mp-stock-perf">Od ${mpDate(pi.since)}: <b style="color:var(--${pi.ret >= (pi.spy || 0) ? 'up' : 'amber'})">${mpSigned(pi.ret)}</b> · S&amp;P 500 ${mpSigned(pi.spy)}</div>` : '';
+        const sz = r.size || '';
+        const sizeL = r.status !== 'core' ? `<div class="mp-size"><span>Velikost:</span>${['S', 'M', 'L'].map(k => `<button class="${sz === k ? 'on' : ''}" onclick="planSetSize('${mpEsc(r.ticker)}','${k}')">${{ S: 'malá', M: 'střední', L: 'velká' }[k]}</button>`).join('')}</div>` : '';
         return `<div class="mp-stock ${ev.level}">
           <div class="mp-stock-h">
             <div class="who"><span class="tk">${mpEsc(mpBase(r.ticker))}</span>${r.chg != null ? `<span class="chg" style="color:var(--${r.chg >= 0 ? 'up' : 'down'})">${r.chg >= 0 ? '+' : ''}${mpPct(r.chg, 1)}</span>` : ''}${price ? `<span class="px">${price}</span>` : ''}
@@ -7189,8 +7266,10 @@ function planNamesHTML(d) {
           <div class="mp-stock-meta">${bits.filter(Boolean).map(mpEsc).join(' · ')}</div>
           ${bar}
           <div class="mp-ev-why">${mpEsc(ev.why || '')}</div>
+          ${perfL}
           ${(ev.warn || []).map(w => `<div class="mp-flag">⚠ ${mpEsc(w)}</div>`).join('')}${flag}
           ${news}
+          ${sizeL}
         </div>`;
     }).join('');
     return `<div class="mp-card"><h4><i class="ti ti-briefcase"></i> Moje akcie – hodnocení každé</h4>
@@ -7550,7 +7629,7 @@ function renderOverviewPlan() {
 let impState = { step: 'pick', rows: [], mode: 'replace', done: 0, total: 0, errors: [] };
 
 function openImport() {
-    impState = { step: 'pick', rows: [], mode: planLots.length ? 'replace' : 'replace', done: 0, total: 0, errors: [] };
+    impState = { step: 'pick', rows: [], mode: planLots.length ? 'replace' : 'replace', done: 0, total: 0, errors: [], csvNote: '' };
     renderImport();
     document.getElementById('importModal').classList.add('open');
 }
@@ -7570,6 +7649,10 @@ function renderImport() {
             <li>Obrázek se nikam neukládá, jen ho jednorázově přečte AI model.</li>
           </ul>
           <div class="mp-or"><span>nebo</span></div>
+          <div class="cmp-sub" style="margin-bottom:8px"><b>CSV z Trading 212</b> – nejpřesnější, žádné hádání názvů: v Trading 212 otevři <b>Historii</b> → <b>Export</b> (CSV) a vyber období od prvního nákupu. Appka z nákupů a prodejů spočítá, co držíš. Když export pustí jen kratší období, nahraj klidně víc souborů najednou.</div>
+          <label class="tool-btn" style="display:inline-flex; cursor:pointer"><i class="ti ti-file-spreadsheet"></i> Vybrat CSV soubor
+            <input type="file" id="imp-csv" accept=".csv,text/csv,text/plain" multiple style="display:none" onchange="impCsv(this.files)"></label>
+          <div class="mp-or"><span>nebo</span></div>
           <div class="cmp-sub" style="margin-bottom:6px"><b>Napiš / vlož seznam akcií</b> – na řádek jedna${FEATURE_QTY ? ', počet kusů je nepovinný (např. <i>Apple</i>, <i>NVDA 12</i>, <i>Microsoft 3,5 ks</i>)' : ' (např. <i>Apple</i>, <i>NVDA</i>, <i>Microsoft</i>)'}:</div>
           <textarea id="imp-text" class="mp-textarea" rows="4" placeholder="Apple&#10;Microsoft&#10;NVDA 12&#10;iShares Core S&P 500"></textarea>
           <button class="btn-primary" style="margin-top:8px" onclick="impText()"><i class="ti ti-list-search"></i> Najít akcie</button>`;
@@ -7577,7 +7660,11 @@ function renderImport() {
         const drop = document.getElementById('imp-drop');
         drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
         drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-        drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); impFiles(e.dataTransfer.files); });
+        drop.addEventListener('drop', e => {
+            e.preventDefault(); drop.classList.remove('over');
+            const fs = Array.from(e.dataTransfer.files || []);
+            if (fs.length && fs.every(f => /\.csv$/i.test(f.name) || /csv/i.test(f.type))) impCsv(fs); else impFiles(fs);
+        });
         return;
     }
     if (impState.step === 'reading') {
@@ -7593,6 +7680,7 @@ function renderImport() {
     const noQty = rows.filter(r => r.include && r.ticker && !(r.qty > 0)).length;
     let h = '';
     if (impState.errors.length) h += `<div class="mp-note warn" style="margin-top:0"><i class="ti ti-alert-triangle"></i><span>${impState.errors.map(mpEsc).join('<br>')}</span></div>`;
+    if (impState.csvNote) h += `<div class="mp-note" style="margin-top:0"><i class="ti ti-file-spreadsheet"></i><span>${mpEsc(impState.csvNote)}</span></div>`;
     if (!rows.length) {
         h += `<div class="mp-note warn" style="margin-top:0"><i class="ti ti-eye-off"></i><span><b>AI na obrázku nenašla žádnou akcii.</b> ${impState.preview ? `<span style="color:var(--text3)">Odpověď AI: ${mpEsc(impState.preview)}</span><br>` : ''}Zkus ostřejší screenshot seznamu, nebo si akcie <b>napiš jako text</b> – na to AI nepotřebuje.</span></div>
           <button class="btn-primary" style="margin-top:10px" onclick="openImport()"><i class="ti ti-list-search"></i> Napsat seznam akcií</button>`;
@@ -7747,6 +7835,42 @@ async function impFiles(files) {
 }
 
 // Text místo fotky: seznam akcií (názvy / tickery, počet kusů nepovinný)
+async function impCsv(files) {
+    files = Array.from(files || []).slice(0, 6);
+    if (!files.length) return;
+    impState.step = 'reading'; impState.errors = []; impState.rows = []; impState.preview = null; impState.total = 1; impState.done = 0;
+    impState.note = 'Čtu CSV a hledám tickery…';
+    renderImport();
+    let text = '';
+    for (const f of files) {
+        if (f.size > 3_000_000) { impState.errors.push(`${f.name}: soubor je moc velký (max ~3 MB).`); continue; }
+        try { text += (text ? '\n' : '') + (await f.text()).replace(/^\uFEFF/, ''); }
+        catch (e) { impState.errors.push(`${f.name}: soubor nejde přečíst.`); }
+    }
+    const found = [];
+    if (text) {
+        try {
+            const r = await fetch(`${BACKEND_URL}/api/holdings/import`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ csv: text }) });
+            const d = await r.json().catch(() => ({ ok: false, error: `Server neodpověděl (HTTP ${r.status}).` }));
+            if (d.ok) {
+                found.push(...(d.positions || []).map(p => Object.assign(p, { _img: 0 })));
+                const c = d.csv || {};
+                if (c.kind === 'history') {
+                    const pl = (n, one, few, many) => n === 1 ? one : (n >= 2 && n <= 4 ? few : many);
+                    const bits = [`držíš ${c.held} ${pl(c.held, 'titul', 'tituly', 'titulů')}`];
+                    if (c.sold) bits.push(`${c.sold} ${pl(c.sold, 'prodaný jsem vynechal', 'prodané jsem vynechal', 'prodaných jsem vynechal')}`);
+                    if (c.negative) bits.push(`${c.negative} ${pl(c.negative, 'titul má', 'tituly mají', 'titulů má')} v exportu víc prodejů než nákupů (export nejspíš nezačíná prvním nákupem) – vynechal jsem ${pl(c.negative, 'ho', 'je', 'je')}`);
+                    impState.csvNote = 'Z historie obchodů: ' + bits.join(', ') + '.';
+                }
+                if (d.note) impState.errors.push(d.note);
+            } else impState.errors.push(d.error || 'CSV se nepodařilo zpracovat.');
+        } catch (e) { impState.errors.push('Spojení selhalo.'); }
+    }
+    impState.note = '';
+    impState.done = 1;
+    impFinish(found);
+}
+
 async function impText() {
     const text = ((document.getElementById('imp-text') || {}).value || '').trim();
     if (text.length < 2) { showToast('Napiš aspoň jednu akcii', 'down', 'ti-alert-circle'); return; }
@@ -8187,6 +8311,7 @@ function planEvalHTML(d) {
       <div class="dg-headline sm" style="margin:6px 0 12px">${mpEsc(ev.headline)}</div>
       ${line('strong', 'Silné', by('strong'))}${line('hold', 'Drž', by('hold'))}${line('weak', 'Slabší – nedokupuj', by('weak'))}
       ${warn.length ? warn.map(e => `<div class="mp-flag" style="margin-top:6px">⚠ <b>${mpEsc(mpBase(e.ticker))}</b>: ${mpEsc(e.warn.join(' '))}</div>`).join('') : ''}
+      ${planSectorsHTML(d)}
       <div class="mp-note"><i class="ti ti-info-circle"></i><span>Hodnocení = pořadí akcie mezi ~500 firmami S&amp;P 500 podle kombinace „levná podle zisků a cash flow" a „roste". <b>Prodávat podle něj nedoporučuji</b> – na historii slabší akcie spolehlivě nezaostávaly. Spolehlivé je jen tohle: nové peníze dávat do silných akcií a tipů, ne do slabých.</span></div>
     </div>`;
 }
@@ -8212,8 +8337,9 @@ function planPicksHTML(d) {
         ${heldT.has(p.ticker) ? '' : planTipNewsHTML(p.ticker, 'buy')}
       </div>`).join('');
     return `<div class="mp-card" id="mp-picks"><h4><i class="ti ti-target-arrow"></i> Co koupit teď</h4>
-      <div class="mp-sub">Koš ${pk.n} nejsilnějších akcií z S&amp;P 500: půlka je <b>levná a zároveň roste</b> (hodnota + momentum), půlka má <b>nejsilnější momentum</b>. Mění se jednou měsíčně. ${nHeld ? `${pk.basket.filter(p => heldT.has(p.ticker)).map(p => '<b>' + mpEsc(mpBase(p.ticker)) + '</b>').join(', ')} už máš – peníze ${nHeld > 1 ? 'dostanou' : 'dostane'}, jen když ${nHeld > 1 ? 'jich' : 'jí'} máš méně než ostatních. ` : ''}Klikni na akcii pro detail.</div>
+      <div class="mp-sub">${pk.month ? `Koš na <b>${MP_MONTH_CZ[parseInt(pk.month.slice(5, 7), 10) - 1]}</b> (sestaven ${mpDate(pk.since)}) – ` : ''}${pk.n} nejsilnějších akcií z S&amp;P 500: půlka je <b>levná a zároveň roste</b> (hodnota + momentum), půlka má <b>nejsilnější momentum</b>. Mění se jednou měsíčně, mezitím zůstává stejný. ${nHeld ? `${pk.basket.filter(p => heldT.has(p.ticker)).map(p => '<b>' + mpEsc(mpBase(p.ticker)) + '</b>').join(', ')} už máš – peníze ${nHeld > 1 ? 'dostanou' : 'dostane'}, jen když ${nHeld > 1 ? 'jich' : 'jí'} máš méně než ostatních. ` : ''}Klikni na akcii pro detail.</div>
       <div class="mp-riskrow" style="margin:0 0 12px">${tog(10)}${tog(6)}<span class="mp-pill-sep">${pk.n === 6 ? 'koncentrovanější, víc kolísá' : 'doporučeno – stabilnější'}</span></div>
+      ${d.basket_perf ? `<div class="mp-bperf"><i class="ti ti-activity"></i><span>Živý záznam koše od ${mpDate(d.basket_perf.since)}: <b style="color:var(--${d.basket_perf.ret >= d.basket_perf.spy ? 'up' : 'amber'})">${mpSigned(d.basket_perf.ret)}</b> · S&amp;P 500 ${mpSigned(d.basket_perf.spy)}. Krátké období je hlavně náhoda – smysl to dává po měsících.</span></div>` : ''}
       <div class="mp-picks">${cards}</div>
       <div class="mp-acc"><i class="ti ti-chart-dots"></i><div><b>Jak přesné to je (ověřeno na historii S&amp;P 500):</b> koš ${pk.n} tipů porazil index za 12 měsíců v <b>${tr.beat_pct} %</b> případů v letech 2015–2022 (průměrně o +${mpPct(tr.excess, 1)}) a v <b>${ho.beat_pct} %</b> v letech 2023–2026, na kterých se nic neladilo (+${mpPct(ho.excess, 1)}). Jednotlivý tip ale porazí index jen asi v ${ho.tip_pct} % – <b>kupuj celý koš, ne jednu akcii</b>. Žádný model nezaručí výsledek a akcie s nejsilnějším momentem umí i prudce spadnout.</div></div>
       ${!pk.mix ? '<div class="mp-note"><i class="ti ti-info-circle"></i><span>Dnes jsou tipy jen podle hodnoty + momenta – pořadí podle momenta doplní ranní sken.</span></div>' : ''}
