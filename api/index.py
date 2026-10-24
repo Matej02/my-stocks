@@ -4039,6 +4039,7 @@ def _value_holdings(holdings):
                "tax_free_qty": round(free_q, 6), "tax_free_value_czk": round(free_q * px_czk),
                "unknown_qty": round(unknown_q, 6),
                "no_qty": no_qty or bool(qt.get("no_price")), "no_price": bool(qt.get("no_price")),
+               "itype": (qt.get("type") or "").upper(),
                "tax_free": (not no_qty) and unknown_q == 0 and free_q >= qty - 1e-9,
                "tax_next": pending[0] if pending else None,
                "tax_free_from": (pending[-1] if pending else (known[0] and _tax_free_from(known[0]))) if known else None,
@@ -4224,8 +4225,62 @@ def _picks(scan, n, held=(), flags=None):
             "mix": bool(scan.get("mom_rank_map"))}
 
 
-def _evaluate_holdings(rows, scan, basket_set):
-    """Hodnocení každé držené akcie: pořadí mezi S&P 500, momentum, P/E, váha, verdikt."""
+_NOT_STOCK = ("ETF", "MUTUALFUND", "CRYPTOCURRENCY", "CURRENCY", "INDEX", "FUTURE")
+
+
+def _verdict_eval(ticker):
+    """Orientační hodnocení titulu MIMO S&P 500: stejný deterministický model jako hloubková analýza
+    (technika, valuace, růst, analytici), bez AI. Kešováno na den; neúspěch se zkusí znovu za 30 min."""
+    key = f"evalx:{_spx_key(ticker)}:{_today_iso()}"
+    try:
+        c = kv_get_json(key)
+        if c and not c.get("fail"):
+            return c
+        if c and c.get("fail") and time.time() - c.get("ts", 0) < 1800:
+            return None
+    except Exception:
+        pass
+    try:
+        mdl = compute_verdict_model(gather_facts(ticker))
+        out = {"verdict": mdl["verdict"], "score": mdl.get("score"), "coverage": mdl.get("coverage_pct")}
+        kv_set_json(key, out)
+        return out
+    except Exception:
+        try:
+            kv_set_json(key, {"fail": True, "ts": time.time()})
+        except Exception:
+            pass
+        return None
+
+
+def _extra_evals(rows, scan, budget_s=10.0):
+    """{ticker: {verdict, score}} pro držené akcie, které S&P 500 sken nehodnotí (evropské, menší firmy…)."""
+    mix = scan.get("mix_rank_map") or {}
+    todo = [r["ticker"] for r in rows if r["kind"] == "other" and _spx_key(r["ticker"]) not in mix
+            and (r.get("itype") or "EQUITY") not in _NOT_STOCK][:8]
+    out = {}
+    if not todo:
+        return out
+    from concurrent.futures import ThreadPoolExecutor
+    ex = ThreadPoolExecutor(max_workers=4)
+    t0 = time.time()
+    try:
+        futs = [(t, ex.submit(_verdict_eval, t)) for t in todo]
+        for t, f in futs:
+            try:
+                x = f.result(timeout=max(0.5, budget_s - (time.time() - t0)))
+                if x:
+                    out[t] = x
+            except Exception:
+                pass
+    finally:
+        ex.shutdown(wait=False)
+    return out
+
+
+def _evaluate_holdings(rows, scan, basket_set, extra=None):
+    """Hodnocení každé držené akcie: pořadí mezi S&P 500, momentum, P/E, verdikt (a váha, když jsou známé kusy).
+    Titul mimo S&P 500 dostane orientační hodnocení z modelu hloubkové analýzy (`extra`)."""
     mix, mk, rk = scan.get("mix_rank_map") or {}, scan.get("mom_rank_map") or {}, scan.get("rank_map") or {}
     n_uni = max(len(mix), 1)
     out, counts = [], {"strong": 0, "hold": 0, "weak": 0, "na": 0}
@@ -4239,6 +4294,7 @@ def _evaluate_holdings(rows, scan, basket_set):
             e["why"] = "Široký index – stabilní základ. Pokud chceš jen akcie, nedokupuj ho a nové peníze dávej do tipů."
         elif key in mix:
             pct = mix[key] / n_uni
+            e["pct_better"] = max(0, min(100, int(round((1 - (mix[key] - 1) / n_uni) * 100))))   # lepší než X % akcií S&P 500
             if key in basket_set and (r.get("weight") or 0) < HOLD_CONC_PCT:
                 e["level"], e["verdict"] = "strong", "Silná – přikupuj"
                 e["why"] = "Patří do aktuálního koše tipů – nové peníze sem dávají smysl."
@@ -4255,9 +4311,21 @@ def _evaluate_holdings(rows, scan, basket_set):
                 e["level"], e["verdict"] = "weak", "Slabší – nedokupuj"
                 e["why"] = ("Horší polovina S&P 500 – drahá nebo bez momenta. Neprodávej kvůli tomu, "
                             "jen nové peníze dávej do silnějších tipů.")
+        elif (extra or {}).get(r["ticker"]):
+            x = extra[r["ticker"]]
+            lvl = {"Koupit": "strong", "Držet": "hold", "Prodat": "weak"}.get(x.get("verdict"), "hold")
+            e["level"] = lvl
+            e["verdict"] = {"strong": "Silná (orientačně)", "hold": "Drž (orientačně)", "weak": "Slabší (orientačně)"}[lvl]
+            e["source"] = "model"
+            e["score"] = x.get("score")
+            e["why"] = ("Mimo S&P 500 nemám ověřený model pořadí – orientačně z techniky, valuace, růstu a analytiků: "
+                        f"skóre {x.get('score')}/100. Bere to s rezervou.")
+        elif (r.get("itype") or "") in ("ETF", "MUTUALFUND"):
+            e["level"], e["verdict"] = "na", "ETF / fond"
+            e["why"] = "Fond nehodnotím jednotlivě – hodnotím akcie. U fondu sleduji jen zprávy."
         else:
-            e["level"], e["verdict"] = "na", "Mimo hodnocení"
-            e["why"] = "Hodnotím jen akcie z S&P 500 – tady sleduji zprávy a riziko, ne pořadí."
+            e["level"], e["verdict"] = "na", "Zatím bez hodnocení"
+            e["why"] = "Pro tenhle titul teď nemám dost dat (ceny nebo fundamenty se nenačetly) – zkus to za chvíli."
         if r.get("weight") and r["weight"] >= HOLD_CONC_PCT and r["kind"] != "core":
             e["warn"].append(f"Tvoří {_pc(r['weight'], 0)} % portfolia – velké riziko jedné firmy.")
         if (r.get("flag") or {}).get("pause"):
@@ -4274,7 +4342,7 @@ def _evaluate_holdings(rows, scan, basket_set):
         headline = f"Portfolio je v dobré kondici: {strong} z {ranked_n} hodnocených akcií patří k nejsilnějším."
     else:
         headline = f"Smíšené: {strong} silných, {counts['hold']} na držení, {weak} slabších."
-    return {"items": out, "counts": counts, "headline": headline}
+    return {"items": out, "counts": counts, "headline": headline, "n": len(out)}
 
 
 def _allocate_basket(amount, rows, picks):
@@ -4666,9 +4734,13 @@ def api_plan():
         except Exception:
             flags = {}
         picks = _picks(scan, int(_num(body.get("picks_n")) or 10), held, flags)
+        try:
+            extra = _extra_evals(rows, scan)
+        except Exception:
+            extra = {}
         out = {"ok": True, "rows": rows, "total_czk": round(total), "missing": missing, "plan": plan,
                "xray": _xray(rows, total, scan), "scan_date": scan.get("date"), "picks": picks,
-               "evaluation": _evaluate_holdings(rows, scan, {_spx_key(p["ticker"]) for p in picks["basket"]})}
+               "evaluation": _evaluate_holdings(rows, scan, {_spx_key(p["ticker"]) for p in picks["basket"]}, extra)}
         amount = _num(body.get("amount_czk"))
         if amount and 0 < amount < 1e10:
             out["deposit"] = (_allocate_basket(amount, rows, picks) if risk == "maximum"
@@ -4896,6 +4968,16 @@ def _local_scan():
     return sc
 
 
+_SHARE_CLASS = {"GOOGL": "A", "GOOG": "C", "FOXA": "A", "FOX": "B", "NWSA": "A", "NWS": "B", "BRK.B": "B", "BF.B": "B"}
+
+
+def _class_hint(name):
+    """„Alphabet (Class A)", „Berkshire Hathaway B" → 'A' / 'B' (třída akcií z názvu)."""
+    n = name or ""
+    m = re.search(r"\bclass\s*([abc])\b", n, re.I) or re.search(r"\(\s*(?:class\s*)?([abc])\s*\)", n, re.I) or re.search(r"\s([ABC])\s*$", n)
+    return m.group(1).upper() if m else None
+
+
 def _scan_candidates(raw_t, name, scan, limit=4):
     """Kandidáti z našeho skenu podle tickeru nebo jména: [{ticker (Yahoo styl BRK-B), name, price, currency}]."""
     names, pm = scan.get("name_map") or {}, scan.get("px_map") or {}
@@ -4904,8 +4986,13 @@ def _scan_candidates(raw_t, name, scan, limit=4):
     if k and k in names:
         keys.append(k)
     if name:
-        hits = sorted((len(n), kk) for kk, n in names.items() if kk not in keys and _name_match(name, n))
-        keys += [kk for _l, kk in hits[:limit]]
+        hint = _class_hint(name)
+        # firmy s víc třídami akcií (GOOGL/GOOG…): třída z názvu, bez nápovědy první „A"
+        def prio(kk):
+            c = _SHARE_CLASS.get(kk)
+            return 0 if ((hint and c == hint) or (not hint and c in (None, "A"))) else 1
+        hits = sorted((prio(kk), len(n), kk) for kk, n in names.items() if kk not in keys and _name_match(name, n))
+        keys += [kk for _p, _l, kk in hits[:limit]]
     out = []
     for kk in keys[:limit]:
         px = pm.get(kk)
@@ -4928,7 +5015,7 @@ def _resolve_position(p):
 
     def add(ticker, name="", exchange="", type="", us=False):
         t = (ticker or "").upper()
-        if t and t not in seen and len(cands) < 10:
+        if t and t not in seen and len(cands) < 14:
             seen.add(t)
             cands.append({"ticker": t, "name": name, "exchange": exchange, "type": type, "us": us})
     if raw_t:
@@ -4944,29 +5031,28 @@ def _resolve_position(p):
     if name and len(cands) < 6:
         for x in _yahoo_search(name, 6)[:5]:
             add(**x)
+    # Kandidáti z našeho skenu S&P 500 (jméno / ticker) VŽDY – Yahoo hledání občas vrátí cizí burzu
+    # nebo pákový produkt (např. „Berkshire Hathaway B" → BRK2.L) a z Vercelu někdy neodpoví vůbec.
+    local_px = {}
+    for lc in _scan_candidates(raw_t, name, _local_scan()):
+        add(lc["ticker"], lc["name"], "S&P 500", "EQUITY", True)
+        local_px[lc["ticker"].upper()] = lc
     q = _quotes([c["ticker"] for c in cands])
     scored = []
     for c in cands:
         qt = q.get(c["ticker"])
+        if (not qt or not qt.get("price")) and c["ticker"] in local_px:
+            lc = local_px[c["ticker"]]                      # Yahoo cenu nedalo → cena z ranního skenu
+            qt = {"price": lc["price"], "currency": lc["currency"], "name": lc["name"], "type": "EQUITY"}
         if not qt or not qt.get("price"):
             continue
-        fx = _fx_czk(qt["currency"])
-        if not fx:
-            continue
-        px_czk = qt["price"] * fx
+        fx = _fx_czk(qt["currency"])                       # bez kurzu titul rozpoznáme, jen ho neoceníme v Kč
+        px_czk = qt["price"] * fx if fx else None
         c.update(price=round(qt["price"], 4), currency=qt["currency"], name=c["name"] or qt["name"],
                  px_czk=px_czk, type=c["type"] or qt.get("type") or "")
         if qty and value_czk:
-            c["err"] = abs(qty * px_czk - value_czk) / value_czk
+            c["err"] = abs(qty * px_czk - value_czk) / value_czk if px_czk else 9.0
         scored.append(c)
-    if not scored:                         # Yahoo neodpovědělo / titul nezná → zkus náš sken S&P 500
-        for lc in _scan_candidates(raw_t, name, _local_scan()):
-            fx = _fx_czk(lc["currency"])                # bez kurzu rozpoznáme titul, jen ho neoceníme v Kč
-            c = {"ticker": lc["ticker"], "name": lc["name"], "exchange": "S&P 500", "type": "EQUITY", "us": True,
-                 "price": round(lc["price"], 4), "currency": lc["currency"], "px_czk": lc["price"] * fx if fx else None}
-            if qty and value_czk:
-                c["err"] = abs(qty * c["px_czk"] - value_czk) / value_czk if c["px_czk"] else 9.0
-            scored.append(c)
     if not scored:
         return {"name": name or raw_t, "raw_ticker": raw_t, "ticker": None, "qty": qty,
                 "value_czk": round(value_czk) if value_czk else None, "status": "unresolved", "candidates": []}
@@ -8051,6 +8137,23 @@ def _portfolio_email_html(email, mark_sent=False):
     plan = _build_plan(rows, risk, scan)
     held = [r for r in rows if r["kind"] != "core"]
     nq = [r for r in rows if r.get("no_qty")]
+    names_only = not total                      # uživatel zná jen názvy akcií (počty kusů zatím nezadává)
+    picks, ev = None, None
+    if names_only or risk == "maximum":
+        try:
+            held_keys = {_spx_key(r["ticker"]) for r in rows}
+            try:
+                flags = _red_flags([t.replace(".", "-") for t, _s in _mix_basket(scan, 10)[:40]])
+            except Exception:
+                flags = {}
+            picks = _picks(scan, 10, held_keys, flags)
+            try:
+                extra = _extra_evals(rows, scan)
+            except Exception:
+                extra = {}
+            ev = _evaluate_holdings(rows, scan, {_spx_key(p["ticker"]) for p in picks["basket"]}, extra)
+        except Exception:
+            picks, ev = None, None
     # změna za poslední obchodní den (z pohybu ceny; nové nákupy ji nezkreslí)
     day = sum(r["value_czk"] * r["chg"] / (100 + r["chg"]) for r in rows if r.get("chg") is not None)
     base = total - day
@@ -8065,13 +8168,26 @@ def _portfolio_email_html(email, mark_sent=False):
                 f"({sg}{_pc(abs(day) / base * 100 if base else 0, 2)} %) za poslední obchodní den</div>"
                 f"<div style='color:#9ba1b0;font-size:13px;margin-top:6px'>Indexové jádro {_pc(core, 0)} % (cíl {plan['core_pct']} %) · "
                 f"akcie v plánu {plan['slots_used']}/{plan['slots']}</div></div>")
-    else:       # uživatel zná jen NÁZVY akcií – bez počtu kusů nejde ocenit
-        names = ", ".join(_html_escape(r["ticker"].split(".")[0]) for r in rows[:12])
+    else:       # jen NÁZVY akcií: hodnocení každé (silná / drž / slabší), bez hodnoty a vah
+        def _chip(lbl, fg, bg, names):
+            return (f"<div style='margin:5px 0;font-size:14px;line-height:1.7'><span style='display:inline-block;padding:2px 9px;"
+                    f"border-radius:8px;background:{bg};color:{fg};font-weight:700;font-size:12px'>{lbl}</span> <b>{names}</b></div>") if names else ""
+        if ev:
+            def _names(lvl):
+                return ", ".join(_html_escape(r["ticker"].split(".")[0]) for r, e in zip(rows, ev["items"]) if e["level"] == lvl)
+            body = (_chip("Silné", "#00C853", "rgba(0,200,83,0.14)", _names("strong")) +
+                    _chip("Drž", "#E6E8EE", "#23262f", _names("hold")) +
+                    _chip("Slabší – nedokupuj", "#FFB347", "rgba(255,179,71,0.14)", _names("weak")) +
+                    _chip("Fondy a ostatní", "#9ba1b0", "#1a1d26", _names("na")))
+            head = f"<div style='font-size:14px;font-weight:600;margin-bottom:6px'>{_html_escape(ev['headline'])}</div>"
+            foot = ("<div style='color:#9ba1b0;font-size:12px;margin-top:8px'>Hodnocení = pořadí akcie mezi ~500 firmami S&amp;P 500 "
+                    "(levná podle zisků a cash flow + roste). Neprodávej podle něj – nové peníze dávej do silných akcií a tipů.</div>")
+        else:
+            body = f"<b>{', '.join(_html_escape(r['ticker'].split('.')[0]) for r in rows[:12])}</b>"
+            head = foot = ""
         html = ("<h3 style='font-size:16px;margin:22px 0 8px'>🧭 Tvoje akcie</h3>"
-                "<div style='background:#12141c;border:1px solid #23262f;border-radius:12px;padding:12px 16px;margin-bottom:10px;"
-                f"font-size:14px;line-height:1.5'><b>{names}</b>"
-                "<div style='color:#9ba1b0;font-size:12px;margin-top:6px'>Počet kusů neznám, proto nepočítám hodnotu ani úkoly. "
-                "Doplníš ho v appce (Moje portfolio → tužka u akcie).</div></div>")
+                "<div style='background:#12141c;border:1px solid #23262f;border-radius:12px;padding:12px 16px;margin-bottom:10px'>"
+                f"{head}{body}{foot}</div>")
     if total and nq:
         html += (f"<div style='color:#9ba1b0;font-size:12px;margin:0 0 8px'>U {len(nq)} {'akcie' if len(nq) == 1 else 'akcií'} neznám počet kusů "
                  f"({_html_escape(', '.join(r['ticker'].split('.')[0] for r in nq[:6]))}), proto nejsou v hodnotě.</div>")
@@ -8131,7 +8247,8 @@ def _portfolio_email_html(email, mark_sent=False):
     due = today.day <= 10 and hrec.get("deposit_month") != month
     if due:
         if amount and amount > 0:
-            dep = _allocate(float(amount), rows, total, plan)
+            dep = (_allocate_basket(float(amount), rows, picks) if (picks and (names_only or risk == "maximum"))
+                   else _allocate(float(amount), rows, total, plan))
             lines = "".join(
                 f"<div style='padding:4px 0;font-size:14px'><b>{_html_escape(l['ticker'].split('.')[0])}</b> "
                 f"<span style='color:#9ba1b0;font-size:12px'>{_html_escape((l.get('name') or '')[:34])}</span>"
@@ -8164,6 +8281,8 @@ def _portfolio_email_html(email, mark_sent=False):
                       f"za ≈ {_kc(a0['amount_czk'])} (bez daně).")
         elif plan.get("paused"):
             action = "Dnes: nic neprodávej; u pozastavených titulů se jen nedokupuje."
+        elif names_only and ev:
+            action = "Dnes: nemusíš nic dělat. Nové peníze dávej jen do silných akcií a koše tipů."
         else:
             action = "Dnes: nemusíš nic dělat – plán drží. Zprávy jsou kontext, ne signál."
     return html, action

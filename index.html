@@ -1576,6 +1576,9 @@ input[type=month]::-webkit-datetime-edit, input[type=date]::-webkit-datetime-edi
 @media (max-width:640px) {
   .mp-rv-hd {display:none;}
   .mp-rv {grid-template-columns:24px minmax(0,1fr) minmax(0,1fr); grid-template-areas:"chk raw raw" ". tick tick" ". qty mon"; row-gap:8px; padding:12px;}
+  .mp-rv.names {grid-template-columns:24px minmax(0,1fr) minmax(0,1fr); grid-template-areas:"chk raw raw" ". tick tick";}
+  .mp-stocks {grid-template-columns:1fr;}
+  .mp-stock-h .px {display:none;}
   .mp-rv > input[type=checkbox] {grid-area:chk; width:20px; height:20px;}
   .mp-rv > :nth-child(2) {grid-area:raw;}
   .mp-rv > :nth-child(3) {grid-area:tick;}
@@ -1693,6 +1696,26 @@ body.modal-open {overflow:hidden;}
 
 /* ===== Hodnocení portfolia a tipy ===== */
 .mp-pill-sep {font-size:11.5px; color:var(--text3); margin:0 2px 0 6px; align-self:center;}
+.mp-stocks {display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:12px; margin-top:12px;}
+.mp-stock {background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:13px 14px; min-width:0;}
+.mp-stock.strong {border-color:rgba(0,230,118,0.32);}
+.mp-stock.weak {border-color:rgba(255,179,71,0.32);}
+.mp-stock-h {display:flex; align-items:flex-start; gap:10px;}
+.mp-stock-h .who {min-width:0; flex:1;}
+.mp-stock-h .tk {font-family:var(--fh); font-weight:700; font-size:17px;}
+.mp-stock-h .chg {font-size:12px; font-weight:600; margin-left:8px;}
+.mp-stock-h .px {font-size:12px; color:var(--text3); margin-left:8px; white-space:nowrap;}
+.mp-stock-h .nm {font-size:12.5px; color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.mp-stock-h .mp-verdict {flex:none; margin-top:2px;}
+.mp-stock-h .mp-icon-btn {flex:none; width:28px; height:28px;}
+.mp-stock-meta {font-size:12.5px; color:var(--text2); margin:9px 0 2px;}
+.mp-bar {height:6px; border-radius:6px; background:rgba(255,255,255,0.08); overflow:hidden; margin-top:8px;}
+.mp-bar i {display:block; height:100%; border-radius:6px; background:var(--accent);}
+.mp-bar.strong i {background:var(--up);}
+.mp-bar.weak i {background:var(--amber);}
+.mp-bar-l {font-size:11.5px; color:var(--text3); margin:4px 0 6px;}
+.mp-bar-l b {color:var(--text2);}
+.mp-rv.names, .mp-rv-hd.names {grid-template-columns:22px minmax(0,1.6fr) minmax(0,1.3fr);}
 .mp-verdict {display:inline-block; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:8px; white-space:nowrap;}
 .mp-verdict.strong {background:var(--up-glow); color:var(--up);}
 .mp-verdict.hold {background:var(--elev2); color:var(--text);}
@@ -1933,7 +1956,7 @@ body.modal-open {overflow:hidden;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.23·c</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.24·a</div>
 
 <div class="container">
   
@@ -3527,6 +3550,13 @@ function renderBrief(d) {
         const day = rows.reduce((sm, r) => sm + (r.chg != null ? r.value_czk * r.chg / (100 + r.chg) : 0), 0);
         const base = tot - day, up = day >= 0, acts = (planData.plan.actions || []);
         const news = (tipNews && tipNews.ai && tipNews.items) ? tipNews.items.slice(0, 3) : [];
+        if (!FEATURE_QTY) {
+            const ev = planData.evaluation || {}, c = ev.counts || {};
+            h += '<div class="brief-h">Tvoje akcie</div>' +
+                `<div class="dg-story calm"><div class="dg-what">${rows.length} ${rows.length === 1 ? 'akcie' : (rows.length < 5 ? 'akcie' : 'akcií')} · silné ${c.strong || 0} · drž ${c.hold || 0} · slabší ${c.weak || 0}</div>
+                  <div class="dg-why">${mpEsc(ev.headline || '')}</div></div>` +
+                news.map(it => `<div class="mp-news ${{ 'pozitivní': 'up', 'negativní': 'down' }[it.impact] || 'mix'}"><b>${mpEsc(mpBase(it.ticker))}</b> – ${mpEsc(it.what)}</div>`).join('');
+        } else
         h += '<div class="brief-h">Tvoje portfolio</div>' +
             `<div class="dg-story ${up ? 'calm' : 'mixed'}"><div class="dg-what">${mpKc(tot)}
                 <span style="font-size:14px;font-weight:600;color:var(--${up ? 'up' : 'down'})">${up ? '+' : '−'}${mpKc(Math.abs(day))} (${up ? '+' : '−'}${mpPct(Math.abs(base ? day / base * 100 : 0), 2)}) za poslední obchodní den</span></div>
@@ -6817,12 +6847,15 @@ function exportCSV() {
 // Pozice se ukládají jako jednotlivé nákupy (loty) – 3letý časový test platí pro
 // každý nákup zvlášť. Lokálně v prohlížeči, po přihlášení i v cloudu (vlastní
 // klíč, ukládání watchlistu je nepřepíše). Výpočty dělá bezstavově /api/plan.
+// Počty kusů zatím nezadáváme (rozhodnutí uživatele 2026-10-23, viz paměť my-stocks-qty-later):
+// portfolio = seznam držených akcií a hodnocení každé z nich. Kód pro kusy/váhy/daňový test zůstává, jen je vypnutý.
+const FEATURE_QTY = false;
 let planLots = (() => { try { return JSON.parse(localStorage.getItem('ma_holdings') || '[]') || []; } catch (e) { return []; } })();
 let planData = null, planLoading = false, planErr = '', planTs = 0;
 let planAmount = (() => { try { return localStorage.getItem('ma_plan_amount') || ''; } catch (e) { return ''; } })();
 let planShowDeposit = false;
 // Profil plánu = profil rizika appky, navíc „maximum" (jen pro dlouhodobý plán)
-let planRisk = (() => { try { return localStorage.getItem('ma_plan_risk') || 'maximum'; } catch (e) { return 'maximum'; } })();
+let planRisk = FEATURE_QTY ? (() => { try { return localStorage.getItem('ma_plan_risk') || 'maximum'; } catch (e) { return 'maximum'; } })() : 'maximum';
 // 2026-10: výchozí je „Jen akcie" (hodnocení + koš tipů, bez ETF) – jednorázový přechod i pro dřívější volbu
 (function () { try { if (!localStorage.getItem('ma_plan_mig2')) { planRisk = 'maximum'; localStorage.setItem('ma_plan_risk', 'maximum'); localStorage.setItem('ma_plan_mig2', '1'); } } catch (e) {} })();
 let planPicksN = (() => { try { return parseInt(localStorage.getItem('ma_picks_n'), 10) === 6 ? 6 : 10; } catch (e) { return 10; } })();
@@ -6898,6 +6931,7 @@ function planOnRisk() {
 
 function planSetRisk(r, fromApp) {
     if (!MP_RISK[r]) return;
+    if (!FEATURE_QTY && r !== 'maximum') return;          // indexové profily potřebují počty kusů
     if (r !== 'maximum' && !fromApp && r !== investorRisk) { setRisk(r); return; }   // setRisk zavolá planOnRisk
     planRisk = r;
     try { localStorage.setItem('ma_plan_risk', r); } catch (e) {}
@@ -6911,7 +6945,7 @@ async function planRefresh() {
     planLoading = true; planErr = '';
     renderPlan();
     try {
-        const body = { holdings: planLots, risk: planRisk, picks_n: planPicksN };
+        const body = { holdings: FEATURE_QTY ? planLots : planNamesOnly(), risk: planRisk, picks_n: planPicksN };
         const amt = parseFloat(String(planAmount).replace(/\s/g, '').replace(',', '.'));
         if (planShowDeposit && amt > 0) body.amount_czk = amt;
         const r = await fetch(`${BACKEND_URL}/api/plan`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
@@ -6925,7 +6959,7 @@ async function planRefresh() {
     planLoading = false;
     renderPlan();
     renderOverviewPlan();
-    if (planData && planData.rows && planData.rows.length) planLoadStress();
+    if (FEATURE_QTY && planData && planData.rows && planData.rows.length) planLoadStress();
     planLoadTipNews();
 }
 
@@ -7008,6 +7042,7 @@ function renderPlan() {
     if (!root) return;
     if (planTyping()) { planPending = true; return; }
     planPending = false;
+    if (!FEATURE_QTY) { renderPlanNames(root); return; }
     const d = planData;
     const has = planLots.length > 0;
     const pill = r => `<button class="risk-pill ${r === planRisk ? 'active' : ''}" onclick="planSetRisk('${r}')">${MP_RISK[r].label}</button>`;
@@ -7061,6 +7096,109 @@ function renderPlan() {
     if (planGoal) planDrawFan();
 }
 
+// ---------- portfolio bez počtu kusů: seznam akcií + hodnocení každé z nich ----------
+function planNamesOnly() {
+    const seen = new Map();
+    planLots.forEach(l => { if (l && l.ticker && !seen.has(l.ticker)) seen.set(l.ticker, { ticker: l.ticker, qty: null, buy_month: null, name: l.name || '' }); });
+    return [...seen.values()];
+}
+function planRemove(ticker) {
+    if (!confirm(`Odebrat ${mpBase(ticker)} z portfolia?`)) return;
+    planLots = planLots.filter(l => l.ticker !== ticker);
+    saveLots();
+    if (planData && planData.rows) planData.rows = planData.rows.filter(r => r.ticker !== ticker);
+    planData = null;
+    if (planLots.length) planRefresh(); else renderPlan();
+    renderOverviewPlan();
+}
+
+function renderPlanNames(root) {
+    const d = planData, has = planLots.length > 0, n = new Set(planLots.map(l => l.ticker)).size;
+    let html = `<div class="mp-box">
+      <div class="mp-head">
+        <div>
+          <div class="mp-title"><i class="ti ti-compass"></i> Moje portfolio</div>
+          <div class="mp-sub"><b>Hodnocení každé tvé akcie</b> (přikupuj / drž / nedokupuj), <b>nové tipy z S&amp;P 500</b> a <b>kam dát peníze</b>. Stačí seznam akcií – počty kusů nepotřebuju.</div>
+        </div>
+        <div class="mp-actions">
+          <button class="tool-btn primary" onclick="openImport()"><i class="ti ti-camera"></i> ${has ? 'Aktualizovat ze screenshotu' : 'Nahrát screenshot'}</button>
+          <button class="tool-btn" onclick="openLot()"><i class="ti ti-plus"></i> Přidat akcii</button>
+          ${has ? `<button class="tool-btn" onclick="planRefresh()" title="Přepočítat"><i class="ti ti-refresh ${planLoading ? 'spin' : ''}"></i></button>` : ''}
+        </div>
+      </div>`;
+    if (!has) {
+        html += `<div class="mp-empty">
+            <div class="mp-step"><span class="n">1</span><b>Seznam akcií</b>Vyfoť seznam z Trading 212 (stačí názvy nebo tickery) – nebo ho napiš.</div>
+            <div class="mp-step"><span class="n">2</span><b>Rychlá kontrola</b>Appka najde tickery a ověří je na burze. Ty jen potvrdíš.</div>
+            <div class="mp-step"><span class="n">3</span><b>Hodnocení každé akcie</b>U každé uvidíš, jestli přikupovat, držet, nebo nedokupovat – a k tomu nové tipy na nákup.</div>
+          </div>
+          <div class="mp-note"><i class="ti ti-info-circle"></i><span>Žádné portfolio zatím nemáš? Tipy na nákup najdeš níže i bez něj.</span></div>`;
+    } else if (planLoading && !d) {
+        html += `<div class="mp-progress"><i class="ti ti-loader spin"></i> Hodnotím tvoje akcie (${n})…</div>`;
+    } else if (planErr && !d) {
+        html += `<div class="mp-note warn"><i class="ti ti-alert-triangle"></i><span>${mpEsc(planErr)} <a style="color:var(--accent);cursor:pointer" onclick="planRefresh()">Zkusit znovu</a></span></div>
+          <div class="mp-sub" style="margin-top:10px">Uložené akcie: ${[...new Set(planLots.map(l => l.ticker))].map(t => '<b>' + mpEsc(mpBase(t)) + '</b>').join(', ')}</div>`;
+    } else if (d) {
+        html += planNamesKpisHTML(d);
+    }
+    html += `</div>`;
+    if (d && d.rows && d.rows.length) { html += planEvalHTML(d); html += planNamesHTML(d); }
+    if (d && d.picks) html += planPicksHTML(d);
+    html += planDepositHTML(d);
+    if (d) html += planWhyHTML(d);
+    root.innerHTML = html;
+}
+
+function planNamesKpisHTML(d) {
+    const c = (d.evaluation && d.evaluation.counts) || {}, n = (d.rows || []).length;
+    const rated = (c.strong || 0) + (c.hold || 0) + (c.weak || 0);
+    return `<div class="mp-kpis">
+        <div class="mp-kpi"><div class="l">Moje akcie</div><div class="v">${n}</div><div class="s">${rated} hodnoceno${n - rated > 0 ? `, ${n - rated} bez hodnocení` : ''}</div></div>
+        <div class="mp-kpi"><div class="l">Silné</div><div class="v" style="color:var(--up)">${c.strong || 0}</div><div class="s">přikupuj / drž</div></div>
+        <div class="mp-kpi"><div class="l">Drž</div><div class="v">${c.hold || 0}</div><div class="s">nic neměň</div></div>
+        <div class="mp-kpi"><div class="l">Slabší</div><div class="v" style="color:${c.weak ? 'var(--amber)' : 'var(--text)'}">${c.weak || 0}</div><div class="s">${c.weak ? 'nedokupuj' : 'žádná'}</div></div>
+      </div>`;
+}
+
+function planNamesHTML(d) {
+    const evBy = {}; ((d.evaluation && d.evaluation.items) || []).forEach(e => { evBy[e.ticker] = e; });
+    const order = { strong: 0, hold: 1, weak: 2, na: 3 };
+    const rows = d.rows.slice().sort((a, b) => {
+        const ea = evBy[a.ticker] || {}, eb = evBy[b.ticker] || {};
+        return (order[ea.level] ?? 4) - (order[eb.level] ?? 4) || (eb.pct_better ?? -1) - (ea.pct_better ?? -1) || String(a.ticker).localeCompare(String(b.ticker));
+    });
+    const cards = rows.map(r => {
+        const ev = evBy[r.ticker] || { level: 'na', verdict: 'Zatím bez hodnocení', why: '' };
+        const sec = r.status === 'core' ? 'ETF' : (MP_SECTOR_CZ[r.sector] || r.sector || '');
+        const bits = [sec];
+        if (ev.pe) bits.push(ev.pe >= 200 ? 'P/E velmi vysoké' : 'P/E ' + Math.round(ev.pe));
+        if (ev.mom_pct != null) bits.push(`za rok ${ev.mom_pct >= 0 ? '+' : ''}${mpPct(ev.mom_pct, 0)}`);
+        const price = r.price && !r.no_price ? `${mpQty(r.price)} ${mpEsc(r.currency || '')}` : '';
+        const bar = ev.pct_better != null
+            ? `<div class="mp-bar ${ev.level}"><i style="width:${ev.pct_better}%"></i></div><div class="mp-bar-l">Lepší než <b>${ev.pct_better} %</b> akcií v S&amp;P 500 · celkově #${ev.rank} z ${ev.of}</div>`
+            : (ev.score != null ? `<div class="mp-bar ${ev.level}"><i style="width:${Math.max(0, Math.min(100, ev.score))}%"></i></div><div class="mp-bar-l">Orientační skóre <b>${ev.score}</b>/100 (technika, valuace, růst, analytici)</div>` : '');
+        const flag = r.flag ? `<div class="mp-flag">${r.flag.pause ? '⏸ Nákup pozastaven' : '⚠'} – ${mpEsc(((r.flag.reasons || [])[0] || {}).reason || '')}</div>` : '';
+        const news = r.status !== 'core' ? planTipNewsHTML(r.ticker, 'hold', 'plan') : '';
+        return `<div class="mp-stock ${ev.level}">
+          <div class="mp-stock-h">
+            <div class="who"><span class="tk">${mpEsc(mpBase(r.ticker))}</span>${r.chg != null ? `<span class="chg" style="color:var(--${r.chg >= 0 ? 'up' : 'down'})">${r.chg >= 0 ? '+' : ''}${mpPct(r.chg, 1)}</span>` : ''}${price ? `<span class="px">${price}</span>` : ''}
+              <div class="nm">${mpEsc(r.name)}</div></div>
+            <span class="mp-verdict ${ev.level}">${mpEsc(ev.verdict)}</span>
+            <button class="mp-icon-btn" onclick="planRemove('${mpEsc(r.ticker)}')" title="Odebrat z portfolia"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="mp-stock-meta">${bits.filter(Boolean).map(mpEsc).join(' · ')}</div>
+          ${bar}
+          <div class="mp-ev-why">${mpEsc(ev.why || '')}</div>
+          ${(ev.warn || []).map(w => `<div class="mp-flag">⚠ ${mpEsc(w)}</div>`).join('')}${flag}
+          ${news}
+        </div>`;
+    }).join('');
+    return `<div class="mp-card"><h4><i class="ti ti-briefcase"></i> Moje akcie – hodnocení každé</h4>
+      <div class="mp-sub">Od nejsilnější. Hodnocení říká, co dělat s <b>novými penězi</b> – prodávat podle něj nedoporučuji, na historii slabší akcie spolehlivě nezaostávaly.</div>
+      <div class="mp-stocks">${cards}</div>
+    </div>`;
+}
+
 function planKpisHTML(d) {
     const p = d.plan, rows = d.rows || [];
     const tot = d.total_czk || 0;
@@ -7104,7 +7242,9 @@ function planDepositHTML(d) {
     const quick = [2000, 5000, 10000, 25000].map(v => `<button onclick="planDeposit(${v})">${v.toLocaleString('cs-CZ')} Kč</button>`).join('');
     let html = `<div class="mp-card" id="mp-deposit">
       <h4><i class="ti ti-coins"></i> Kam s penězi</h4>
-      <div class="mp-sub">${planRisk === 'maximum'
+      <div class="mp-sub">${!FEATURE_QTY
+        ? 'Napiš, kolik můžeš teď investovat. Peníze půjdou rovnoměrně do tipů z koše, které ještě nemáš. Žádné ETF, nic se neprodává.'
+        : planRisk === 'maximum'
         ? 'Napiš, kolik můžeš teď investovat. Peníze půjdou rovnoměrně do koše tipů – akcie z koše, které už držíš, dokoupí, ostatní otevře. Žádné ETF, nic se neprodává.'
         : 'Napiš, kolik můžeš teď investovat. Peníze půjdou tam, kde nejvíc chybí do cíle – doplní jádro, dokoupí akcie z plánu, nebo otevřou nový titul. Nic se neprodává.'}</div>
       <div class="mp-dep-form">
@@ -7139,9 +7279,9 @@ function planDepositHTML(d) {
         }
         html += `<div class="mp-btnrow">
             <button class="tool-btn" onclick="planCopy()"><i class="ti ti-copy"></i> Kopírovat seznam</button>
-            <button class="tool-btn" onclick="openBought()"><i class="ti ti-circle-check"></i> Nakoupeno – připsat do portfolia</button>
+            <button class="tool-btn" onclick="openBought()"><i class="ti ti-circle-check"></i> ${FEATURE_QTY ? 'Nakoupeno – připsat do portfolia' : 'Koupil jsem – přidat do portfolia'}</button>
           </div>
-          <div class="mp-note"><i class="ti ti-device-mobile"></i><span>V Trading 212: vyhledej ticker → <b>Koupit</b> → přepni na <b>hodnotu</b> a zadej částku v Kč. Zlomky akcií jsou v pořádku. Po nákupu klikni „Nakoupeno" – appka si zapamatuje měsíc nákupu kvůli 3letému testu.</span></div>`;
+          <div class="mp-note"><i class="ti ti-device-mobile"></i><span>V Trading 212: vyhledej ticker → <b>Koupit</b> → přepni na <b>hodnotu</b> a zadej částku v Kč. Zlomky akcií jsou v pořádku. ${FEATURE_QTY ? 'Po nákupu klikni „Nakoupeno" – appka si zapamatuje měsíc nákupu kvůli 3letému testu.' : 'Po nákupu klikni „Koupil jsem" – appka akcii přidá mezi tvoje a bude ji hodnotit.'}</span></div>`;
     }
     return html + `</div>`;
 }
@@ -7384,20 +7524,25 @@ function renderOverviewPlan() {
     const el = document.getElementById('ov-plan-mini');
     if (!el) return;
     if (!planLots.length) {
-        el.innerHTML = `<div class="mp-note" style="margin:0 0 10px"><i class="ti ti-compass"></i><span>Nahraj screenshot portfolia a appka ti řekne, kam posílat každý vklad.</span></div>`;
+        el.innerHTML = `<div class="mp-note" style="margin:0 0 10px"><i class="ti ti-compass"></i><span>${FEATURE_QTY ? 'Nahraj screenshot portfolia a appka ti řekne, kam posílat každý vklad.' : 'Nahraj seznam svých akcií a appka ti u každé řekne, jestli přikupovat, držet, nebo nedokupovat.'}</span></div>`;
         return;
     }
     const d = planData;
     if (!d) {
-        el.innerHTML = `<div class="mp-note" style="margin:0 0 10px"><i class="ti ti-loader spin"></i><span>Oceňuji tvé portfolio…</span></div>`;
+        el.innerHTML = `<div class="mp-note" style="margin:0 0 10px"><i class="ti ti-loader spin"></i><span>${FEATURE_QTY ? 'Oceňuji tvé portfolio…' : 'Hodnotím tvé akcie…'}</span></div>`;
         if (!planLoading) planRefresh();
         return;
     }
     const acts = (d.plan.actions || []).length;
-    el.innerHTML = `<div class="ov-mini-stats" style="margin-bottom:10px">
+    const evc = (d.evaluation && d.evaluation.counts) || {};
+    el.innerHTML = (FEATURE_QTY ? `<div class="ov-mini-stats" style="margin-bottom:10px">
         <div class="ov-mini-stat"><div class="l">${d.total_czk ? 'Hodnota' : 'Akcií'}</div><div class="v">${d.total_czk ? mpKcShort(d.total_czk) : d.rows.length}</div></div>
         <div class="ov-mini-stat"><div class="l">Úkoly</div><div class="v ${acts ? 'r' : 'g'}">${acts || '✓'}</div></div>
-      </div>
+      </div>` : `<div class="ov-mini-stats" style="margin-bottom:10px">
+        <div class="ov-mini-stat"><div class="l">Silné</div><div class="v g">${evc.strong || 0}</div></div>
+        <div class="ov-mini-stat"><div class="l">Drž</div><div class="v">${evc.hold || 0}</div></div>
+        <div class="ov-mini-stat"><div class="l">Slabší</div><div class="v ${evc.weak ? 'r' : ''}">${evc.weak || 0}</div></div>
+      </div>`) + `
       <button class="tool-btn" onclick="switchTab('portfolio'); setTimeout(()=>{const e=document.getElementById('mp-amount'); if(e){e.scrollIntoView({behavior:'smooth',block:'center'}); e.focus();}},150)" style="width:100%; justify-content:center; margin-bottom:8px;"><i class="ti ti-coins"></i> Kam s penězi</button>`;
 }
 
@@ -7414,16 +7559,18 @@ function closeImport() { document.getElementById('importModal').classList.remove
 function renderImport() {
     const body = document.getElementById('imp-body'), btns = document.getElementById('imp-btns');
     if (impState.step === 'pick') {
-        body.innerHTML = `<div class="cmp-sub" style="margin-bottom:12px">Appka z obrázku přečte <b>názvy akcií</b> (a počty kusů, když jsou vidět) a každou ověří proti burze. Počty kusů nejsou povinné – stačí vědět, co vlastníš. Než se cokoli uloží, všechno zkontroluješ.</div>
+        body.innerHTML = `<div class="cmp-sub" style="margin-bottom:12px">${FEATURE_QTY
+            ? 'Appka z obrázku přečte <b>názvy akcií</b> (a počty kusů, když jsou vidět) a každou ověří proti burze. Počty kusů nejsou povinné – stačí vědět, co vlastníš. Než se cokoli uloží, všechno zkontroluješ.'
+            : 'Appka z obrázku přečte <b>názvy akcií</b> a každou ověří proti burze. Počty kusů ani ceny nepotřebuju – stačí vědět, co vlastníš. Než se cokoli uloží, všechno zkontroluješ.'}</div>
           <label class="mp-drop" id="imp-drop"><i class="ti ti-photo-up"></i><b>Vyber screenshoty</b> nebo je sem přetáhni<br><span style="font-size:12px">JPG / PNG / HEIC (iPhone), klidně víc najednou</span>
             <input type="file" id="imp-file" accept="${impAccept()}" multiple style="display:none" onchange="impFiles(this.files)"></label>
           <ul class="mp-tips">
             <li>Trading 212 → <b>Portfolio</b> (Investice) → seznam pozic. Vyfoť celý seznam, při scrollování klidně s překryvem.</li>
-            <li>Nejlepší je, když je u pozic vidět <b>počet kusů</b> i <b>hodnota v Kč</b> – podle hodnoty appka pozná správnou burzu (např. CSPX v USD vs. SXR8 v EUR).</li>
+            ${FEATURE_QTY ? '<li>Nejlepší je, když je u pozic vidět <b>počet kusů</b> i <b>hodnota v Kč</b> – podle hodnoty appka pozná správnou burzu (např. CSPX v USD vs. SXR8 v EUR).</li>' : '<li>Stačí, aby byly vidět <b>názvy nebo tickery</b> akcií. Víc nepotřebuju.</li>'}
             <li>Obrázek se nikam neukládá, jen ho jednorázově přečte AI model.</li>
           </ul>
           <div class="mp-or"><span>nebo</span></div>
-          <div class="cmp-sub" style="margin-bottom:6px"><b>Napiš / vlož seznam akcií</b> – na řádek jedna, počet kusů je nepovinný (např. <i>Apple</i>, <i>NVDA 12</i>, <i>Microsoft 3,5 ks</i>):</div>
+          <div class="cmp-sub" style="margin-bottom:6px"><b>Napiš / vlož seznam akcií</b> – na řádek jedna${FEATURE_QTY ? ', počet kusů je nepovinný (např. <i>Apple</i>, <i>NVDA 12</i>, <i>Microsoft 3,5 ks</i>)' : ' (např. <i>Apple</i>, <i>NVDA</i>, <i>Microsoft</i>)'}:</div>
           <textarea id="imp-text" class="mp-textarea" rows="4" placeholder="Apple&#10;Microsoft&#10;NVDA 12&#10;iShares Core S&P 500"></textarea>
           <button class="btn-primary" style="margin-top:8px" onclick="impText()"><i class="ti ti-list-search"></i> Najít akcie</button>`;
         btns.innerHTML = `<button class="btn-ghost" onclick="closeImport()">Zavřít</button>`;
@@ -7450,26 +7597,29 @@ function renderImport() {
         h += `<div class="mp-note warn" style="margin-top:0"><i class="ti ti-eye-off"></i><span><b>AI na obrázku nenašla žádnou akcii.</b> ${impState.preview ? `<span style="color:var(--text3)">Odpověď AI: ${mpEsc(impState.preview)}</span><br>` : ''}Zkus ostřejší screenshot seznamu, nebo si akcie <b>napiš jako text</b> – na to AI nepotřebuje.</span></div>
           <button class="btn-primary" style="margin-top:10px" onclick="openImport()"><i class="ti ti-list-search"></i> Napsat seznam akcií</button>`;
     } else {
-        h += `<div class="cmp-sub" style="margin-bottom:10px">Našel jsem <b>${rows.length}</b> pozic. Zkontroluj hlavně řádky se žlutým rámečkem. <b>Počet kusů ani měsíc nákupu nejsou povinné</b> – bez počtu appka ví, že titul vlastníš (hlídá k němu zprávy a nedoporučí ho jako nový), jen ho nemůže ocenit. Měsíc nákupu slouží ke hlídání 3letého testu (bez daně).</div>
-          <div class="mp-rv-hd"><div></div><div>Ze screenshotu</div><div>Ticker</div><div>Počet kusů (nepovinné)</div><div>Koupeno (měsíc)</div></div>`;
+        h += FEATURE_QTY
+          ? `<div class="cmp-sub" style="margin-bottom:10px">Našel jsem <b>${rows.length}</b> pozic. Zkontroluj hlavně řádky se žlutým rámečkem. <b>Počet kusů ani měsíc nákupu nejsou povinné</b> – bez počtu appka ví, že titul vlastníš (hlídá k němu zprávy a nedoporučí ho jako nový), jen ho nemůže ocenit. Měsíc nákupu slouží ke hlídání 3letého testu (bez daně).</div>
+          <div class="mp-rv-hd"><div></div><div>Ze screenshotu</div><div>Ticker</div><div>Počet kusů (nepovinné)</div><div>Koupeno (měsíc)</div></div>`
+          : `<div class="cmp-sub" style="margin-bottom:10px">Našel jsem <b>${rows.length}</b> ${rows.length === 1 ? 'akcii' : (rows.length < 5 ? 'akcie' : 'akcií')}. Zkontroluj hlavně řádky se žlutým rámečkem – stačí, aby seděl <b>ticker</b>. Odškrtnutím akcii vynecháš.</div>
+          <div class="mp-rv-hd names"><div></div><div>Ze screenshotu</div><div>Ticker</div></div>`;
         rows.forEach((r, i) => {
             const cls = !r.include ? 'off' : (r.status === 'unresolved' ? 'bad' : (r.status === 'check' ? 'check' : ''));
             const opts = (r.candidates || []).map(c => `<option value="${mpEsc(c.ticker)}" ${c.ticker === r.ticker ? 'selected' : ''}>${mpEsc(c.ticker)} · ${mpEsc(c.exchange || c.currency || '')}${c.implied_czk ? ' · ' + mpKc(c.implied_czk) : ''}</option>`).join('');
             const tick = r.status === 'unresolved' || !(r.candidates || []).length
                 ? `<div style="display:flex;gap:4px"><input type="text" id="imp-q-${i}" placeholder="ticker / název" value="${mpEsc(r.raw_ticker || '')}"><button class="mp-icon-btn" style="flex:none" onclick="impSearch(${i})"><i class="ti ti-search"></i></button></div>`
                 : `<select onchange="impPick(${i}, this.value)">${opts}</select>`;
-            h += `<div class="mp-rv ${cls}">
+            h += `<div class="mp-rv ${cls}${FEATURE_QTY ? '' : ' names'}">
               <input type="checkbox" ${r.include ? 'checked' : ''} onchange="impState.rows[${i}].include=this.checked; renderImport()">
               <div style="min-width:0"><div class="raw" title="${mpEsc(r.name)}">${mpEsc(r.name || r.raw_ticker || '?')}</div>${impCheckHTML(r)}</div>
               <div style="min-width:0">${tick}</div>
-              <label class="mp-rv-f"><span>Počet kusů (nepovinné)</span><input type="number" step="any" min="0" placeholder="nepovinné" value="${r.qty != null ? r.qty : ''}" onchange="impQty(${i}, this.value)"></label>
-              <label class="mp-rv-f"><span>Koupeno (měsíc)</span><input type="month" value="${mpEsc(r.buy_month || '')}" max="${mpThisMonth()}" onchange="impState.rows[${i}].buy_month=this.value"></label>
+              ${FEATURE_QTY ? `<label class="mp-rv-f"><span>Počet kusů (nepovinné)</span><input type="number" step="any" min="0" placeholder="nepovinné" value="${r.qty != null ? r.qty : ''}" onchange="impQty(${i}, this.value)"></label>
+              <label class="mp-rv-f"><span>Koupeno (měsíc)</span><input type="month" value="${mpEsc(r.buy_month || '')}" max="${mpThisMonth()}" onchange="impState.rows[${i}].buy_month=this.value"></label>` : ''}
             </div>`;
         });
         if (planLots.length) {
             h += `<div class="mp-mode">
                 <label><input type="radio" name="imp-mode" ${impState.mode === 'replace' ? 'checked' : ''} onchange="impState.mode='replace'"> Nahradit současné portfolio (screenshot = celý stav)</label>
-                <label><input type="radio" name="imp-mode" ${impState.mode === 'add' ? 'checked' : ''} onchange="impState.mode='add'"> Přidat k současným pozicím</label></div>`;
+                <label><input type="radio" name="imp-mode" ${impState.mode === 'add' ? 'checked' : ''} onchange="impState.mode='add'"> Přidat k současným akciím</label></div>`;
         }
     }
     body.innerHTML = h;
@@ -7479,6 +7629,13 @@ function renderImport() {
 
 function impCheckHTML(r) {
     if (r.status === 'unresolved') return `<div class="chk bad">✗ nenašel jsem – napiš ticker a hledej</div>`;
+    if (!FEATURE_QTY) {                                   // bez kusů stačí vědět, že titul existuje
+        const c = (r.candidates || []).find(x => x.ticker === r.ticker) || {};
+        let t = r.status === 'ok' ? `<div class="chk ok">✓ nalezeno: ${mpEsc(c.name || r.ticker)}</div>`
+                                  : `<div class="chk check">⚠ zkontroluj, že je to ta správná firma: ${mpEsc(c.name || r.ticker)}</div>`;
+        if (r.dup) t += `<div class="chk check">${mpEsc(r.dup)}</div>`;
+        return t;
+    }
     let t = '';
     if (!(r.qty > 0) && !r.value_czk) {
         const c = (r.candidates || []).find(x => x.ticker === r.ticker) || {};
@@ -7655,9 +7812,10 @@ async function impSearch(i) {
 
 function impSave() {
     const lots = impState.rows.filter(r => r.include && r.ticker)
-        .map(r => ({ ticker: r.ticker, qty: r.qty > 0 ? r.qty : null, buy_month: r.buy_month || null, name: r.name || '' }));
+        .map(r => ({ ticker: r.ticker, qty: FEATURE_QTY && r.qty > 0 ? r.qty : null, buy_month: FEATURE_QTY ? (r.buy_month || null) : null, name: r.name || '' }));
     if (!lots.length) return;
     planLots = (impState.mode === 'add' && planLots.length) ? planLots.concat(lots) : lots;
+    if (!FEATURE_QTY) planLots = [...new Map(planLots.map(l => [l.ticker, l])).values()];     // každá akcie jednou
     saveLots(); planData = null;
     closeImport();
     showToast(`Uloženo ${lots.length} akcií`, 'up', 'ti-check');
@@ -7696,6 +7854,15 @@ function renderLot() {
         <div class="mp-field"><label>${i ? '' : '&nbsp;'}</label><button class="mp-icon-btn" style="height:42px;width:36px" onclick="lotState.lots.splice(${i},1); if(!lotState.lots.length) lotState.lots.push({qty:'',buy_month:''}); renderLot()"><i class="ti ti-x"></i></button></div>
       </div>`).join('') + `<a style="color:var(--accent);cursor:pointer;font-size:13px" onclick="lotState.lots.push({qty:'',buy_month:''}); renderLot()"><i class="ti ti-plus"></i> další nákup (jiný měsíc)</a>
       <div class="cmp-sub" style="margin-top:10px">Každý nákup zvlášť kvůli 3letému testu – kusy koupené před víc než 3 lety jsou při prodeji v ČR bez daně. Počet ani měsíc nevíš? Nech prázdné – appka si zapamatuje, že akcii vlastníš.</div>`;
+    if (s.mode === 'bought' && !FEATURE_QTY) {
+        title.innerHTML = `<i class="ti ti-circle-check" style="color:var(--accent)"></i> Koupil jsem – přidat do portfolia`;
+        body.innerHTML = `<div class="cmp-sub" style="margin-bottom:12px">Zaškrtni, co jsi koupil. Appka to přidá mezi tvoje akcie a bude je hodnotit – počty kusů nepotřebuju.</div>` +
+            s.lines.map((l, i) => `<label class="mp-lot" style="grid-template-columns:22px 1fr; align-items:center; cursor:pointer">
+                <input type="checkbox" ${l.on ? 'checked' : ''} onchange="lotState.lines[${i}].on=this.checked">
+                <div><b>${mpEsc(mpBase(l.ticker))}</b> <span style="color:var(--text2);font-size:12.5px">${mpEsc(l.name || '')}</span></div></label>`).join('');
+        btns.innerHTML = `<button class="btn-ghost" onclick="closeLot()">Zrušit</button><button class="btn-primary" onclick="lotSave()"><i class="ti ti-check"></i> Přidat</button>`;
+        return;
+    }
     if (s.mode === 'bought') {
         title.innerHTML = `<i class="ti ti-circle-check" style="color:var(--accent)"></i> Nakoupeno – připsat do portfolia`;
         body.innerHTML = `<div class="cmp-sub" style="margin-bottom:12px">Uprav počty kusů podle skutečných nákupů v Trading 212. Měsíc nákupu se uloží jako ${mpMonth(mpThisMonth())}.</div>` +
@@ -7707,11 +7874,11 @@ function renderLot() {
         return;
     }
     if (s.mode === 'add') {
-        title.innerHTML = `<i class="ti ti-plus" style="color:var(--accent)"></i> Přidat pozici`;
+        title.innerHTML = `<i class="ti ti-plus" style="color:var(--accent)"></i> ${FEATURE_QTY ? 'Přidat pozici' : 'Přidat akcii'}`;
         body.innerHTML = `<div class="mp-field"><label>Ticker nebo název</label>
             <div style="display:flex;gap:8px"><input type="text" id="lot-q" placeholder="např. AAPL, SXR8, Microsoft" onkeydown="if(event.key==='Enter')lotFind()"><button class="tool-btn" style="flex:none" onclick="lotFind()"><i class="ti ti-search"></i> Najít</button></div></div>
           <div class="mp-search-res" id="lot-res">${s.found ? `<b>${mpEsc(s.found.ticker)}</b> · ${mpEsc(s.found.name)} · ${mpQty(s.found.price)} ${mpEsc(s.found.currency)}${(s.found.candidates || []).length > 1 ? `<br><select style="margin-top:6px;padding:6px 8px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;color:var(--text)" onchange="lotPickCand(this.value)">${s.found.candidates.map(c => `<option value="${mpEsc(c.ticker)}" ${c.ticker === s.found.ticker ? 'selected' : ''}>${mpEsc(c.ticker)} · ${mpEsc(c.exchange || '')} · ${mpQty(c.price)} ${mpEsc(c.currency)}</option>`).join('')}</select>` : ''}` : ''}</div>
-          ${s.found ? lotRows() : ''}`;
+          ${s.found ? (FEATURE_QTY ? lotRows() : '<div class="cmp-sub" style="margin-top:10px">Přidá se mezi tvoje akcie a appka ji bude hodnotit. Počet kusů nepotřebuju.</div>') : ''}`;
         btns.innerHTML = `<button class="btn-ghost" onclick="closeLot()">Zrušit</button><button class="btn-primary" ${s.found ? '' : 'disabled style="opacity:.5"'} onclick="lotSave()"><i class="ti ti-check"></i> Přidat</button>`;
         return;
     }
@@ -7745,13 +7912,16 @@ function lotSave() {
     const s = lotState;
     if (s.mode === 'bought') {
         const m = mpThisMonth();
-        const add = s.lines.filter(l => l.on && parseFloat(l.qty) > 0).map(l => ({ ticker: l.ticker, qty: parseFloat(l.qty), buy_month: m, name: l.name || '' }));
+        const have = new Set(planLots.map(l => l.ticker));
+        const add = FEATURE_QTY
+            ? s.lines.filter(l => l.on && parseFloat(l.qty) > 0).map(l => ({ ticker: l.ticker, qty: parseFloat(l.qty), buy_month: m, name: l.name || '' }))
+            : s.lines.filter(l => l.on && !have.has(l.ticker)).map(l => ({ ticker: l.ticker, qty: null, buy_month: null, name: l.name || '' }));
         if (!add.length) { closeLot(); return; }
         planLots = planLots.concat(add);
         planShowDeposit = false; planAmount = '';
         try { localStorage.removeItem('ma_plan_amount'); } catch (e) {}
         saveLots(); closeLot();
-        showToast(`Připsáno ${add.length} nákupů`, 'up', 'ti-check');
+        showToast(FEATURE_QTY ? `Připsáno ${add.length} nákupů` : `Přidáno ${add.length} ${add.length === 1 ? 'akcie' : (add.length < 5 ? 'akcie' : 'akcií')} do portfolia`, 'up', 'ti-check');
         planRefresh();
         return;
     }
@@ -7761,8 +7931,9 @@ function lotSave() {
     let lots = s.lots.map(l => ({ ticker, qty: parseFloat(String(l.qty).replace(',', '.')), buy_month: l.buy_month || null, name: nm }))
         .filter(l => l.qty > 0);
     if (!lots.length) lots = [{ ticker, qty: null, buy_month: null, name: nm }];   // jen „vlastním", počet neznám
-    planLots = planLots.filter(l => s.mode === 'add' || l.ticker !== ticker).concat(lots);
+    planLots = planLots.filter(l => (s.mode === 'add' && FEATURE_QTY) || l.ticker !== ticker).concat(lots);
     saveLots(); closeLot();
+    if (!FEATURE_QTY) showToast(`${mpBase(ticker)} přidána – hodnotím ji`, 'up', 'ti-check');
     planRefresh();
 }
 function lotDelete() {
@@ -7819,7 +7990,7 @@ function dgForMe(ev) {
     const secs = new Set(ev.sectors || []);
     const hit = my.filter(h => tick.has(h.base.toUpperCase()) || (h.sector && secs.has(h.sector)));
     if (!hit.length) return { hit: [], text: 'Tvého portfolia se to přímo netýká.' };
-    const w = hit.reduce((s, h) => s + h.weight, 0);
+    const w = hit.reduce((s, h) => s + (h.weight || 0), 0);
     const names = hit.filter(h => h.status !== 'core').map(h => mpBase(h.ticker));
     const core = hit.some(h => h.status === 'core');
     let who = [];
@@ -7828,14 +7999,14 @@ function dgForMe(ev) {
     let act;
     if (ev.impact === 'negativní') {
         act = hit.some(h => h.status === 'plan' || h.status === 'core')
-            ? 'Nic neprodávej – plán se kvůli zprávám nemění. Kdyby cena spadla, další měsíční vklad nakoupí levněji.'
-            : 'Nic neprodávej v panice. Tyhle tituly stejně nedokupuješ; o prodeji rozhoduje jen pravidlo po 3 letech.';
+            ? (FEATURE_QTY ? 'Nic neprodávej – plán se kvůli zprávám nemění. Kdyby cena spadla, další měsíční vklad nakoupí levněji.' : 'Nic neprodávej – hodnocení se kvůli jedné zprávě nemění. Kdyby cena spadla, další vklad nakoupí levněji.')
+            : (FEATURE_QTY ? 'Nic neprodávej v panice. Tyhle tituly stejně nedokupuješ; o prodeji rozhoduje jen pravidlo po 3 letech.' : 'Nic neprodávej v panice. Tyhle tituly stejně nedokupuješ; jeden titulek hodnocení nemění.');
     } else if (ev.impact === 'pozitivní') {
-        act = 'Nic nedokupuj navíc kvůli titulku – vklady jdou dál podle plánu tam, kde chybí do cíle.';
+        act = FEATURE_QTY ? 'Nic nedokupuj navíc kvůli titulku – vklady jdou dál podle plánu tam, kde chybí do cíle.' : 'Nic nedokupuj navíc kvůli titulku – nové peníze jdou dál do koše tipů.';
     } else {
         act = 'Nic dělat nemusíš – sleduje se to, ale plán to nemění.';
     }
-    return { hit, text: `Týká se: <b>${mpEsc(who.join(' + '))}</b> (≈ ${mpPct(w, 0)} portfolia). ${act}` };
+    return { hit, text: `Týká se: <b>${mpEsc(who.join(' + '))}</b>${w > 0 ? ` (≈ ${mpPct(w, 0)} portfolia)` : ''}. ${act}` };
 }
 
 
