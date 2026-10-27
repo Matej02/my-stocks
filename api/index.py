@@ -5399,6 +5399,9 @@ ETF_SUFFIXES = (".DE", ".L", ".AS", ".MI", ".PA", ".SW")
 
 
 _vision_state = {"kind": None, "retry_after": 0.0}
+# Bezplatný Groq: 8 000 tokenů/min a obrázek = 2 048 tokenů; rezerva na odpověď se počítá do limitu.
+# 1 300 stačí na seznam z jednoho screenshotu (~35 tokenů na pozici) a za minutu projdou 2 fotky.
+VISION_MAX_TOKENS = 1300
 
 
 def call_vision(image_data_url, prompt=IMPORT_PROMPT):
@@ -5427,7 +5430,7 @@ def call_vision(image_data_url, prompt=IMPORT_PROMPT):
                 if budget < 6:
                     out_of_time = True
                     break
-                st, text, err, ra = _llm_post(url, key, model, content, jm, ex, min(30, budget), 2500, temperature=0)
+                st, text, err, ra = _llm_post(url, key, model, content, jm, ex, min(30, budget), VISION_MAX_TOKENS, temperature=0)
                 if st == 429 and attempt == 0 and 0 < ra <= 8 and deadline - time.time() > ra + 12:
                     time.sleep(ra + 0.4)
                     continue
@@ -5452,7 +5455,7 @@ def call_vision(image_data_url, prompt=IMPORT_PROMPT):
             errs.append("vypršel čas")
             break
     if not out_of_time:
-        res, _used = _fallback_call(content, True, deadline, errs, codes, vision=True, max_tokens=2500, temperature=0)
+        res, _used = _fallback_call(content, True, deadline, errs, codes, vision=True, max_tokens=VISION_MAX_TOKENS, temperature=0)
         if res is not None:
             return res, None
     _vision_state.update(kind=_llm_kind(codes), retry_after=wait)
@@ -5824,7 +5827,7 @@ def api_holdings_import():
         data, err = call_vision(img)
         if data is None:
             try:
-                kv_set_json("import:last", {"ts": int(time.time()), "ok": False, "error": err})
+                kv_set_json("import:last", {"ts": int(time.time()), "ok": False, "error": err, "kind": _vision_state.get("kind")})
             except Exception:
                 pass
             kind = _vision_state.get("kind")
