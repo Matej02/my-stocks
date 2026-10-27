@@ -4142,6 +4142,13 @@ def _value_holdings(holdings):
     total = sum(r["value_czk"] for r in rows)
     for r in rows:
         r["weight"] = round(r["value_czk"] / total * 100, 2) if total else 0
+    need = [r for r in rows if r["kind"] == "other" and not r.get("sector") and not _is_fund(r)]
+    if need:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            for r, sec in zip(need, ex.map(lambda r_: _ysector(r_["ticker"]), need)):
+                if sec:
+                    r["sector"] = sec
     rows.sort(key=lambda r: -r["value_czk"])
     return rows, total, missing, scan
 
@@ -4325,6 +4332,39 @@ def _picks(scan, n, held=(), flags=None):
 
 
 _NOT_STOCK = ("ETF", "MUTUALFUND", "CRYPTOCURRENCY", "CURRENCY", "INDEX", "FUTURE")
+# Fondy, ETC a pákové produkty poznáme i podle názvu – Yahoo u londýnských ETC (fyzické zlato) hlásí typ EQUITY.
+_FUND_RX = re.compile(r"\b(physical|etc|etp|etf|ucits|leveraged?|[235]x|ishares|vanguard|spdr|invesco|wisdomtree|global x|"
+                      r"vaneck|amundi|xtrackers|lyxor|leverage shares|graniteshares|21shares)\b", re.I)
+_YSECTOR_MAP = {"Technology": "Information Technology", "Financial Services": "Financials", "Healthcare": "Health Care",
+                "Consumer Cyclical": "Consumer Discretionary", "Consumer Defensive": "Consumer Staples",
+                "Basic Materials": "Materials", "Industrials": "Industrials", "Communication Services": "Communication Services",
+                "Energy": "Energy", "Real Estate": "Real Estate", "Utilities": "Utilities"}
+
+
+def _is_fund(row):
+    return (row.get("itype") or "") in ("ETF", "MUTUALFUND") or bool(_FUND_RX.search(row.get("name") or ""))
+
+
+def _ysector(ticker):
+    """Sektor akcie mimo S&P 500 z Yahoo hledání (Technology → Information Technology…), kešováno 30 dní."""
+    key = f"ysector:{ticker.upper()}"
+    try:
+        c = kv_get_json(key)
+        if c is not None and time.time() - c.get("ts", 0) < 30 * 86400:
+            return c.get("s")
+    except Exception:
+        pass
+    sec = None
+    try:
+        r = requests.get(f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(ticker)}&quotesCount=4&newsCount=0",
+                         headers=HEADERS, timeout=6).json()
+        qs = r.get("quotes") or []
+        x = next((q for q in qs if (q.get("symbol") or "").upper() == ticker.upper()), qs[0] if qs else {})
+        sec = _YSECTOR_MAP.get(x.get("sector") or x.get("sectorDisp") or "")
+        kv_set_json(key, {"s": sec, "ts": time.time()})
+    except Exception:
+        pass
+    return sec
 
 
 def _verdict_eval(ticker):
@@ -4352,11 +4392,11 @@ def _verdict_eval(ticker):
         return None
 
 
-def _extra_evals(rows, scan, eu=None, budget_s=10.0):
+def _extra_evals(rows, scan, eu=None, budget_s=14.0):
     """{ticker: {verdict, score}} pro držené akcie, které nehodnotí S&P 500 sken ani evropský žebříček."""
     mix = scan.get("mix_rank_map") or {}
     todo = [r["ticker"] for r in rows if r["kind"] == "other" and _spx_key(r["ticker"]) not in mix
-            and (r.get("itype") or "EQUITY") not in _NOT_STOCK and not (eu and _eu_match(r, eu)[1])][:8]
+            and (r.get("itype") or "EQUITY") not in _NOT_STOCK and not _is_fund(r) and not (eu and _eu_match(r, eu)[1])][:16]
     out = {}
     if not todo:
         return out
@@ -4390,7 +4430,7 @@ def _evaluate_holdings(rows, scan, basket_set, extra=None, eu=None):
         e = {"ticker": r["ticker"], "rank": mix.get(key), "of": n_uni, "mom_pct": mom, "pe": pe,
              "weight": r.get("weight"), "no_qty": r.get("no_qty"), "warn": [], "in_basket": key in basket_set,
              "size": r.get("size"), "approx_weight": round(aw.get(r["ticker"], 0) * 100, 1) if sized else None}
-        eu_key, eu_row = (_eu_match(r, eu) if (eu and key not in mix and r["kind"] != "core") else (None, None))
+        eu_key, eu_row = (_eu_match(r, eu) if (eu and key not in mix and r["kind"] != "core" and not _is_fund(r)) else (None, None))
         if r["kind"] == "core":
             e["level"], e["verdict"] = "na", "Indexový fond"
             e["why"] = "Široký index – stabilní základ. Pokud chceš jen akcie, nedokupuj ho a nové peníze dávej do tipů."
@@ -4427,6 +4467,9 @@ def _evaluate_holdings(rows, scan, basket_set, extra=None, eu=None):
                 e["level"], e["verdict"] = "weak", "Slabší – nedokupuj"
                 e["why"] = "Horší polovina velkých evropských firem podle momenta. Neprodávej kvůli tomu, jen nové peníze dávej jinam."
             e["why"] += " Evropu hodnotím jen podle momenta (hodnotu bez dat z výkazů neumím poctivě změřit)."
+        elif _is_fund(r) and key not in mix:
+            e["level"], e["verdict"] = "na", "ETF / fond"
+            e["why"] = "Fond, ETC nebo pákový produkt – hodnotím jen jednotlivé akcie. U fondu sleduji jen zprávy."
         elif (extra or {}).get(r["ticker"]):
             x = extra[r["ticker"]]
             lvl = {"Koupit": "strong", "Držet": "hold", "Prodat": "weak"}.get(x.get("verdict"), "hold")
@@ -5071,16 +5114,25 @@ def _sector_mix(rows, scan):
     smap = scan.get("sector_map") or {}
     mix = {}
     for r in rows:
-        sec = r.get("sector") or smap.get(_spx_key(r["ticker"])) or ("ETF" if r.get("kind") == "core" or (r.get("itype") or "") in ("ETF", "MUTUALFUND") else "Ostatní")
+        sec = ("ETF" if r.get("kind") == "core" or _is_fund(r) else (r.get("sector") or smap.get(_spx_key(r["ticker"])) or "Ostatní"))
         mix[sec] = mix.get(sec, 0.0) + (aw[r["ticker"]] if sized else 1.0 / max(len(rows), 1))
     items = sorted(({"sector": k, "pct": round(v * 100, 1)} for k, v in mix.items()), key=lambda x: -x["pct"])
     warn = None
-    if items and items[0]["sector"] not in ("ETF", "Ostatní"):
-        top = items[0]
-        if (sized and top["pct"] >= SECTOR_WARN * 100) or (not sized and len(rows) >= 4 and top["pct"] >= 60):
-            name = SECTOR_CZ.get(top["sector"], top["sector"])
-            warn = (f"{name} tvoří odhadem {_pc(top['pct'], 0)} % portfolia – hodně sázíš na jedno odvětví."
-                    if sized else f"{name}: {round(top['pct'] * len(rows) / 100)} z {len(rows)} tvých akcií – hodně sázíš na jedno odvětví.")
+    if sized:
+        top = next((x for x in items if x["sector"] not in ("ETF", "Ostatní")), None)
+        if top and top["pct"] >= SECTOR_WARN * 100:
+            warn = f"{SECTOR_CZ.get(top['sector'], top['sector'])} tvoří odhadem {_pc(top['pct'], 0)} % portfolia – hodně sázíš na jedno odvětví."
+    else:       # podle počtu jen mezi AKCIEMI – fondy (zlato, ETF) jsou jiná sázka
+        stocks = [r for r in rows if not (r.get("kind") == "core" or _is_fund(r))]
+        cnt = {}
+        for r in stocks:
+            sec = r.get("sector") or smap.get(_spx_key(r["ticker"]))
+            if sec:
+                cnt[sec] = cnt.get(sec, 0) + 1
+        if len(stocks) >= 4 and cnt:
+            sec, n = max(cnt.items(), key=lambda x: x[1])
+            if n / len(stocks) >= 0.6:
+                warn = f"{SECTOR_CZ.get(sec, sec)}: {n} z {len(stocks)} tvých akcií – hodně sázíš na jedno odvětví."
     return {"items": items, "sized": sized, "warn": warn}
 
 
@@ -5462,7 +5514,7 @@ def _parse_text_list(text):
         name = name.strip(" \t,")
         if not name:
             continue
-        tick = name if (re.match(r"^[A-Z]{1,6}(?:[.\-][A-Z]{1,3})?$", name)) else None
+        tick = name if (re.match(r"^(?=[A-Z0-9]*[A-Z])[A-Z0-9]{1,6}(?:[.\-][A-Z]{1,3})?$", name)) else None
         out.append({"name": name, "ticker": tick, "quantity": qty, "currency": "CZK"})
     return out[:80]
 
@@ -5491,7 +5543,8 @@ def _name_match(a, b):
     if not (ta and tb):
         return False
     ja, jb = "".join(w for w in la if w not in _NAME_STOP), "".join(w for w in lb if w not in _NAME_STOP)
-    if min(len(ja), len(jb)) >= 4 and (ja in jb or jb in ja):          # „Exxon Mobil" ↔ „ExxonMobil Holdings"; „apple" ≠ „PPL"
+    short, long_ = sorted((ja, jb), key=len)
+    if len(short) >= 4 and short in long_ and len(short) >= 0.6 * len(long_):   # „Exxon Mobil" ↔ „ExxonMobil"; ne „apple"↔„PPL" ani „nvidia"↔„3x nvidia ETP"
         return True
     return len(ta & tb) / len(ta) >= 0.6
 
@@ -5546,10 +5599,21 @@ def _scan_candidates(raw_t, name, scan, limit=4):
     return out
 
 
+# Dvojznačné tickery, které český investor v Trading 212 myslí jinak než Yahoo:
+# „CSG" = Czechoslovak Group (Amsterdam), ne CMS Energy na Xetře.
+_TICKER_ALIASES = {"CSG": "CSG.AS"}
+_NAME_ALIASES = {"czechoslovak group": "CSG.AS", "csg": "CSG.AS", "csg n.v.": "CSG.AS"}
+
+
 def _resolve_position(p):
     """Jedna pozice z AI → ověřený ticker + počet kusů. Vrací dict pro kontrolu."""
     name = (str(p.get("name") or "")).strip()[:80]
     raw_t = re.sub(r"[^A-Za-z0-9.\-]", "", str(p.get("ticker") or "")).upper()[:12]
+    # useknutý název ze screenshotu („VanEck Gold Miners (A", „Wisdomtree Strategic…") → hledej bez zbytku
+    qname = re.sub(r"\s*\([^)]*$", "", name).strip(" .…·-") or name
+    alias = _TICKER_ALIASES.get(raw_t) or _NAME_ALIASES.get(name.lower())
+    if alias and not (raw_t and "." in raw_t):
+        raw_t = alias
     qty, value = _num(p.get("quantity")), _num(p.get("value"))
     vcur = (p.get("currency") or "CZK").upper()
     if vcur not in FX_SYMBOLS and vcur != "CZK":
@@ -5576,13 +5640,13 @@ def _resolve_position(p):
     if _ISIN_RX.match(isin) and len(cands) < 8:
         for x in _yahoo_search(isin, 6)[:4]:              # ISIN (z CSV) = jednoznačná identita titulu
             add(**x)
-    if name and len(cands) < 6:
-        for x in _yahoo_search(name, 6)[:5]:
+    if qname and len(cands) < 6:
+        for x in _yahoo_search(qname, 6)[:5]:
             add(**x)
     # Kandidáti z našeho skenu S&P 500 (jméno / ticker) VŽDY – Yahoo hledání občas vrátí cizí burzu
     # nebo pákový produkt (např. „Berkshire Hathaway B" → BRK2.L) a z Vercelu někdy neodpoví vůbec.
     local_px = {}
-    for lc in _scan_candidates(raw_t, name, _local_scan()):
+    for lc in _scan_candidates(raw_t, qname, _local_scan()):
         add(lc["ticker"], lc["name"], "S&P 500", "EQUITY", True)
         local_px[lc["ticker"].upper()] = lc
     q = _quotes([c["ticker"] for c in cands])
