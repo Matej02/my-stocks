@@ -9975,11 +9975,24 @@ def cron_morning():
                                              "send_hour": SEND_HOUR_PRAGUE})
         except Exception:
             pass
-        if hour != SEND_HOUR_PRAGUE:
+        # Okno odeslání: od 8:00 do 11:59 pražského času, jednou za den. Dřív se posílalo jen v „přesně 8:xx" –
+        # Vercel cron ale umí ujet i o hodinu, takže se oba běhy mohly minout a mail ten den nepřišel.
+        day_key = f"cron:sent:morning:{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+        if not (SEND_HOUR_PRAGUE <= hour < SEND_HOUR_PRAGUE + 4):
             return jsonify({"ok": True, "sent": 0, "skipped": True,
                             "prague_hour": hour, "send_hour": SEND_HOUR_PRAGUE})
+        try:
+            if kv_get_json(day_key):
+                return jsonify({"ok": True, "sent": 0, "skipped": True, "already_sent": True, "prague_hour": hour})
+        except Exception:
+            pass
         sent = _broadcast("morning", "☀️ Ranní přehled trhu – MY ADVANTAGE",
                           lambda em: build_morning_summary_html(em, top_opps, top_signals, mark_sent=True))
+        if digest_sending_enabled():
+            try:
+                kv_set_json(day_key, {"ts": int(time.time()), "sent": sent})
+            except Exception:
+                pass
         return jsonify({"ok": True, "sent": sent, "prague_hour": hour,
                         "sending_enabled": digest_sending_enabled()})
     except Exception as e:
