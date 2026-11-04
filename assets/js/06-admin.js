@@ -130,6 +130,7 @@ async function adminDailyKick(manual) {
     dailyKickRunning = false;
     if (done) {
         try { localStorage.setItem('ma_daily_kick2', today); } catch (e) {}
+        signalsLoaded = false;
         if (added) showToast(`Denní aktualizace hotová: +${added} ${added === 1 ? 'verdikt' : (added < 5 ? 'verdikty' : 'verdiktů')} v track recordu`, 'up', 'ti-refresh');
         if (typeof activeTab !== 'undefined' && activeTab === 'ai') loadTrackRecord();
     }
@@ -263,6 +264,7 @@ async function adminScan(round) {
         out.innerHTML = d.done
             ? `<span style="color:var(--up)">Hotovo: ${d.scanned} titulů, ${d.signals} ${d.signals === 1 ? 'signál' : 'signálů'} (${escapeHtml(d.updated || '')}).</span>`
             : 'Sken ještě běží – klikni znovu.';
+        signalsLoaded = false;
     } catch (e) {
         out.innerHTML = '<span style="color:var(--down)">Chyba spojení se serverem.</span>';
     }

@@ -39,9 +39,11 @@ chk("cizí skripty/styly jen z povolených CSP zdrojů", all(any(h == a.rstrip("
     f"hosts={hosts} csp={bool(csp)}")
 chk("CSP nepovoluje unsafe-eval", "unsafe-eval" not in csp)
 
-for name in ("loadSignals", "renderSignals", "loadOpportunities", "renderOpportunities", "loadExitSignals", "renderSimpleBuy", "oppData",
-             "signalsLoaded", "signals-box", "opp-box", "exit-box", "api/signals", "api/opportunities", "api/exit-signals"):
-    chk(f"odstraněný starý seznam „co koupit“: {name}", name not in allsrc, "zůstal v kódu")
+for name in ("loadExitSignals", "renderSimpleBuy", "exit-box", "simple-buy", "api/exit-signals"):
+    chk(f"odstraněný box (Co zvážit k prodeji / zjednodušený nákup): {name}", name not in allsrc, "zůstal v kódu")
+chk("Příležitosti: původní boxy (Sleva v trendu, Podhodnocené s momentem) jsou zpět", all(x in html for x in ('id="signals-box"', 'id="opp-box"')) and all(x in js for x in ("loadSignals", "loadOpportunities", "renderSignals", "renderOpportunities")))
+chk("Přehled: ⭐ Top signál dne a „Další top příležitosti“ jsou zpět, koš tipů je navíc", 'id="ov-top-signal"' in html and "TOP signál dne" in js and "api/signals" in js and "api/opportunities" in js and 'id="ov-basket"' in html and "fetchOverviewBasket" in js)
+chk("Příležitosti: koš tipů je navíc pod nimi", html.index('id="opp-box"') < html.index('id="opp-picks-root"'))
 chk("koš tipů je v Příležitostech", 'id="opp-picks-root"' in html and "loadOppPicks" in js)
 chk("živý záznam koše ve Výsledcích", 'id="tr-basket-body"' in html and "renderResultsBasket" in js)
 vjs = open(os.path.join(ROOT, "vercel.json"), encoding="utf-8").read()

@@ -124,7 +124,7 @@
         <div class="lp-plan feat">
           <div class="lp-plan-tag">Doporučeno</div>
           <div class="nm">Pro</div><div class="pr">10 €<span> / měs</span></div>
-          <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Měsíční koš tipů</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Hodnocení tvých akcií</li></ul>
+          <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Skener příležitostí + koš tipů</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Hodnocení tvých akcií</li></ul>
           <button onclick="openProfile('plans')">Vybrat Pro</button>
         </div>
         <div class="lp-plan">
@@ -184,7 +184,7 @@
     </div>
     <div class="lp-hero">
       <h1>Vyber si plán a <em>začni</em>.</h1>
-      <p class="lp-lead">Tvůj účet zatím nemá aktivní předplatné. Odemkni koš tipů, hloubkovou analýzu i hodnocení svých akcií.</p>
+      <p class="lp-lead">Tvůj účet zatím nemá aktivní předplatné. Odemkni dnešní signály, koš tipů, hloubkovou analýzu i hodnocení svých akcií.</p>
     </div>
     <div class="lp-sec" style="margin-top:18px;">
       <div class="lp-plans">
@@ -196,7 +196,7 @@
         <div class="lp-plan feat">
           <div class="lp-plan-tag">Doporučeno</div>
           <div class="nm">Pro</div><div class="pr">10 €<span> / měs</span></div>
-          <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Měsíční koš tipů</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Hodnocení tvých akcií</li></ul>
+          <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Skener příležitostí + koš tipů</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Hodnocení tvých akcií</li></ul>
           <button onclick="openProfile('plans')">Předplatit Pro</button>
         </div>
         <div class="lp-plan">
@@ -233,7 +233,7 @@
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.11.04·d</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.11.04·f</div>
 
 <div class="container">
   
@@ -282,18 +282,18 @@
         <h2>Vítej v <span style="color:var(--accent)">MY ADVANTAGE</span></h2>
         <p>Investiční asistent, který ti řekne <b>kdy koupit, kdy prodat a kolik</b>. Bez slibů — s čísly.</p>
         <ul class="onb-bul">
-          <li><i class="ti ti-check"></i> <b>Měsíční koš tipů</b> – nejsilnější akce S&amp;P 500, kupuješ celý koš</li>
-          <li><i class="ti ti-check"></i> <b>Ověřeno na historii S&amp;P 500</b> – i na letech, na kterých se nic neladilo</li>
-          <li><i class="ti ti-check"></i> <b>Hodnocení každé tvé akcie</b> – přikupuj / drž / nedokupuj</li>
+          <li><i class="ti ti-check"></i> <b>Top signál dne</b> – jeden konkrétní obchod, ne 50</li>
+          <li><i class="ti ti-check"></i> <b>Ověřeno na 11 letech S&amp;P 500</b> – ~59 % trefnost signálu</li>
+          <li><i class="ti ti-check"></i> <b>Stop-loss u každého obchodu</b> – chráníme tě</li>
         </ul>
       </div>
       <div class="onb-page" data-page="1" style="display:none;">
         <div class="onb-icon"><i class="ti ti-layout-dashboard"></i></div>
         <h2>Tvůj <span style="color:var(--accent)">Přehled</span></h2>
-        <p>Hlavní obrazovka shrnuje stav trhu, první tip z koše, sektorové trendy, novinky a co se chystá tento týden.</p>
+        <p>Hlavní obrazovka shrnuje stav trhu, top signál dne, sektorové trendy, novinky a co se chystá tento týden.</p>
         <ul class="onb-bul">
           <li><i class="ti ti-pulse"></i> <b>Stav trhu</b> – VIX, výnosy, dolar, ropa, BTC</li>
-          <li><i class="ti ti-target-arrow"></i> <b>Koš tipů</b> – nejsilnější akce měsíce</li>
+          <li><i class="ti ti-target-arrow"></i> <b>Top signál dne</b> – konkrétní akce</li>
           <li><i class="ti ti-grid-dots"></i> <b>Sektorová heatmapa</b> – kdo dnes roste</li>
         </ul>
       </div>
@@ -723,11 +723,11 @@
       </div>
 
       <div class="ov-grid">
-        <!-- KOŠ TIPŮ: první tip -->
+        <!-- TOP SIGNÁL DNE -->
         <div class="ov-col-8">
           <div class="signal-spotlight" id="ov-top-signal">
-            <div class="ss-tag"><i class="ti ti-target-arrow"></i> Koš tipů</div>
-            <div class="ov-load"><i class="ti ti-loader spin"></i> Načítám koš tipů…</div>
+            <div class="ss-tag"><i class="ti ti-target-arrow"></i> Top signál dne</div>
+            <div class="ov-load"><i class="ti ti-loader spin"></i> Hledám nejlepší příležitost dneška…</div>
           </div>
         </div>
 
@@ -808,8 +808,15 @@
         <!-- TOP PŘÍLEŽITOSTI -->
         <div class="ov-col-12">
           <div class="ov-card">
-            <h3 style="display:flex; justify-content:space-between; align-items:center;"><span><i class="ti ti-rocket"></i> Další tipy z koše</span><a onclick="switchTab('opportunities')" style="color:var(--accent); cursor:pointer; font-size:11px; letter-spacing:.5px;">Vše →</a></h3>
+            <h3 style="display:flex; justify-content:space-between; align-items:center;"><span><i class="ti ti-rocket"></i> Další top příležitosti</span><a onclick="switchTab('opportunities')" style="color:var(--accent); cursor:pointer; font-size:11px; letter-spacing:.5px;">Vše →</a></h3>
             <div id="ov-opps"><div class="ov-load"><i class="ti ti-loader spin"></i> Skenuji trh…</div></div>
+          </div>
+        </div>
+        <!-- KOŠ TIPŮ (měsíční, dlouhodobě) – navíc k signálu dne -->
+        <div class="ov-col-12">
+          <div class="ov-card">
+            <h3 style="display:flex; justify-content:space-between; align-items:center;"><span><i class="ti ti-basket"></i> Koš tipů na tento měsíc</span><a onclick="switchTab('opportunities')" style="color:var(--accent); cursor:pointer; font-size:11px; letter-spacing:.5px;">Celý koš →</a></h3>
+            <div id="ov-basket"><div class="ov-load"><i class="ti ti-loader spin"></i> Načítám koš tipů…</div></div>
           </div>
         </div>
       </div>
@@ -881,7 +888,44 @@
 
     <!-- SEKCE: PŘÍLEŽITOSTI -->
     <div class="dash-section" id="section-opportunities" style="display:none;">
-    <!-- KOŠ TIPŮ: jediný seznam „co koupit“ (stejný jako v Moje portfolio, e-mailech a Přehledu) -->
+    <!-- ŽIVÉ NÁKUPNÍ SIGNÁLY PODLE OVĚŘENÉHO MODELU -->
+    <div class="opp-box" id="signals-box" style="border-color:rgba(0,230,118,0.35);">
+      <div class="opp-head">
+        <div class="opp-title">
+          <i class="ti ti-target-arrow" style="color:var(--up)"></i> Co koupit teď — signál „Sleva v trendu"
+          <span class="opp-sub">Akcie, které <b>právě teď</b> splňují náš backtestem prověřený nákupní signál. Horizont do 6 týdnů. <span id="signals-proof" style="color:var(--up)"></span> <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span>
+        </div>
+        <div class="opp-actions">
+          <span class="opp-updated" id="signals-updated"></span>
+          <button class="tool-btn" onclick="loadSignals(true)"><i class="ti ti-refresh"></i> Skenovat</button>
+        </div>
+      </div>
+      <div class="opp-grid" id="signals-grid">
+        <div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh podle ověřeného modelu…</div>
+      </div>
+    </div>
+
+    <!-- SCANNER PŘÍLEŽITOSTÍ – Potenciál -->
+    <div class="opp-box" id="opp-box">
+      <div class="opp-head">
+        <div class="opp-title">
+          <i class="ti ti-target-arrow"></i> Podhodnocené s momentem
+          <span class="opp-sub">Akcie S&amp;P 500, které jsou <b>levné podle zisků a cash flow</b> a zároveň mají <b>roční momentum</b>. Samotná „levnost" ani samotný růst nefungovaly stabilně — jejich kombinace v testu 2015–2026 ano. Kupovat v nákupní zóně, ne naslepo.</span>
+        </div>
+        <div class="opp-actions">
+          <span class="opp-updated" id="opp-updated"></span>
+          <button class="tool-btn" onclick="loadOpportunities()"><i class="ti ti-refresh"></i> Skenovat</button>
+        </div>
+      </div>
+      <div class="opp-filters" id="opp-filters">
+        <span style="font-size:12px;color:var(--text2)">💎 Nejlevnější akcie S&amp;P 500, které zároveň mají roční momentum — ověřená kombinace, ne jen „spadlé" tituly.</span>
+      </div>
+      <div class="opp-grid" id="opp-grid">
+        <div class="opp-loading"><i class="ti ti-loader spin"></i> Hledám příležitosti s potenciálem...</div>
+      </div>
+    </div>
+
+    <!-- DLOUHODOBĚ: měsíční koš tipů (stejný jako v Moje portfolio a v Přehledu) -->
     <div id="opp-picks-root"><div class="opp-loading"><i class="ti ti-loader spin"></i> Načítám koš tipů…</div></div>
     </div><!-- /section-opportunities -->
 

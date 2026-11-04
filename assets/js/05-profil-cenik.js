@@ -29,6 +29,8 @@ function setRisk(r) {
     renderStarter();
     // Při změně profilu znovu načti, co na něm závisí. (Dřív se tu volalo
     // neexistující renderOpps() – příležitosti se proto nikdy nepřekreslily.)
+    if (oppData && oppData.length) renderOpportunities();
+    if (typeof signalsLoaded !== 'undefined' && signalsLoaded) loadSignals(true);
     if (picksCache && Object.keys(picksCache).length) { picksCache = {}; loadOppPicks(true); }
     if (typeof fetchOverviewPositions === 'function') fetchOverviewPositions();
     planOnRisk();
@@ -278,7 +280,7 @@ async function saveDisplayName() {
         const r = await fetch(`${BACKEND_URL}/api/profile/name`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: el.value }) });
         const d = await r.json().catch(() => ({ ok: false }));
         if (!d.ok) { showToast(d.error || 'Jméno se nepodařilo uložit', 'down', 'ti-x'); return; }
-        myName = d.name || ''; el.value = myName;
+        myName = d.name || ''; myNameVoc = d.name_voc || ''; el.value = myName;
         updateProfileBtn(); renderOverviewGreeting();
         showToast(myName ? `Budu ti říkat ${myName}` : 'Oslovení vypnuto', 'up', 'ti-user-check');
     } catch (e) { showToast('Jméno se nepodařilo uložit', 'down', 'ti-x'); }
@@ -395,9 +397,9 @@ function addAllStarter() {
 const PLANS = [
     { id: 'start', name: 'Start', price: '5 €', period: '/ měsíc', feats: [
         ['Neomezené sledování', 1], ['Grafy, Signal Score & technický budík', 1], ['Aktuální zprávy', 1],
-        ['Cenová upozornění + sync', 1], ['Koš tipů & analytici', 0], ['Hloubková analýza', 0] ] },
+        ['Cenová upozornění + sync', 1], ['Příležitosti & analytici', 0], ['Hloubková analýza', 0] ] },
     { id: 'pro', name: 'Pro', price: '10 €', period: '/ měsíc', featured: true, feats: [
-        ['Vše ze Start', 1], ['Měsíční koš tipů', 1], ['Doporučení analytiků & cílové ceny', 1],
+        ['Vše ze Start', 1], ['Podhodnocené s momentem + koš tipů', 1], ['Doporučení analytiků & cílové ceny', 1],
         ['Fundamenty (P/E, kapitalizace)', 1], ['Hloubková analýza (5/den)', 1],
         ['Asistent, přehled & track record', 0] ] },
     { id: 'elite', name: 'Elite', price: '15 €', period: '/ měsíc', feats: [

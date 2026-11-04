@@ -22,8 +22,19 @@ function switchTab(name) {
         renderStarter();
         planOpen();
     }
-    // Příležitosti = koš tipů (jediný seznam „co koupit“)
-    if (name === 'opportunities') loadOppPicks();
+    // Příležitosti: signál „Sleva v trendu“ + podhodnocené s momentem (zamčené bez Pro) a pod nimi měsíční koš tipů
+    if (name === 'opportunities') {
+        if (!hasFeature('pro')) {
+            document.getElementById('signals-grid').innerHTML = lockedCardHTML('Co koupit teď — ověřený signál', 'pro',
+                'Akcie, které právě teď splňují náš backtestem prověřený nákupní signál.');
+            document.getElementById('opp-grid').innerHTML = lockedCardHTML('Podhodnocené s momentem', 'pro',
+                'Nejlevnější akcie S&amp;P 500, které zároveň mají roční momentum — ověřená kombinace.');
+        } else {
+            loadSignals();
+            if (!oppData.length && !oppLoading) loadOpportunities();
+        }
+        loadOppPicks();
+    }
     if (name === 'ai') {
         const lock = document.getElementById('ai-lock');
         if (!hasFeature('elite')) {
@@ -104,7 +115,7 @@ async function initAccount() {
                 // Stav předplatného
                 try {
                     const me = await (await fetch(`${BACKEND_URL}/api/me`, { headers: authHeaders() })).json();
-                    if (me.ok) { mySub = me.subscription; if (me.notif) myNotif = me.notif; myName = me.display_name || ''; }
+                    if (me.ok) { mySub = me.subscription; if (me.notif) myNotif = me.notif; myName = me.display_name || ''; myNameVoc = me.display_name_voc || ''; }
                     if (mySub && mySub.is_admin) setTimeout(adminDailyKick, 4000);   // admin: denní aktualizace 1× za den
                 } catch (e) {}
             } else {

@@ -1085,6 +1085,62 @@ html, body {max-width:100%;}
 @media (max-width:600px){ .profile-box .port-summary {grid-template-columns:1fr;} }
 
 /* ============ SCANNER PŘÍLEŽITOSTÍ ============ */
+.opp-box {background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:20px; padding:1.6rem; margin-bottom:2.2rem; position:relative; overflow:hidden;}
+.opp-box::before {content:""; position:absolute; top:-40%; right:-10%; width:320px; height:320px; background:radial-gradient(circle, rgba(255,122,0,0.10), transparent 70%); pointer-events:none;}
+.opp-head {display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; position:relative; z-index:1;}
+.opp-title {font-family:var(--fh); font-size:20px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.opp-title i {color:var(--accent); font-size:24px;}
+.opp-sub {display:block; width:100%; font-family:var(--fb); font-size:12px; font-weight:400; color:var(--text2); margin-top:3px;}
+.opp-actions {display:flex; align-items:center; gap:10px;}
+.opp-updated {font-size:11px; color:var(--text2); font-family:var(--fb);}
+.opp-filters {display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 4px; position:relative; z-index:1; align-items:center;}
+.opp-chip {background:var(--surface); border:1px solid var(--border); padding:7px 14px; border-radius:10px; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; transition:all .2s;}
+.opp-chip:hover {border-color:var(--accent); color:var(--text);}
+.opp-chip.active {background:var(--accent-soft); border-color:var(--border-accent); color:var(--accent); font-weight:600;}
+.opp-toggle {display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); cursor:pointer; margin-left:auto; font-family:var(--fb);}
+.opp-toggle input {accent-color:var(--accent); cursor:pointer;}
+.opp-grid {display:grid; grid-template-columns:repeat(auto-fill, minmax(265px, 1fr)); gap:14px; margin-top:16px; position:relative; z-index:1;}
+.opp-card {background:var(--elev); border:1px solid var(--border); border-radius:16px; padding:17px; cursor:pointer; transition:transform .15s, border-color .2s, box-shadow .2s; position:relative; overflow:hidden;}
+.opp-card:hover {transform:translateY(-3px); border-color:var(--border-accent); box-shadow:0 10px 26px rgba(0,0,0,0.35);}
+.opp-card.moon {border-color:var(--accent); background:linear-gradient(160deg, rgba(255,122,0,0.10), transparent 70%);}
+.opp-rank {position:absolute; top:12px; right:14px; font-family:var(--fh); font-size:11px; color:var(--text2);}
+.opp-c-top {display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+.opp-score {min-width:46px; height:46px; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:var(--fh); font-weight:800; font-size:18px; line-height:1; color:#fff;}
+.opp-score small {font-size:8px; font-weight:600; opacity:.85; letter-spacing:.5px;}
+.opp-score.p-high {background:linear-gradient(135deg,#00C853,#69F0AE); color:#062;}
+.opp-score.p-strong {background:linear-gradient(135deg,#FF7A00,#FF9A3C); color:#1a0e00;}
+.opp-score.p-mid {background:linear-gradient(135deg,#ff7a45,#ffb347);}
+.opp-score.p-low {background:rgba(255,255,255,0.12); color:var(--text2);}
+.opp-upside {margin:10px 0 6px; display:flex; align-items:baseline; gap:8px;}
+.opp-up-val {font-family:var(--fh); font-weight:800; font-size:26px; color:var(--up);}
+.opp-up-lbl {font-size:11px; color:var(--text2);}
+.opp-tier-lbl {margin-left:auto; font-size:11px; font-weight:700; padding:2px 8px; border-radius:8px;}
+.opp-tier-lbl.p-high {background:var(--up-glow); color:var(--up);}
+.opp-tier-lbl.p-strong {background:rgba(255,122,0,0.14); color:var(--accent);}
+.opp-tier-lbl.p-mid {background:rgba(255,122,69,0.15); color:#ff9d6e;}
+.opp-tier-lbl.p-low {background:rgba(255,255,255,0.06); color:var(--text2);}
+.opp-why {font-size:12.5px; line-height:1.5; color:var(--text); background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:10px; padding:9px 11px; margin-bottom:10px;}
+.opp-why i {color:var(--accent);}
+.opp-c-id {min-width:0;}
+.opp-c-tkr {font-family:var(--fh); font-weight:700; font-size:17px; color:var(--text);}
+.opp-c-name {font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;}
+.opp-c-px {display:flex; align-items:baseline; gap:8px; margin:6px 0 10px;}
+.opp-c-price {font-family:var(--fb); font-weight:700; font-size:18px; color:var(--text);}
+.opp-c-chg {font-size:14px; font-weight:700;}
+.opp-c-chg.up {color:var(--up);} .opp-c-chg.down {color:var(--down);}
+.opp-badges {display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px;}
+.opp-badge {font-size:10.5px; font-weight:600; padding:3px 8px; border-radius:8px; font-family:var(--fb); white-space:nowrap;}
+.opp-badge.extreme {background:rgba(255,45,110,0.15); color:#ff6090; border:1px solid rgba(255,45,110,0.35);}
+.opp-badge.hot {background:rgba(255,122,69,0.15); color:#ff9d6e; border:1px solid rgba(255,122,69,0.3);}
+.opp-badge.up {background:var(--up-glow); color:var(--up); border:1px solid rgba(0,200,150,0.3);}
+.opp-badge.down {background:rgba(255,77,109,0.12); color:var(--down); border:1px solid rgba(255,77,109,0.25);}
+.opp-badge.gem {background:rgba(255,179,71,0.15); color:#ffce8a; border:1px solid rgba(255,179,71,0.35);}
+.opp-badge.neutral {background:rgba(255,255,255,0.06); color:var(--text2); border:1px solid var(--border);}
+.opp-c-stats {display:flex; gap:12px; border-top:1px solid var(--border); padding-top:9px; font-family:var(--fb);}
+.opp-stat {display:flex; flex-direction:column; gap:1px;}
+.opp-stat .l {font-size:9px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
+.opp-stat .v {font-size:12px; color:var(--text); font-weight:600;}
+.opp-disclaimer {font-size:10.5px; color:var(--text2); margin-top:14px; position:relative; z-index:1; opacity:.7;}
 .opp-loading {color:var(--accent); padding:24px; font-size:14px;}
 
 /* ============ TECHNICKÝ SIGNAL PANEL ============ */
@@ -1450,8 +1506,9 @@ input[type=month]::-webkit-datetime-edit, input[type=date]::-webkit-datetime-edi
   /* drobné popisky ať se dají přečíst */
   .si-type, .search-grp, .pick-badge, .deep-badge, .dl-cell .l, .track-stat .l, .track-score, .tb-cell .l, .at-cell .l,
   .starter-sector, .ov-event .tag, .ov-news-row .meta, .cmp-picker-grp, .cmp-picker-item .type-badge, .heat-cell .hc-tk,
-  .sim-cell .l, .signal-scale, .mp-badge, .mp-rv-hd, .dg-imp,
+  .sim-cell .l, .opp-stat .l, .signal-scale, .opp-badge, .opp-disclaimer, .mp-badge, .mp-rv-hd, .dg-imp,
   .news-src-tag, .sec-sum-cell .l, .notif-dot, .lp-footer-links span {font-size:11px;}
+  .opp-score small {font-size:9px;}
   .pfp-r {padding:9px 14px; font-size:12px;}
   .app-footer-col a {display:block; padding:7px 0;}
 
