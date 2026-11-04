@@ -194,6 +194,33 @@ function planPausedHTML(p) {
     }).join('');
 }
 
+// Přejde na Moje portfolio a odroluje na kartu (id) AŽ PO načtení hodnocení – dřív se scrollovalo do ještě krátké stránky
+// a po dotažení obsahu (33 akcií) zůstal uživatel nahoře.
+async function planGoTo(id, focusAmount) {
+    switchTab('portfolio');
+    for (let i = 0; i < 48 && (planLoading || (planLots.length && !planData)); i++) await new Promise(r => setTimeout(r, 250));
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (focusAmount) {
+        const inp = document.getElementById('mp-amount');
+        if (inp && !('ontouchstart' in window)) setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) {} }, 500);
+    }
+    // Zprávy a přepočty se dotahují ještě pár vteřin a mění výšku stránky nad kartou – drž ji na místě,
+    // dokud uživatel sám nezačne posouvat.
+    let moved = false; const mv = () => { moved = true; };
+    ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(ev => window.addEventListener(ev, mv, { passive: true, once: true }));
+    const t0 = Date.now();
+    await new Promise(r => setTimeout(r, 700));
+    while (!moved && Date.now() - t0 < 8000 && (planLoading || tipNewsLoading || Date.now() - t0 < 2000)) {
+        const e2 = document.getElementById(id); if (!e2) break;
+        const top = e2.getBoundingClientRect().top;
+        if (top < -20 || top > 140) e2.scrollIntoView({ block: 'start' });
+        await new Promise(r => setTimeout(r, 350));
+    }
+}
+
 function planDeposit(v) {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     if (v != null) planAmount = String(v);
@@ -203,8 +230,9 @@ function planDeposit(v) {
     try { localStorage.setItem('ma_plan_amount', String(amt)); } catch (e) {}
     planShowDeposit = true;
     planRefresh().then(() => {
-        const el = document.getElementById('mp-deposit');
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // výsledek má být vidět, ale stránka nemá „skákat“: odroluj jen, když rozdělení leží mimo obrazovku
+        const r = document.querySelector('#mp-deposit .mp-dep-split, #mp-deposit .mp-cands');
+        if (r) { const b = r.getBoundingClientRect(); if (b.top > window.innerHeight * 0.85 || b.bottom < 0) r.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     });
 }
 
@@ -839,7 +867,7 @@ function renderOverviewPlan() {
         <div class="ov-mini-stat"><div class="l">Drž</div><div class="v">${evc.hold || 0}</div></div>
         <div class="ov-mini-stat"><div class="l">Slabší</div><div class="v ${evc.weak ? 'r' : ''}">${evc.weak || 0}</div></div>
       </div>`) + `
-      <button class="tool-btn" onclick="switchTab('portfolio'); setTimeout(()=>{const e=document.getElementById('mp-amount'); if(e){e.scrollIntoView({behavior:'smooth',block:'center'}); e.focus();}},150)" style="width:100%; justify-content:center; margin-bottom:8px;"><i class="ti ti-coins"></i> Kam s penězi</button>`;
+      <button class="tool-btn" onclick="planGoTo('mp-deposit', true)" style="width:100%; justify-content:center; margin-bottom:8px;"><i class="ti ti-coins"></i> Kam s penězi</button>`;
 }
 
 // ---------- import ze screenshotu ----------
