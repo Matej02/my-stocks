@@ -6929,7 +6929,21 @@ změna vedení, velký pohyb ceny s uvedeným důvodem), napiš česky:
   kvůli podvodu, přepočet dřívějších výsledků, bankrot nebo vážnou hrozbu bankrotu, vyřazení z burzy.
   Pokuta, prohraný soud, slabé výsledky nebo snížený výhled NEJSOU severe. Jinak false.
 Tickery, kde jsou jen obecné články, rady nebo nic podstatného, VYNECH. Žádné rady kupovat/prodat, žádné předpovědi.
+VŠECHNY texty ("what", "why") piš ČESKY, i když jsou zprávy anglicky – nic nepřepisuj anglicky, jen názvy firem a produktů nech.
 Odpověz JEN JSON: {{"items": [{{"ticker": "...", "what": "...", "why": "...", "impact": "...", "severe": false, "sources": []}}]}}"""
+
+
+_EN_WORDS = {"the", "and", "of", "to", "in", "for", "on", "with", "as", "at", "by", "its", "is", "are", "was", "were", "said",
+             "after", "from", "that", "this", "has", "have", "will", "over", "into", "says", "reports", "stock", "shares"}
+
+
+def _looks_english(text):
+    """Hrubá detekce anglického textu (AI občas odpoví anglicky): hodně anglických spojek a žádná česká diakritika."""
+    t = (text or "").strip()
+    if not t or re.search(r"[ěščřžýáíéúůďťňó]", t.lower()):
+        return False
+    words = re.findall(r"[a-z']+", t.lower())
+    return len(words) >= 4 and sum(1 for w in words if w in _EN_WORDS) >= max(2, len(words) // 8)
 
 
 _NAME_SUFFIX = re.compile(r"\b(inc|incorporated|corp|corporation|co|company|holdings?|group|plc|n\.?v|s\.?a|ag|se|ltd|limited|the|class [a-c])\b\.?", re.I)
@@ -6979,7 +6993,7 @@ def _mine_digest(tickers, names=None, cap=20):
         except Exception:
             c = None
         age = time.time() - (c or {}).get("generated", 0)
-        if c and age < ttl and (c.get("ai") or not analysis_enabled() or age < 900):
+        if c and age < ttl and (c.get("ai") or not analysis_enabled() or age < 180):
             got[t] = c
         else:
             missing.append(t)
@@ -7029,6 +7043,7 @@ def _mine_compute(tickers, names):
         raw = call_llm(MINE_PROMPT.format(items="\n".join(
             f"{p['id']} | {p['ticker']} | {p['src']} | {p['title']} | {p['text']}" for p in pool)))
         by_id = {p["id"]: p for p in pool}
+        dropped_en = 0
         for e in ((raw or {}).get("items") or [])[:10]:
             if not isinstance(e, dict):
                 continue
@@ -7037,6 +7052,9 @@ def _mine_compute(tickers, names):
             srcs = [by_id[s] for s in (e.get("sources") or [])
                     if isinstance(s, str) and s in by_id and by_id[s]["ticker"] == t]
             if not srcs or t not in tickers or not e.get("what"):
+                continue
+            if _looks_english(str(e.get("what"))) or _looks_english(str(e.get("why") or "")):
+                dropped_en += 1                       # uživatel chce všechno česky – anglické shrnutí nezobrazíme
                 continue
             imp = (e.get("impact") or "").lower()
             severe = e.get("severe") is True
@@ -7051,7 +7069,7 @@ def _mine_compute(tickers, names):
                         "reason": "ze zpráv: " + str(e["what"])[:200], "url": srcs[0]["link"]})
                 except Exception:
                     pass
-        res["ai"] = raw is not None
+        res["ai"] = raw is not None and not (dropped_en and not res["items"])   # samé anglické odpovědi = jako by AI nebyla
     return res
 
 
@@ -7658,7 +7676,7 @@ def _parse_rss_time(pub):
 def api_portfolio_history():
     """Vrátí denní kumulativní výkon watchlist (equal-weighted) vs SPY.
     Base = 100 v den [today - N]. Data pro rychlé vykreslení line chartu."""
-    tickers = [t.strip().upper() for t in (request.args.get("tickers") or "").split(",") if t.strip()][:30]
+    tickers = [t.strip().upper() for t in (request.args.get("tickers") or "").split(",") if t.strip()][:40]
     days = max(7, min(365, int(request.args.get("days", "90") or 90)))
     if not tickers:
         return jsonify({"ok": True, "series": [], "baseline": [], "labels": []})
@@ -7676,8 +7694,7 @@ def api_portfolio_history():
         rng = "1y"
 
     # Sesbírej denní close pro každý ticker (unifikované na 'YYYY-MM-DD')
-    per_ticker = {}
-    for t in tickers:
+    def _hist_one(t):
         try:
             d = yahoo_chart(t, rng, "1d")
             ts_list = d.get("timestamp") or []
@@ -7689,9 +7706,15 @@ def api_portfolio_history():
                 if c is None: continue
                 dt = datetime.fromtimestamp(ts + gmt, tz=timezone.utc).strftime("%Y-%m-%d")
                 series[dt] = c
-            per_ticker[t] = series
+            return t, series
         except Exception:
-            continue
+            return t, None
+    from concurrent.futures import ThreadPoolExecutor
+    per_ticker = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:        # 30+ akcií po jedné trvalo desítky sekund
+        for t, series in ex.map(_hist_one, tickers):
+            if series is not None:
+                per_ticker[t] = series
 
     # SPY baseline
     spy_series = {}
@@ -8064,16 +8087,23 @@ def api_alerts_events():
     """Vrátí souhrn klíčových událostí pro seznam tickerů. Cache 2h."""
     tickers_param = (request.args.get("tickers") or "").upper()
     since_days = max(1, min(30, int(request.args.get("days", "10") or 10)))
-    tickers = [t.strip() for t in tickers_param.split(",") if t.strip()][:20]
+    tickers = [t.strip() for t in tickers_param.split(",") if t.strip()][:40]
     if not tickers:
         return jsonify({"ok": True, "events": []})
     ck = f"alerts:{','.join(tickers)}:{since_days}"
     cached = kv_get_json(ck)
     if cached and (time.time() - cached.get("ts", 0) < 7200):
         return jsonify({"ok": True, "cached": True, **cached})
+    def _ev_one(t):
+        try:
+            return _events_for_ticker(t, since_days=since_days)
+        except Exception:
+            return []
+    from concurrent.futures import ThreadPoolExecutor
     events = []
-    for t in tickers:
-        events += _events_for_ticker(t, since_days=since_days)
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        for lst in ex.map(_ev_one, tickers):
+            events += lst
     events.sort(key=lambda x: x.get("date") or "", reverse=True)
     out = {"ts": int(time.time()), "events": events[:15],
            "updated": datetime.now(timezone.utc).strftime("%H:%M UTC")}

@@ -233,7 +233,7 @@
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.11.04·c</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.11.04·d</div>
 
 <div class="container">
   
@@ -774,7 +774,7 @@
         <div class="ov-col-12">
           <div class="ov-card">
             <h3 style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-              <span><i class="ti ti-chart-line"></i> Výkon tvé watchlist vs S&amp;P 500</span>
+              <span><i class="ti ti-chart-line"></i> <span id="pfp-title">Výkon tvého portfolia vs S&amp;P 500</span></span>
               <div class="pfp-range" id="pfp-range">
                 <button class="pfp-r active" data-days="30" onclick="setPfpRange(30)">30D</button>
                 <button class="pfp-r" data-days="90" onclick="setPfpRange(90)">3M</button>
@@ -784,14 +784,14 @@
             </h3>
             <div class="pfp-stats" id="pfp-stats"></div>
             <div id="pfp-chart" style="width:100%; min-height:280px;"></div>
-            <div class="pfp-fine">Equal-weighted index z akcií, které sleduješ (bez ohledu na tvé skutečné pozice). SPY = S&amp;P 500 ETF jako srovnávací baseline. Alfa = <b>o kolik % tvůj výběr překonal trh</b>.</div>
+            <div class="pfp-fine" id="pfp-fine">Rovnoměrný index z akcií v Moje portfolio. SPY = S&amp;P 500 ETF jako srovnání. Alfa = <b>o kolik % tvůj výběr překonal trh</b>.</div>
           </div>
         </div>
 
         <!-- UDÁLOSTI U TVÝCH AKCIÍ -->
         <div class="ov-col-12">
           <div class="ov-card">
-            <h3><i class="ti ti-bell"></i> Události u tvých akcií <span style="font-size:11px; color:var(--text2); font-weight:400; letter-spacing:0; text-transform:none;">— posledních 10 dnů</span></h3>
+            <h3><i class="ti ti-bell"></i> Události u tvých akcií <span style="font-size:11px; color:var(--text2); font-weight:400; letter-spacing:0; text-transform:none;">— portfolio i sledované, posledních 10 dnů</span></h3>
             <div class="ov-alerts" id="ov-alerts"><div class="ov-load"><i class="ti ti-loader spin"></i> Kontroluji SEC + analytické revize…</div></div>
           </div>
         </div>

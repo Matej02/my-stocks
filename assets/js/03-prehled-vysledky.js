@@ -178,11 +178,19 @@ function renderOverviewPortfolio() {
     set('ov-port-down', downs);
 }
 
+// Tickery pro Přehled: nejdřív to, co držím (Moje portfolio), pak co jen sleduji. Bez futures a indexů (=F, ^) –
+// u nich žádné výsledky ani zprávy o firmě nejsou.
+function ovTickers(max) {
+    const held = (typeof planLots !== 'undefined' ? planLots : []).map(l => l.ticker);
+    const all = held.concat(myStocks || []).map(t => String(t || '').toUpperCase()).filter(t => t && !/[=^]/.test(t));
+    return [...new Set(all)].slice(0, max || 30);
+}
+
 async function renderOverviewEvents() {
     const box = document.getElementById('ov-events');
     if (!box) return;
     try {
-        const tk = (myStocks || []).join(',');
+        const tk = ovTickers(30).join(',');
         const d = await (await fetch(`${BACKEND_URL}/api/calendar?days=10&tickers=${encodeURIComponent(tk)}`)).json();
         const items = (d && d.items) || [];
         if (!items.length) {
@@ -252,18 +260,26 @@ async function fetchOverviewPerf(force) {
     const stats = document.getElementById('pfp-stats');
     const chartEl = document.getElementById('pfp-chart');
     if (!chartEl) return;
-    const tk = (myStocks || []).slice(0, 20).join(',');
+    // Má-li uživatel portfolio, počítá se výkon JEHO akcií; jinak jen sledovaných.
+    const held = (typeof planLots !== 'undefined' ? planLots : []).map(l => String(l.ticker || '').toUpperCase()).filter(t => t && !/[=^]/.test(t));
+    const isPf = held.length > 0, who = isPf ? 'portfolia' : 'watchlistu';
+    const tk = (isPf ? [...new Set(held)] : (myStocks || [])).slice(0, 40).join(',');
+    const setTxt = (id, t) => { const el = document.getElementById(id); if (el) el.innerHTML = t; };
+    setTxt('pfp-title', `Výkon tvého ${who} vs S&amp;P 500`);
+    setTxt('pfp-fine', isPf
+        ? 'Rovnoměrný index z akcií, které máš v Moje portfolio (velikosti pozic nepočítám). SPY = S&amp;P 500 ETF jako srovnání. Alfa = <b>o kolik % tvůj výběr překonal trh</b>.'
+        : 'Rovnoměrný index z akcií, které sleduješ. Nahraj si portfolio a uvidíš výkon svých akcií. SPY = S&amp;P 500 ETF jako srovnání. Alfa = <b>o kolik % tvůj výběr překonal trh</b>.');
     if (!tk) {
         stats.innerHTML = '';
-        chartEl.innerHTML = '<div class="ov-empty">Nejdřív si přidej pár tickerů do sledování — pak uvidíš, jak by tvé picky letěly.</div>';
+        chartEl.innerHTML = '<div class="ov-empty">Nahraj si portfolio (Moje portfolio) nebo přidej pár akcií do sledování – pak tady uvidíš, jak si vedou proti S&P 500.</div>';
         return;
     }
-    if (!force) chartEl.innerHTML = '<div class="ov-load"><i class="ti ti-loader spin"></i> Počítám výkon watchlistu vs S&P 500…</div>';
+    if (!force) chartEl.innerHTML = `<div class="ov-load"><i class="ti ti-loader spin"></i> Počítám výkon ${who} vs S&P 500…</div>`;
     try {
         const d = await (await fetch(`${BACKEND_URL}/api/portfolio-history?tickers=${encodeURIComponent(tk)}&days=${_pfpDays}`)).json();
         if (!d.ok || !d.series || !d.series.length) {
             stats.innerHTML = '';
-            chartEl.innerHTML = '<div class="ov-empty">Nedostatek historických dat pro tuto watchlist.</div>';
+            chartEl.innerHTML = '<div class="ov-empty">Nedostatek historických dat pro tyto akcie.</div>';
             return;
         }
         const yours = d.final_change_pct ?? 0;
@@ -278,7 +294,7 @@ async function fetchOverviewPerf(force) {
                 <div class="v ${alpha >= 0 ? 'up' : 'down'}">${sign(alpha)}</div>
             </div>
             <div class="pfp-stat">
-                <div class="l">Tvá watchlist</div>
+                <div class="l">Tvé ${isPf ? 'portfolio' : 'sledované'}</div>
                 <div class="v ${cls(yours)}">${sign(yours)}</div>
             </div>
             <div class="pfp-stat">
@@ -299,7 +315,7 @@ async function fetchOverviewPerf(force) {
                      zoom: { enabled: false, allowMouseWheelZoom: false },
                      animations: { enabled: false }, foreColor: '#8a8f99' },
             series: [
-                { name: 'Tvá watchlist', data: d.series },
+                { name: isPf ? 'Tvé portfolio' : 'Tvé sledované', data: d.series },
                 { name: 'S&P 500', data: d.baseline },
             ],
             xaxis: { categories: d.labels, tickAmount: 6, labels: { style: { fontFamily: 'Outfit', fontSize: '11px' } } },
@@ -327,8 +343,8 @@ async function fetchOverviewPerf(force) {
 async function fetchOverviewAlerts() {
     const box = document.getElementById('ov-alerts');
     if (!box) return;
-    const tk = (myStocks || []).join(',');
-    if (!tk) { box.innerHTML = '<div class="ov-empty">Přidej si akcii do sledování a začneme hlídat její události.</div>'; return; }
+    const tk = ovTickers(40).join(',');
+    if (!tk) { box.innerHTML = '<div class="ov-empty">Nahraj si portfolio nebo přidej akcii do sledování a začneme hlídat její události.</div>'; return; }
     try {
         const d = await (await fetch(`${BACKEND_URL}/api/alerts/events?tickers=${encodeURIComponent(tk)}&days=10`)).json();
         const items = (d && d.events) || [];

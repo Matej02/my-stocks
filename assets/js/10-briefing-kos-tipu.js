@@ -135,11 +135,21 @@ function dgMineHTML() {
     } else if (m.ai) {
         body = `<div class="dg-note">U tvých akcií za poslední 3 dny nic podstatného – žádné výsledky, akvizice ani velké zprávy.</div>`;
     } else if ((m.headlines || []).length) {
-        body = m.headlines.slice(0, 8).map(h => `<a class="dg-hl" href="${mpEsc(h.link)}" target="_blank" rel="noopener noreferrer"><b>${mpEsc(mpBase(h.ticker))}</b> ${mpEsc(h.title)}</a>`).join('');
+        // Titulky z Yahoo jsou anglicky – bez českého AI shrnutí je neukazujeme, jen které akcie mají nové zprávy.
+        const cnt = {}; m.headlines.forEach(x => { const b = mpBase(x.ticker); cnt[b] = (cnt[b] || 0) + 1; });
+        body = `<div class="dg-note warn"><i class="ti ti-info-circle"></i> České shrnutí zpráv se teď nepodařilo vytvořit (bezplatná AI má limit). Nové zprávy jsou u: ${Object.entries(cnt).map(([k, v]) => `<b>${mpEsc(k)}</b> (${v})`).join(', ')}. Jsou anglicky, proto je tu neukazuju – <a style="color:var(--accent);cursor:pointer" onclick="dgRetryMine()">zkusit znovu</a>.</div>`;
     } else {
         body = `<div class="dg-note">U tvých akcií za poslední 3 dny žádné zprávy.</div>`;
     }
     return `<div class="dg-h"><i class="ti ti-briefcase"></i> Tvoje akcie ve zprávách</div>${body}`;
+}
+
+async function dgRetryMine() {
+    digestMine = null; digestMineKey = '';
+    const list = document.getElementById('market-news-list');
+    if (list) list.insertAdjacentHTML('afterbegin', '<div class="dg-note"><i class="ti ti-loader spin"></i> Zkouším znovu vytvořit české shrnutí…</div>');
+    await loadDigestMine();
+    renderDigestModal();
 }
 
 function renderDigestModal() {
@@ -249,8 +259,13 @@ function planEvalHTML(d) {
 function planSetPicks(n) {
     planPicksN = n === 6 ? 6 : 10;
     try { localStorage.setItem('ma_picks_n', String(planPicksN)); } catch (e) {}
+    // Hned přepni tlačítko a oříznutý koš (prvních n tipů je totéž, co server pošle); přesná čísla doběhnou po odpovědi serveru.
+    if (planData && planData.picks) {
+        const pk = planData.picks;
+        planData.picks = Object.assign({}, pk, { n: planPicksN, loading: true, basket: (pk.basket || []).slice(0, planPicksN) });
+    }
     if (planLots.length) planRefresh(); else renderPlan();
-    if (document.getElementById('opp-picks-root') && picksCache) loadOppPicks(true);
+    if (document.getElementById('opp-picks-root')) loadOppPicks();
     if (typeof fetchOverviewSignal === 'function') { fetchOverviewSignal(); fetchOverviewOpps(); }
 }
 
@@ -319,7 +334,7 @@ function planPicksHTML(d, sfx) {
       </div>`).join('');
     return `<div class="mp-card" id="mp-picks${sfx}"><h4><i class="ti ti-target-arrow"></i> Co koupit teď</h4>
       <div class="mp-sub">${pk.month ? `Koš na <b>${MP_MONTH_CZ[parseInt(pk.month.slice(5, 7), 10) - 1]}</b> (sestaven ${mpDate(pk.since)}) – ` : ''}${pk.n} nejsilnějších akcií z S&amp;P 500: půlka je <b>levná a zároveň roste</b> (hodnota + momentum), půlka má <b>nejsilnější momentum</b>. Mění se jednou měsíčně, mezitím zůstává stejný. ${nHeld ? `${pk.basket.filter(p => heldT.has(p.ticker)).map(p => '<b>' + mpEsc(mpBase(p.ticker)) + '</b>').join(', ')} už máš – peníze ${nHeld > 1 ? 'dostanou' : 'dostane'}, jen když ${nHeld > 1 ? 'jich' : 'jí'} máš méně než ostatních. ` : ''}Klikni na akcii pro detail.</div>
-      <div class="mp-riskrow" style="margin:0 0 12px">${tog(10)}${tog(6)}<span class="mp-pill-sep">${pk.n === 6 ? 'koncentrovanější, víc kolísá' : 'doporučeno – stabilnější'}</span></div>
+      <div class="mp-riskrow" style="margin:0 0 12px">${tog(10)}${tog(6)}<span class="mp-pill-sep">${pk.loading ? '<i class="ti ti-loader spin"></i> přepočítávám…' : (pk.n === 6 ? 'koncentrovanější, víc kolísá' : 'doporučeno – stabilnější')}</span></div>
       ${d.basket_perf ? `<div class="mp-bperf"><i class="ti ti-activity"></i><span>Živý záznam koše od ${mpDate(d.basket_perf.since)}: <b style="color:var(--${d.basket_perf.ret >= d.basket_perf.spy ? 'up' : 'amber'})">${mpSigned(d.basket_perf.ret)}</b> · S&amp;P 500 ${mpSigned(d.basket_perf.spy)}. Krátké období je hlavně náhoda – smysl to dává po měsících.</span></div>` : ''}
       <div class="mp-picks">${cards}</div>
       <div class="mp-acc"><i class="ti ti-chart-dots"></i><div><b>Jak přesné to je (ověřeno na historii S&amp;P 500):</b> koš ${pk.n} tipů porazil index za 12 měsíců v <b>${tr.beat_pct} %</b> případů v letech 2015–2022 (průměrně o +${mpPct(tr.excess, 1)}) a v <b>${ho.beat_pct} %</b> v letech 2023–2026, na kterých se nic neladilo (+${mpPct(ho.excess, 1)}). Jednotlivý tip ale porazí index jen asi v ${ho.tip_pct} % – <b>kupuj celý koš, ne jednu akcii</b>. Žádný model nezaručí výsledek a akcie s nejsilnějším momentem umí i prudce spadnout.</div></div>

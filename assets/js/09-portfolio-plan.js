@@ -77,6 +77,7 @@ async function syncLotsFromCloud() {
             planLots = d.holdings; saveLots(false); planData = null;
             if (activeTab === 'portfolio') planOpen();
             renderOverviewPlan();
+            if (typeof fetchOverviewPerf === 'function') { fetchOverviewPerf(); fetchOverviewAlerts(); renderOverviewEvents(); }
         } else if (planLots.length) {
             saveLots(true);
         }
@@ -125,6 +126,7 @@ async function planRefresh() {
         planErr = e.message || 'Plán se nepodařilo spočítat.';
     }
     planLoading = false;
+    if (planData && planData.picks && planData.picks.loading) planData.picks.loading = false;     // chyba serveru: zůstane oříznutý koš
     renderPlan();
     renderOverviewPlan();
     if (typeof activeTab !== 'undefined' && activeTab === 'ai' && hasFeature('elite')) renderRecommendations();
