@@ -63,10 +63,10 @@ chk("max 5 řádků + živý záznam koše", bh.count("border-top:1px solid #232
 sig = [{"ticker": "DELL", "name": "Dell", "price": 1, "currency": "USD", "score": 80, "vm": 60, "change_pct": 1, "target": 2, "stop": 1, "reward_pct": 5, "risk_pct": 3, "rr": 1.5, "sector": "Information Technology"}]
 opps = [{"ticker": "XOM", "name": "Exxon", "vm_rank": 3, "score": 70, "pe": 12}]
 mh = m.build_morning_summary_html(EM, opps, sig)
-chk("ranní e-mail: nákupní signály + podhodnocené + koš tipů navíc", all(x in mh for x in ("Dnešní nákupní signály", "Podhodnocené s momentem", "Koš tipů na")), txt(mh)[:200])
-chk("ranní e-mail: pořadí signály → podhodnocené → koš", mh.index("Dnešní nákupní signály") < mh.index("Podhodnocené s momentem") < mh.index("Koš tipů na"))
+chk("ranní e-mail: nákupní signály + podhodnocené + koš tipů navíc", all(x in mh for x in ("Dnešní nákupní signál", "Podhodnocené s momentem", "Koš tipů na")), txt(mh)[:200])
+chk("ranní e-mail: pořadí signály → podhodnocené → koš", mh.index("Dnešní nákupní signál") < mh.index("Podhodnocené s momentem") < mh.index("Koš tipů na"))
 mh0 = m.build_morning_summary_html(EM, [], [])
-chk("bez signálů a příležitostí zůstane jen koš", "Koš tipů na" in mh0 and "Dnešní nákupní signály" not in mh0 and "Podhodnocené s momentem" not in mh0)
+chk("bez signálů a příležitostí zůstane jen koš", "Koš tipů na" in mh0 and "Dnešní nákupní signál" not in mh0 and "Podhodnocené s momentem" not in mh0)
 wh = m.build_weekly_digest_html(EM, sig, opps)
 chk("týdenní e-mail: signály + podhodnocené + koš tipů", all(x in wh for x in ("Nákupní signály", "Podhodnocené s momentem", "Koš tipů na")))
 m.market_scan = lambda allow_step=False: None
