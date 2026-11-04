@@ -513,7 +513,7 @@ async function submitAuth() {
 
         authToken = d.token; authUser = d.user;
         mySub = d.subscription || null;
-        myName = d.display_name || '';
+        myName = d.display_name || ''; myNameVoc = d.display_name_voc || '';
         localStorage.setItem('mystocks_token', authToken);
         localStorage.setItem('mystocks_user', authUser);
 
@@ -546,7 +546,7 @@ async function submitAuth() {
 }
 
 function doLogout() {
-    authToken = null; authUser = null; mySub = null; myName = '';
+    authToken = null; authUser = null; mySub = null; myName = ''; myNameVoc = '';
     localStorage.removeItem('mystocks_token');
     localStorage.removeItem('mystocks_user');
     // Vyčistit citlivá data z tohoto zařízení (pozice + upozornění), watchlist na výchozí

@@ -100,6 +100,157 @@ async function handlePaidReturn() {
     showToast('Předplatné aktivní 🎉', 'up', 'ti-crown');
 }
 
+// ====================== SCANNER PŘÍLEŽITOSTÍ ======================
+let oppData = [];
+let oppLoading = false;
+
+
+let signalsLoaded = false;
+async function loadSignals(force) {
+    const grid = document.getElementById('signals-grid');
+    if (!hasFeature('pro')) {
+        grid.innerHTML = lockedCardHTML('Co koupit teď — ověřený signál', 'pro',
+            'Akcie, které právě teď splňují náš backtestem prověřený nákupní signál.');
+        return;
+    }
+    if (signalsLoaded && !force) return;
+    grid.innerHTML = '<div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh podle ověřeného modelu… (poprvé to chvíli trvá)</div>';
+    try {
+        const data = await (await fetch(`${BACKEND_URL}/api/signals`)).json();
+        if (!data.ok) throw new Error();
+        if (data.scanning) { grid.innerHTML = '<div class="opp-loading" style="color:var(--text2)">První sken S&amp;P 500 ještě neproběhl — spustí se sám ráno v 7:00 našeho času, nebo ho admin pustí hned v Profilu → Admin → Spustit sken.</div>'; return; }
+        signalsLoaded = true;
+        document.getElementById('signals-updated').textContent = `${data.count} ${data.count === 1 ? 'signál' : (data.count < 5 ? 'signály' : 'signálů')} · ${data.updated}`;
+        if (btProof && btProof.buy && btProof.buy.win_rate != null) {
+            document.getElementById('signals-proof').textContent =
+                `Ověřeno na 2023–2026: ${btProof.buy.win_rate} % trefnost, ${btProof.buy.avg_return >= 0 ? '+' : ''}${btProof.buy.avg_return} % na obchod.`;
+        }
+        renderSignals(data.results || []);
+    } catch (e) {
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--down)">Skener se nepodařilo načíst.</div>`;
+    }
+}
+
+function renderSignals(list) {
+    const grid = document.getElementById('signals-grid');
+    const beforeN = list.length;
+    list = (list || []).filter(o => riskFilterPass(o));
+    const filteredOut = beforeN - list.length;
+    if (!list.length) {
+        const extra = filteredOut > 0 ? ` (${filteredOut} ${filteredOut === 1 ? 'titul vyfiltrován' : 'titulů vyfiltrováno'} dle tvého rizikového profilu)` : '';
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Dnes žádný titul nesplňuje nákupní signál${extra}. To je v pořádku — model nakupuje jen ověřené situace, ne pořád. Mrkni sem zítra.</div>`;
+        return;
+    }
+    grid.innerHTML = list.map((o, i) => {
+        const chg = o.change_pct;
+        const chgTxt = (chg || chg === 0) ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` : '';
+        const chgCol = (chg >= 0) ? 'var(--up)' : 'var(--down)';
+        const isTop = o.conviction === 'top';
+        const overCap = (o.sector_rank || 0) > 2;
+        const vmLine = o.vm != null
+            ? `<div class="opp-why" style="margin-top:8px"><i class="ti ti-diamond"></i> Hodnota+momentum <b>${o.vm}/100</b>${o.vm_rank ? ` (#${o.vm_rank} v S&amp;P 500)` : ''}${o.pe ? ` · P/E ${o.pe}` : ''}${o.mom_pct != null ? ` · momentum ${o.mom_pct >= 0 ? '+' : ''}${o.mom_pct} %` : ''}</div>` : '';
+        const capLine = overCap
+            ? `<div class="opp-why" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> ${o.sector_rank}. signál z odvětví ${escapeHtml(o.sector || '')} — model drží max 2 na sektor.</div>` : '';
+        return `
+        <div class="opp-card${isTop && !overCap ? ' moon' : ''}" onclick="loadStockDetail('${o.ticker}')" style="${overCap ? 'opacity:.6' : ''}">
+            <span class="opp-rank">${isTop && !overCap ? '⭐ TOP' : '#' + (i + 1)}</span>
+            <div class="opp-c-top">
+                <div class="opp-score p-high">${o.score}<small>SIGNÁL</small></div>
+                <div class="opp-c-id">
+                    <div class="opp-c-tkr">${o.ticker}</div>
+                    <div class="opp-c-name">${escapeHtml(niceName(o.ticker, o.name))}</div>
+                </div>
+            </div>
+            <div class="opp-upside">
+                <span class="opp-up-val" style="color:var(--up)">cíl +${o.reward_pct ?? '?'}%</span>
+                <span class="opp-up-lbl">stop −${o.risk_pct ?? '?'} % · zisk:riziko ${o.rr ?? '—'} : 1</span>
+            </div>
+            <div class="opp-c-px">
+                <span class="opp-c-price">${(o.price ?? 0).toFixed(2)} <span style="font-size:11px;color:var(--text2)">${o.currency || ''}</span></span>
+                <span style="font-size:12px;color:${chgCol}">${chgTxt} · RSI ${o.rsi ?? '—'}</span>
+            </div>
+            ${vmLine}${capLine}
+        </div>`;
+    }).join('');
+}
+
+async function loadOpportunities() {
+    const grid = document.getElementById('opp-grid');
+    if(!hasFeature('pro')) {
+        grid.innerHTML = lockedCardHTML('Podhodnocené s momentem', 'pro',
+            'Nejlevnější akcie S&amp;P 500, které zároveň mají roční momentum — ověřená kombinace.');
+        return;
+    }
+    if(oppLoading) return;
+    oppLoading = true;
+    grid.innerHTML = '<div class="opp-loading"><i class="ti ti-loader spin"></i> Načítám dnešní sken S&amp;P 500…</div>';
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/opportunities`);
+        const data = await res.json();
+        if(!data.ok) throw new Error();
+        if (data.scanning) { grid.innerHTML = '<div class="opp-loading" style="color:var(--text2)">První sken S&amp;P 500 ještě neproběhl — spustí se sám ráno v 7:00 našeho času, nebo ho admin pustí hned v Profilu → Admin → Spustit sken.</div>'; return; }
+        oppData = data.results || [];
+        document.getElementById('opp-updated').textContent = data.count
+            ? `${data.count} kandidátů · ${data.updated}` : '';
+        renderOpportunities();
+    } catch(e) {
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--down)">Scanner se nepodařilo načíst (backend neběží?).</div>`;
+    } finally {
+        oppLoading = false;
+    }
+}
+
+function tierClass(tier) {
+    return ({ 'TOP 2 %': 'p-high', 'TOP 5 %': 'p-strong', 'TOP 10 %': 'p-mid' })[tier] || 'p-low';
+}
+
+function renderOpportunities() {
+    const grid = document.getElementById('opp-grid');
+    const all = oppData.slice();
+    const list = all.filter(o => riskFilterPass(o));
+    const filteredOut = all.length - list.length;
+    if(!list.length) {
+        const extra = filteredOut > 0 ? ` Tvůj rizikový profil ${filteredOut} titulů vyfiltroval — zkus „Vyvážená/Agresivní" v profilu.` : '';
+        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Žádné příležitosti k zobrazení.${extra} Zkus jiný filtr nebo Skenovat.</div>`;
+        return;
+    }
+
+    grid.innerHTML = list.map((o, i) => {
+        const badges = (o.badges || []).slice(0, 3).map(b =>
+            `<span class="opp-badge ${b.k}">${b.t}</span>`).join('');
+        const yr = o.year_pct;
+        const yrTxt = (yr || yr === 0) ? `${yr >= 0 ? '+' : ''}${yr.toFixed(0)}%` : '—';
+        const why = o.why ? `<div class="opp-why"><i class="ti ti-bulb"></i> ${escapeHtml(o.why)}</div>` : '';
+        return `
+        <div class="opp-card" onclick="loadStockDetail('${o.ticker}')" title="${o.exchange || ''}">
+            <span class="opp-rank">#${i+1}</span>
+            <div class="opp-c-top">
+                <div class="opp-score ${tierClass(o.tier)}">${o.score}<small>HODN.+MOM.</small></div>
+                <div class="opp-c-id">
+                    <div class="opp-c-tkr">${o.ticker}</div>
+                    <div class="opp-c-name">${o.name || ''}</div>
+                </div>
+            </div>
+            <div class="opp-upside">
+                <span class="opp-up-val">#${o.vm_rank ?? '—'}</span>
+                <span class="opp-up-lbl">pořadí v S&amp;P 500 · ${escapeHtml(o.sector || '')}</span>
+            </div>
+            <div class="opp-c-px">
+                <span class="opp-c-price">${(o.price ?? 0).toFixed(o.price < 10 ? 2 : 2)} <span style="font-size:11px;color:var(--text2)">${o.currency||''}</span></span>
+                <span class="opp-tier-lbl ${tierClass(o.tier)}">${o.tier}</span>
+            </div>
+            ${why}
+            <div class="opp-badges">${badges}</div>
+            <div class="opp-c-stats">
+                <div class="opp-stat"><span class="l">P/E</span><span class="v">${o.pe ?? '—'}</span></div>
+                <div class="opp-stat"><span class="l">Cash flow / cena</span><span class="v">${o.fcf_yield != null ? o.fcf_yield + ' %' : '—'}</span></div>
+                <div class="opp-stat"><span class="l">Za rok</span><span class="v" style="color:${(yr||0)>=0?'var(--up)':'var(--down)'}">${yrTxt}</span></div>
+            </div>
+        </div>`;
+    }).join('') +
+    `<div class="opp-disclaimer" style="grid-column:1/-1;"><i class="ti ti-info-circle"></i> Skóre hodnota+momentum = průměr pořadí v S&amp;P 500 podle zisku, účetní hodnoty a cash flow vůči ceně a ročního momenta (fundamenty z oficiálních dat SEC). Nejlepších 20 titulů v testu 2015–2026 porazilo průměrnou akcii indexu v obou obdobích. Kupuj je v nákupní zóně, ne naslepo. Není to investiční doporučení.</div>`;
+}
+
 // --- VYKRESLENÍ KARET: rozdělení na Moje pozice vs Sledované ---
 // Hezké názvy pro komodity/indexy/krypto (Yahoo je má ošklivé, např. „Gold Jun 26")
 const NAME_MAP = {

@@ -332,7 +332,7 @@ function planPicksHTML(d, sfx) {
         ${mpEarnHTML(d.earnings && d.earnings[p.ticker])}${mpShortHTML(d.short && d.short[p.ticker])}
         ${heldT.has(p.ticker) ? '' : planTipNewsHTML(p.ticker, 'buy')}
       </div>`).join('');
-    return `<div class="mp-card" id="mp-picks${sfx}"><h4><i class="ti ti-target-arrow"></i> Co koupit teď</h4>
+    return `<div class="mp-card" id="mp-picks${sfx}"><h4><i class="ti ti-target-arrow"></i> ${sfx ? 'Dlouhodobě: měsíční koš tipů' : 'Co koupit teď'}</h4>
       <div class="mp-sub">${pk.month ? `Koš na <b>${MP_MONTH_CZ[parseInt(pk.month.slice(5, 7), 10) - 1]}</b> (sestaven ${mpDate(pk.since)}) – ` : ''}${pk.n} nejsilnějších akcií z S&amp;P 500: půlka je <b>levná a zároveň roste</b> (hodnota + momentum), půlka má <b>nejsilnější momentum</b>. Mění se jednou měsíčně, mezitím zůstává stejný. ${nHeld ? `${pk.basket.filter(p => heldT.has(p.ticker)).map(p => '<b>' + mpEsc(mpBase(p.ticker)) + '</b>').join(', ')} už máš – peníze ${nHeld > 1 ? 'dostanou' : 'dostane'}, jen když ${nHeld > 1 ? 'jich' : 'jí'} máš méně než ostatních. ` : ''}Klikni na akcii pro detail.</div>
       <div class="mp-riskrow" style="margin:0 0 12px">${tog(10)}${tog(6)}<span class="mp-pill-sep">${pk.loading ? '<i class="ti ti-loader spin"></i> přepočítávám…' : (pk.n === 6 ? 'koncentrovanější, víc kolísá' : 'doporučeno – stabilnější')}</span></div>
       ${d.basket_perf ? `<div class="mp-bperf"><i class="ti ti-activity"></i><span>Živý záznam koše od ${mpDate(d.basket_perf.since)}: <b style="color:var(--${d.basket_perf.ret >= d.basket_perf.spy ? 'up' : 'amber'})">${mpSigned(d.basket_perf.ret)}</b> · S&amp;P 500 ${mpSigned(d.basket_perf.spy)}. Krátké období je hlavně náhoda – smysl to dává po měsících.</span></div>` : ''}

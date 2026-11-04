@@ -233,7 +233,7 @@
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.11.04·d</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.11.04·e</div>
 
 <div class="container">
   
@@ -881,7 +881,44 @@
 
     <!-- SEKCE: PŘÍLEŽITOSTI -->
     <div class="dash-section" id="section-opportunities" style="display:none;">
-    <!-- KOŠ TIPŮ: jediný seznam „co koupit“ (stejný jako v Moje portfolio, e-mailech a Přehledu) -->
+    <!-- ŽIVÉ NÁKUPNÍ SIGNÁLY PODLE OVĚŘENÉHO MODELU -->
+    <div class="opp-box" id="signals-box" style="border-color:rgba(0,230,118,0.35);">
+      <div class="opp-head">
+        <div class="opp-title">
+          <i class="ti ti-target-arrow" style="color:var(--up)"></i> Co koupit teď — signál „Sleva v trendu"
+          <span class="opp-sub">Akcie, které <b>právě teď</b> splňují náš backtestem prověřený nákupní signál. Horizont do 6 týdnů. <span id="signals-proof" style="color:var(--up)"></span> <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span>
+        </div>
+        <div class="opp-actions">
+          <span class="opp-updated" id="signals-updated"></span>
+          <button class="tool-btn" onclick="loadSignals(true)"><i class="ti ti-refresh"></i> Skenovat</button>
+        </div>
+      </div>
+      <div class="opp-grid" id="signals-grid">
+        <div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh podle ověřeného modelu…</div>
+      </div>
+    </div>
+
+    <!-- SCANNER PŘÍLEŽITOSTÍ – Potenciál -->
+    <div class="opp-box" id="opp-box">
+      <div class="opp-head">
+        <div class="opp-title">
+          <i class="ti ti-target-arrow"></i> Podhodnocené s momentem
+          <span class="opp-sub">Akcie S&amp;P 500, které jsou <b>levné podle zisků a cash flow</b> a zároveň mají <b>roční momentum</b>. Samotná „levnost" ani samotný růst nefungovaly stabilně — jejich kombinace v testu 2015–2026 ano. Kupovat v nákupní zóně, ne naslepo.</span>
+        </div>
+        <div class="opp-actions">
+          <span class="opp-updated" id="opp-updated"></span>
+          <button class="tool-btn" onclick="loadOpportunities()"><i class="ti ti-refresh"></i> Skenovat</button>
+        </div>
+      </div>
+      <div class="opp-filters" id="opp-filters">
+        <span style="font-size:12px;color:var(--text2)">💎 Nejlevnější akcie S&amp;P 500, které zároveň mají roční momentum — ověřená kombinace, ne jen „spadlé" tituly.</span>
+      </div>
+      <div class="opp-grid" id="opp-grid">
+        <div class="opp-loading"><i class="ti ti-loader spin"></i> Hledám příležitosti s potenciálem...</div>
+      </div>
+    </div>
+
+    <!-- DLOUHODOBĚ: měsíční koš tipů (stejný jako v Moje portfolio a v Přehledu) -->
     <div id="opp-picks-root"><div class="opp-loading"><i class="ti ti-loader spin"></i> Načítám koš tipů…</div></div>
     </div><!-- /section-opportunities -->
 

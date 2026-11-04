@@ -81,6 +81,7 @@ const RISK_LABELS = { conservative: 'Opatrná', balanced: 'Vyvážená', aggress
 // Předplatné
 let mySub = null;                       // {plan, effective, trial_ends, days_left, is_admin, ...}
 let myNotif = { morning: false };       // nastavení notifikací
+let myNameVoc = '';                     // totéž jméno v 5. pádu (Matěji) – pro „Dobré ráno, …“ (počítá server)
 let myName = '';                        // jméno k oslovení (nastavuje si uživatel; nikdy ne z e-mailu)
 const PLAN_RANK = { none: -1, start: 0, pro: 1, elite: 2 };
 const PLAN_NAMES = { none: 'Bez přístupu', start: 'Start', pro: 'Pro', elite: 'Elite' };

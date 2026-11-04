@@ -1094,7 +1094,7 @@ def register():
         kv_set_json(f"portfolio:{email}", {"watchlist": [], "positions": {}, "alerts": []})
         kv_sadd("users", email)
         send_welcome_email(email, effective_plan(rec))
-        return jsonify({"ok": True, "token": make_token(email), "user": email, "display_name": "",
+        return jsonify({"ok": True, "token": make_token(email), "user": email, "display_name": "", "display_name_voc": "",
                         "subscription": subscription_info(email, rec)})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
@@ -1114,7 +1114,7 @@ def login():
         if not u or not verify_password(password, u.get("salt", ""), u.get("hash", "")):
             return jsonify({"ok": False, "error": "Špatný e-mail nebo heslo."}), 401
         portfolio = kv_get_json(f"portfolio:{email}") or {"watchlist": [], "positions": {}, "alerts": []}
-        return jsonify({"ok": True, "token": make_token(email), "user": email, "display_name": _clean_name(u.get("display_name")),
+        return jsonify({"ok": True, "token": make_token(email), "user": email, **_name_fields(_clean_name(u.get("display_name"))),
                         "portfolio": portfolio, "subscription": subscription_info(email, u)})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
@@ -1170,6 +1170,55 @@ def _clean_name(raw):
     return re.sub(r"\s+", " ", t).strip()[:30]
 
 
+# Oslovení: 5. pád českého křestního jména („Dobré ráno, Matěji!“). Pravidla pokryjí běžná česká jména;
+# cizí a neznámé tvary zůstávají beze změny (lepší „Dobré ráno, John“ než „Johne“).
+_VOC_EXC = {"petr": "petře", "alexandr": "alexandře", "pavel": "pavle", "karel": "karle", "havel": "havle",
+            "ester": "ester", "miriam": "miriam", "dagmar": "dagmar", "ingrid": "ingrid", "karin": "karin",
+            "beatrix": "beatrix", "ruth": "ruth", "nikol": "nikol", "carmen": "carmen", "sam": "sam",
+            "john": "john", "jack": "jack", "james": "james"}
+_VOC_FOREIGN = ("w", "q", "th", "ph", "sh", "ck", "ee", "oo")
+_VOC_VOWELS = "aeiouyáéíóúůýě"
+_VOC_SOFT = {"š": "š", "ž": "ž", "č": "č", "ř": "ř", "j": "j", "ď": "ď", "ť": "ť", "ň": "ň", "c": "c", "x": "x"}
+
+
+def _vocative(name):
+    """5. pád křestního jména (jen první slovo): Matěj → Matěji, Petr → Petře, Marek → Marku, Jana → Jano."""
+    w = (name or "").strip().split(" ")[0] if name else ""
+    if not w or not re.fullmatch(r"[^\W\d_]+", w):
+        return w
+    if w.islower() or w.isupper():
+        w = w[:1].upper() + w[1:].lower()
+    l = w.lower()
+    if l in _VOC_EXC:
+        return w[:1] + _VOC_EXC[l][1:]
+    if any(f in l for f in _VOC_FOREIGN) or len(l) < 2:
+        return w
+    last = l[-1]
+    if l.endswith(("ěk", "ek")):                        # Zdeněk → Zdeňku, Marek → Marku, Luděk → Luďku
+        stem = w[:-2]
+        if l.endswith("ěk") and stem and stem[-1].lower() in "ndt":
+            stem = stem[:-1] + {"n": "ň", "d": "ď", "t": "ť"}[stem[-1].lower()]
+        return stem + "ku"
+    if l.endswith(("iel", "uel", "ael")):               # Daniel → Danieli
+        return w + "i"
+    if last in "kgh" or l.endswith("ch"):               # Patrik → Patriku, Vojtěch → Vojtěchu
+        return w + "u"
+    if last == "r" and len(l) > 2 and l[-2] not in _VOC_VOWELS:   # Ondr(a)… / cizí -tr
+        return w[:-1] + "ře"
+    if last in _VOC_SOFT:                               # Tomáš → Tomáši, Matěj → Matěji, Ondřej → Ondřeji
+        return w + "i"
+    if last == "a":                                     # Jana → Jano, Honza → Honzo
+        return w[:-1] + "o"
+    if last in "eiouyíýéůá":                            # Lucie, Ivo, Matty – beze změny
+        return w
+    return w + "e"                                      # Jan → Jane, Martin → Martine, David → Davide
+
+
+def _name_fields(name):
+    """Jméno k zobrazení + jeho tvar pro oslovení (5. pád)."""
+    return {"display_name": name or "", "display_name_voc": _vocative(name) if name else ""}
+
+
 def _display_name(email):
     """Jméno, které si uživatel nastavil (nikdy ne odvozené z e-mailu)."""
     try:
@@ -1197,7 +1246,7 @@ def save_display_name():
         else:
             rec.pop("display_name", None)
         kv_set_json(f"user:{user}", rec)
-        return jsonify({"ok": True, "name": name})
+        return jsonify({"ok": True, "name": name, "name_voc": _vocative(name) if name else ""})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
@@ -1212,7 +1261,7 @@ def me():
         if not rec:
             return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
         return jsonify({"ok": True, "user": user, "subscription": subscription_info(user, rec),
-                        "notif": rec.get("notif", {"morning": False}), "display_name": _clean_name(rec.get("display_name"))})
+                        "notif": rec.get("notif", {"morning": False}), **_name_fields(_clean_name(rec.get("display_name")))})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
@@ -9694,7 +9743,7 @@ def build_morning_summary_html(email, top_opps, top_signals=None, mark_sent=Fals
 
     _nm = _display_name(email)
     return _email_shell("Ranní přehled trhu ☀️",
-                        f"<p style='line-height:1.6'>Dobré ráno{', ' + _html_escape(_nm) if _nm else ''}!</p>" +
+                        f"<p style='line-height:1.6'>Dobré ráno{', ' + _html_escape(_vocative(_nm)) if _nm else ''}!</p>" +
                         brief_html + portfolio_html + action_html +
                         sig_html + opp_html +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>Notifikace vypneš v appce v profilu. "

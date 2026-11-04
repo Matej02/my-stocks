@@ -84,7 +84,7 @@ function renderOverviewGreeting() {
         else if (h < 17) g = 'Dobrý den';
         else if (h < 22) g = 'Dobrý večer';
         else g = 'Dobrou noc';
-        const name = myName || '';
+        const name = myNameVoc || myName || '';
         const el = document.getElementById('ov-greet');
         if (el) el.innerHTML = `${g}${name ? ', <em>' + escapeHtml(name) + '</em>' : ''}.`;
         const sub = document.getElementById('ov-greet-sub');
