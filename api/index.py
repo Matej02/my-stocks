@@ -9245,6 +9245,7 @@ def _todays_action(email, top_signals, risk=None):
     if alloc.get("cash_pct"):
         lead = (f"Trh je rozkolísaný (volatilita {alloc.get('spy_vol')} %) – drž {alloc['exposure_pct']} % "
                 f"v akciích a {alloc['cash_pct']:.0f} % v hotovosti. ")
+    cap = (lambda t: t[:1].upper() + t[1:]) if lead else (lambda t: t)
     if act:
         parts = []
         for i in act[:3]:
@@ -9256,18 +9257,32 @@ def _todays_action(email, top_signals, risk=None):
                 parts.append(f"přehodnoť {i['ticker']} (vypršel horizont)")
         return "Dnes: " + lead + cap(", ".join(parts)) + "."
     free = alloc["slots_max"] - alloc["slots_used"]
-    # Za „Trh je rozkolísaný… ." pokračuje nová věta → velké písmeno.
-    cap = (lambda t: t[:1].upper() + t[1:]) if lead else (lambda t: t)
     slots = (f"{free} volnou pozici" if free == 1 else f"{free} volné pozice" if 2 <= free <= 4
              else f"{free} volných pozic")
+    if top_signals:
+        smap = ((market_scan(allow_step=False) or {}).get("sector_map") or {})
+        held = {}
+        for i in pos["items"]:
+            if i["status"] == "open":
+                sct = smap.get(i["ticker"]) or "?"
+                held[sct] = held.get(sct, 0) + 1
+        mine = {i["ticker"] for i in pos["items"] if i["status"] == "open"}
+        top_signals = [x for x in top_signals if x["ticker"] not in mine
+                       and held.get(x.get("sector") or "?", 0) < SECTOR_CAP]
+    if free and top_signals:
+        s0 = top_signals[0]
+        vm = f"hodnota+momentum {s0['vm']}/100, " if s0.get("vm") is not None else ""
+        return (f"Dnes: {lead}{cap('máš')} {slots} z {alloc['slots_max']}. Nejsilnější "
+                f"signál je {s0.get('ticker')} ({vm}váha {alloc['per_position_pct']} %). "
+                f"Zbytek drží indexové jádro.")
     if free:
-        try:      # jediný seznam „co koupit“ = koš tipů (ne zvláštní denní signály)
+        try:      # bez signálu: první tip z měsíčního koše
             held_k = {_spx_key(i["ticker"]) for i in pos["items"] if i["status"] == "open"}
             nw = _picks(_ensure_scan_maps(market_scan(allow_step=False) or {}), 10, held_k, {})["new"][:1]
         except Exception:
             nw = []
         if nw:
-            return (f"Dnes: {lead}{cap('máš')} {slots} z {alloc['slots_max']}. První v koši tipů na tento měsíc je "
+            return (f"Dnes: {lead}{cap('žádný')} nový signál. První v koši tipů na tento měsíc je "
                     f"{nw[0]['ticker'].split('.')[0]} (váha {alloc['per_position_pct']} %). Zbytek drží indexové jádro.")
     if free:
         return (f"Dnes: {lead}{cap('žádný')} nový signál. Nech kapitál v indexovém jádru – "
@@ -9626,7 +9641,14 @@ def build_morning_summary_html(email, top_opps, top_signals=None, mark_sent=Fals
     watch_html = (f"<div style='color:#9ba1b0;font-size:12px;margin:14px 0 4px'>Sledované akcie:</div>"
                   f"<table style='width:100%;border-collapse:collapse;font-size:14px'>{rows}</table>") if rows else ""
     opp_html = ""
-    sig_html = _basket_email_html(email)     # jediný seznam „co koupit“: koš tipů (dřív signály + podhodnocené)
+    if top_opps:
+        opp_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>💎 Podhodnocené s momentem</h3>"
+                    + _opps_email_rows(top_opps))
+    sig_html = ""
+    if top_signals:
+        sig_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>✅ Dnešní nákupní signály</h3>"
+                    + _signals_email_rows(top_signals))
+    basket_html = _basket_email_html(email)   # měsíční koš tipů (dlouhodobě) – navíc k signálům
     # Otevřené pozice – co dnes vyžaduje akci podle plánu (cíl/stop/horizont).
     # Celý stav portfolia, ne jen to, co křičí. Uživatel chce ráno vidět,
     # co se s jeho penězi děje – i když se zrovna nic dělat nemá.
@@ -9745,7 +9767,7 @@ def build_morning_summary_html(email, top_opps, top_signals=None, mark_sent=Fals
     return _email_shell("Ranní přehled trhu ☀️",
                         f"<p style='line-height:1.6'>Dobré ráno{', ' + _html_escape(_vocative(_nm)) if _nm else ''}!</p>" +
                         brief_html + portfolio_html + action_html +
-                        sig_html + opp_html +
+                        sig_html + opp_html + basket_html +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>Notifikace vypneš v appce v profilu. "
                         "Není to investiční doporučení.</p>")
 
@@ -9848,8 +9870,12 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
         except Exception:
             perf_html = ""
 
-    # Co koupit: koš tipů (dřív zvlášť signály a podhodnocené)
-    sig_html = _basket_email_html(email)
+    # Co koupit: nákupní signály týdne + měsíční koš tipů
+    sig_html = ""
+    if top_signals:
+        sig_html = ("<h3 style='font-size:16px;margin:22px 0 10px'>🎯 Nákupní signály</h3>"
+                    + _signals_email_rows(top_signals))
+    basket_html = _basket_email_html(email)
 
     # Klíčové události u sledovaných akcií (last 7 days)
     events_html = ""
@@ -9870,9 +9896,12 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
         events_html = ""
 
     opp_html = ""
+    if top_opps:
+        opp_html = ("<h3 style='font-size:16px;margin:22px 0 10px'>💎 Podhodnocené s momentem</h3>"
+                    + _opps_email_rows(top_opps))
 
     intro = ("<p style='line-height:1.6'>Hezký víkend! Tady je tvé <b>shrnutí týdne</b> " +
-             "— jak si vedla tvá watchlist, koš tipů na tento měsíc a klíčové události.</p>")
+             "— jak si vedla tvá watchlist, nejlepší signály z modelu, koš tipů na tento měsíc a klíčové události.</p>")
 
     cta = (f"<div style='text-align:center;margin:28px 0 12px'>"
            f"<a href='{APP_URL}/' style='display:inline-block;background:#FF7A00;color:#1a0e00;"
@@ -9885,7 +9914,7 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
         plan_html = ""
 
     return _email_shell("Týdenní shrnutí 📊",
-                        intro + plan_html + perf_html + sig_html + events_html + opp_html + cta +
+                        intro + plan_html + perf_html + sig_html + events_html + opp_html + basket_html + cta +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>"
                         "Sobotní digest posíláme, pokud jsi ho zapnul v profilu. "
                         "Vypneš ho tam samým přepínačem. Není to investiční doporučení.</p>")
