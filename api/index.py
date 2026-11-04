@@ -1073,7 +1073,7 @@ def register():
         kv_set_json(f"portfolio:{email}", {"watchlist": [], "positions": {}, "alerts": []})
         kv_sadd("users", email)
         send_welcome_email(email, effective_plan(rec))
-        return jsonify({"ok": True, "token": make_token(email), "user": email,
+        return jsonify({"ok": True, "token": make_token(email), "user": email, "display_name": "",
                         "subscription": subscription_info(email, rec)})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
@@ -1093,7 +1093,7 @@ def login():
         if not u or not verify_password(password, u.get("salt", ""), u.get("hash", "")):
             return jsonify({"ok": False, "error": "Špatný e-mail nebo heslo."}), 401
         portfolio = kv_get_json(f"portfolio:{email}") or {"watchlist": [], "positions": {}, "alerts": []}
-        return jsonify({"ok": True, "token": make_token(email), "user": email,
+        return jsonify({"ok": True, "token": make_token(email), "user": email, "display_name": _clean_name(u.get("display_name")),
                         "portfolio": portfolio, "subscription": subscription_info(email, u)})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
@@ -1143,6 +1143,44 @@ def reset_password():
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
 
+def _clean_name(raw):
+    """Jméno k oslovení: jen text, bez řídicích znaků a < >, max 30 znaků. Prázdné = bez oslovení."""
+    t = re.sub(r"[\x00-\x1f\x7f<>]", "", str(raw or ""))
+    return re.sub(r"\s+", " ", t).strip()[:30]
+
+
+def _display_name(email):
+    """Jméno, které si uživatel nastavil (nikdy ne odvozené z e-mailu)."""
+    try:
+        return _clean_name((kv_get_json(f"user:{email}") or {}).get("display_name"))
+    except Exception:
+        return ""
+
+
+@app.route("/api/profile/name", methods=["POST"])
+def save_display_name():
+    """Uloží jméno, kterým appka a ranní e-maily oslovují. Prázdné = bez oslovení."""
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    if not _rate_ok("profile_name", 30, 3600):
+        return jsonify({"ok": False, "error": "Moc změn, zkus to za chvíli."}), 429
+    raw = (request.get_json(silent=True) or {}).get("name")
+    name = _clean_name(raw)
+    try:
+        rec = kv_get_json(f"user:{user}")
+        if not rec:
+            return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
+        if name:
+            rec["display_name"] = name
+        else:
+            rec.pop("display_name", None)
+        kv_set_json(f"user:{user}", rec)
+        return jsonify({"ok": True, "name": name})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
 @app.route("/api/me")
 def me():
     user = _auth_user()
@@ -1153,7 +1191,7 @@ def me():
         if not rec:
             return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
         return jsonify({"ok": True, "user": user, "subscription": subscription_info(user, rec),
-                        "notif": rec.get("notif", {"morning": False})})
+                        "notif": rec.get("notif", {"morning": False}), "display_name": _clean_name(rec.get("display_name"))})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
@@ -6092,7 +6130,10 @@ def api_holdings_import():
     if csv_text:
         if len(csv_text) > 3_000_000:
             return jsonify({"ok": False, "error": "Soubor je moc velký (max ~3 MB)."}), 400
-        raw, csv_info = _parse_broker_csv(csv_text)
+        try:
+            raw, csv_info = _parse_broker_csv(csv_text)
+        except Exception:
+            return jsonify({"ok": False, "error": "Soubor se nepodařilo přečíst jako CSV (poškozený nebo jiný formát)."}), 400
         if csv_info.get("error"):
             return jsonify({"ok": False, "error": csv_info["error"]}), 400
         if not FEATURE_QTY:
@@ -9525,8 +9566,9 @@ def build_morning_summary_html(email, top_opps, top_signals=None, mark_sent=Fals
         portfolio_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>📊 Tvé portfolio</h3>"
                           + pos_html + watch_html + why_html)
 
+    _nm = _display_name(email)
     return _email_shell("Ranní přehled trhu ☀️",
-                        "<p style='line-height:1.6'>Dobré ráno!</p>" +
+                        f"<p style='line-height:1.6'>Dobré ráno{', ' + _html_escape(_nm) if _nm else ''}!</p>" +
                         brief_html + portfolio_html + action_html +
                         sig_html + opp_html +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>Notifikace vypneš v appce v profilu. "
