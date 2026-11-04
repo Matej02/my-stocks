@@ -397,9 +397,9 @@ function addAllStarter() {
 const PLANS = [
     { id: 'start', name: 'Start', price: '5 €', period: '/ měsíc', feats: [
         ['Neomezené sledování', 1], ['Grafy, Signal Score & technický budík', 1], ['Aktuální zprávy', 1],
-        ['Cenová upozornění + sync', 1], ['Koš tipů & analytici', 0], ['Hloubková analýza', 0] ] },
+        ['Cenová upozornění + sync', 1], ['Příležitosti & analytici', 0], ['Hloubková analýza', 0] ] },
     { id: 'pro', name: 'Pro', price: '10 €', period: '/ měsíc', featured: true, feats: [
-        ['Vše ze Start', 1], ['Měsíční koš tipů', 1], ['Doporučení analytiků & cílové ceny', 1],
+        ['Vše ze Start', 1], ['Podhodnocené s momentem + koš tipů', 1], ['Doporučení analytiků & cílové ceny', 1],
         ['Fundamenty (P/E, kapitalizace)', 1], ['Hloubková analýza (5/den)', 1],
         ['Asistent, přehled & track record', 0] ] },
     { id: 'elite', name: 'Elite', price: '15 €', period: '/ měsíc', feats: [

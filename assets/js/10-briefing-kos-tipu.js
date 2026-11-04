@@ -266,7 +266,7 @@ function planSetPicks(n) {
     }
     if (planLots.length) planRefresh(); else renderPlan();
     if (document.getElementById('opp-picks-root')) loadOppPicks();
-    if (typeof fetchOverviewSignal === 'function') { fetchOverviewSignal(); fetchOverviewOpps(); }
+    if (typeof fetchOverviewBasket === 'function') fetchOverviewBasket();
 }
 
 // ---------- koš tipů: jediný seznam „co koupit“ (Příležitosti, Přehled, Moje portfolio, e-maily) ----------

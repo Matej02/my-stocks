@@ -64,6 +64,7 @@ async function loadOverview(force) {
         fetchOverviewSignal(),
         fetchOverviewNews(),
         fetchOverviewOpps(),
+        fetchOverviewBasket(),
         fetchOverviewSectors(),
         fetchOverviewAlerts(),
         fetchOverviewPerf(),
@@ -133,38 +134,39 @@ async function fetchOverviewSignal() {
     const box = document.getElementById('ov-top-signal');
     if (!box) return;
     if (!hasFeature('pro')) {
-        box.innerHTML = `<div class="ss-tag"><i class="ti ti-lock"></i> Koš tipů</div>
-            <div style="font-size:15px;line-height:1.5;color:var(--text);margin-bottom:14px;">Měsíční koš nejsilnějších akcií S&amp;P 500 — odemkneme ho v plánu <b>Pro</b>.</div>
+        box.innerHTML = `<div class="ss-tag"><i class="ti ti-lock"></i> Top signál dne</div>
+            <div style="font-size:15px;line-height:1.5;color:var(--text);margin-bottom:14px;">Konkrétní top nákupní signál dnes — odemkneme ho v plánu <b>Pro</b>.</div>
             <button class="ss-cta" onclick="openProfile('plans')"><i class="ti ti-rocket"></i> Vybrat plán Pro</button>`;
         return;
     }
     try {
-        const d = await fetchPicksData(planPicksN);
-        const top = d && d.ok ? picksNotHeld(d)[0] : null;
-        if (!d || !d.ok || !d.picks) {
-            box.innerHTML = `<div class="ss-tag"><i class="ti ti-zzz"></i> Koš tipů</div>
-                <div style="font-size:15px;line-height:1.5;color:var(--text);margin-bottom:6px;">${d && d.scanning ? 'Ranní sken ještě běží.' : 'Koš tipů teď není dostupný.'}</div>
-                <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Zkus to za chvíli.</div>`;
-            return;
-        }
+        const d = await (await fetch(`${BACKEND_URL}/api/signals`)).json();
+        const list = (d && d.results) || [];
+        const top = list.find(o => o.conviction === 'top') || list[0];
         if (!top) {
-            box.innerHTML = `<div class="ss-tag"><i class="ti ti-check"></i> Koš tipů</div>
-                <div style="font-size:15px;line-height:1.5;color:var(--text);margin-bottom:6px;">Všechny tipy z koše už <b>máš</b>.</div>
-                <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Nic dokupovat nemusíš – koš se mění jednou měsíčně.</div>
-                <button class="ss-cta" onclick="switchTab('opportunities')"><i class="ti ti-eye"></i> Celý koš</button>`;
+            box.innerHTML = `<div class="ss-tag"><i class="ti ti-zzz"></i> Top signál dne</div>
+                <div style="font-size:15px;line-height:1.5;color:var(--text);margin-bottom:6px;">Dnes <b>žádný titul nesplňuje</b> náš přísný nákupní signál.</div>
+                <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">To je v pořádku — model nakupuje jen ověřené situace, ne pořád. Mrkni sem zítra.</div>
+                <button class="ss-cta" onclick="switchTab('opportunities')"><i class="ti ti-eye"></i> Mrkni na příležitosti</button>`;
             return;
         }
-        const month = d.picks.month ? MP_MONTH_CZ[parseInt(d.picks.month.slice(5, 7), 10) - 1] : '';
-        const chgTxt = top.chg != null ? (top.chg >= 0 ? '+' : '') + top.chg.toFixed(2) + '%' : '';
-        const chgCol = (top.chg || 0) >= 0 ? 'var(--up)' : 'var(--down)';
+        const isTop = top.conviction === 'top';
+        const chgTxt = (top.change_pct >= 0 ? '+' : '') + (top.change_pct || 0).toFixed(2) + '%';
+        const chgCol = top.change_pct >= 0 ? 'var(--up)' : 'var(--down)';
         box.innerHTML = `
-            <div class="ss-tag">🎯 První v koši tipů${month ? ' na ' + month : ''}</div>
-            <div class="ss-ticker">${escapeHtml(mpBase(top.ticker))}</div>
-            <div class="ss-name">${escapeHtml(top.name || '')}${chgTxt ? ` · <span style="color:${chgCol}">${chgTxt} dnes</span>` : ''}</div>
-            <div style="color:var(--text2);font-size:13px;line-height:1.5;margin:6px 0 14px">${escapeHtml(top.why || '')}<br><b>Kupuj celý koš, ne jednu akcii</b> – jednotlivý tip index porazí jen zhruba v polovině případů, koš častěji.</div>
-            <button class="ss-cta" onclick="switchTab('opportunities')"><i class="ti ti-basket"></i> Celý koš tipů</button>`;
+            <div class="ss-tag">${isTop ? '⭐ TOP signál dne' : 'Nejlepší signál dne'}</div>
+            <div class="ss-ticker">${escapeHtml(top.ticker)}</div>
+            <div class="ss-name">${escapeHtml(niceName(top.ticker, top.name))} · <span style="color:${chgCol}">${chgTxt} dnes</span></div>
+            <div class="ss-row">
+                <div class="it"><span class="l">Cena</span><span class="v">${(top.price || 0).toFixed(2)} ${escapeHtml(top.currency || '')}</span></div>
+                <div class="it"><span class="l">MA skóre</span><span class="v g">${top.score}</span></div>
+                <div class="it"><span class="l">Cíl</span><span class="v g">+${top.reward_pct ?? '?'}%</span></div>
+                <div class="it"><span class="l">Stop-loss</span><span class="v">−${top.risk_pct ?? '?'}%</span></div>
+                <div class="it"><span class="l">Zisk:riziko</span><span class="v">${top.rr ?? '—'} : 1</span></div>
+            </div>
+            <button class="ss-cta" onclick="loadStockDetail('${top.ticker}')"><i class="ti ti-zoom-scan"></i> Otevřít hloubkovou analýzu</button>`;
     } catch(e) {
-        box.innerHTML = '<div class="ss-tag">Koš tipů</div><div class="ov-empty">Koš tipů teď není dostupný.</div>';
+        box.innerHTML = '<div class="ss-tag">Top signál dne</div><div class="ov-empty">Skener teď není dostupný.</div>';
     }
 }
 
@@ -223,29 +225,50 @@ async function fetchOverviewOpps() {
     const box = document.getElementById('ov-opps');
     if (!box) return;
     if (!hasFeature('pro')) {
-        box.innerHTML = '<div class="ov-empty">Koš tipů je k dispozici v plánu <b>Pro</b>.</div>';
+        box.innerHTML = '<div class="ov-empty">Skener příležitostí je k dispozici v plánu <b>Pro</b>.</div>';
         return;
     }
     try {
-        const d = await fetchPicksData(planPicksN);
-        const list = d && d.ok && d.picks ? picksNotHeld(d).slice(1, 5) : [];
+        const d = await (await fetch(`${BACKEND_URL}/api/opportunities`)).json();
+        const list = (d && d.results) || [];
         if (!list.length) {
-            box.innerHTML = '<div class="ov-empty">Další tipy teď nejsou k dispozici.</div>';
+            box.innerHTML = '<div class="ov-empty">Skener zrovna nenašel žádné další příležitosti.</div>';
             return;
         }
-        box.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:8px;">${list.map(o => `
-            <div class="ov-opp-row" onclick="loadStockDetail('${mpEsc(o.ticker)}')">
+        box.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:8px;">${list.slice(0, 4).map(o => `
+            <div class="ov-opp-row" onclick="loadStockDetail('${o.ticker}')">
                 <div class="l">
-                    <span class="t">${escapeHtml(mpBase(o.ticker))}</span>
-                    <span class="n">${escapeHtml(o.name || '')}</span>
+                    <span class="t">${escapeHtml(o.ticker)}</span>
+                    <span class="n">${escapeHtml(niceName(o.ticker, o.name))}</span>
                 </div>
                 <div class="r">
-                    <span class="h">${o.source === 'vm' ? 'Levná + roste' : 'Silné momentum'}</span>
+                    <span class="s">${o.score ?? '?'}</span>
+                    <span class="h">#${o.vm_rank ?? '?'}${o.pe ? ' · P/E ' + o.pe : ''}</span>
                 </div>
             </div>`).join('')}</div>`;
     } catch(e) {
-        box.innerHTML = '<div class="ov-empty">Koš tipů teď není dostupný.</div>';
+        box.innerHTML = '<div class="ov-empty">Skener teď není dostupný.</div>';
     }
+}
+
+// Přehled: koš tipů (měsíční, dlouhodobě) – první tipy, které ještě nemáš. Stejná data jako Příležitosti a Moje portfolio.
+async function fetchOverviewBasket() {
+    const box = document.getElementById('ov-basket');
+    if (!box) return;
+    if (!hasFeature('pro')) { box.innerHTML = '<div class="ov-empty">Koš tipů je k dispozici v plánu <b>Pro</b>.</div>'; return; }
+    try {
+        const d = await fetchPicksData(planPicksN);
+        if (!d || !d.ok || !d.picks) { box.innerHTML = `<div class="ov-empty">${d && d.scanning ? 'Ranní sken ještě běží.' : 'Koš tipů teď není dostupný.'}</div>`; return; }
+        const list = picksNotHeld(d).slice(0, 5);
+        if (!list.length) { box.innerHTML = '<div class="ov-empty">Všechny tipy z koše už máš. Koš se mění jednou měsíčně.</div>'; return; }
+        const month = d.picks.month ? MP_MONTH_CZ[parseInt(d.picks.month.slice(5, 7), 10) - 1] : '';
+        box.innerHTML = `<div style="color:var(--text2);font-size:13px;line-height:1.5;margin:0 0 10px">Nejsilnější akce S&amp;P 500 na ${month} (ty, které ještě nemáš). <b>Kupuj celý koš, ne jednu akcii.</b></div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:8px;">${list.map(o => `
+            <div class="ov-opp-row" onclick="loadStockDetail('${mpEsc(o.ticker)}')">
+                <div class="l"><span class="t">${escapeHtml(mpBase(o.ticker))}</span><span class="n">${escapeHtml(o.name || '')}</span></div>
+                <div class="r"><span class="h">${o.source === 'vm' ? 'Levná + roste' : 'Silné momentum'}</span></div>
+            </div>`).join('')}</div>`;
+    } catch (e) { box.innerHTML = '<div class="ov-empty">Koš tipů teď není dostupný.</div>'; }
 }
 
 let _pfpDays = 30;
