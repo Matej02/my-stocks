@@ -1,2 +1,5 @@
+*.pyc
 .DS_Store
+.pytest_cache/
+__pycache__/
 _desktop-extras/

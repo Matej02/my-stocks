@@ -792,10 +792,31 @@ def verify_password(password, salt, expected_hex):
 
 
 # ---- Tokeny (bezstavové, podepsané HMAC) ----
+_secret_mem = {}
+
+
 def _secret():
-    return (os.environ.get("APP_SECRET")
-            or os.environ.get("APP_PASSWORD")
-            or "mystocks-default-secret-change-me")
+    """Klíč, kterým se podepisují přihlašovací tokeny a token zámku. Primárně env APP_SECRET. Když chybí, NEPOUŽIJE se
+    veřejná výchozí hodnota ze zdroje (repo bylo veřejné → šlo by padělat tokeny i admina), ale náhodný klíč uložený
+    v databázi (KV) – nikdo ho nezná a platí pro všechny instance."""
+    s = os.environ.get("APP_SECRET") or os.environ.get("APP_PASSWORD")
+    if s:
+        return s
+    if _secret_mem.get("v"):
+        return _secret_mem["v"]
+    v = None
+    try:
+        rec = kv_get_json("app:secret")
+        if rec and rec.get("v"):
+            v = rec["v"]
+        else:
+            v = secrets.token_hex(32)
+            kv_set_json("app:secret", {"v": v, "ts": int(time.time())})
+            v = (kv_get_json("app:secret") or {}).get("v") or v      # souběh dvou instancí → platí uložená hodnota
+    except Exception:
+        v = None
+    _secret_mem["v"] = v or secrets.token_hex(32)
+    return _secret_mem["v"]
 
 
 def make_token(username):
@@ -1073,7 +1094,7 @@ def register():
         kv_set_json(f"portfolio:{email}", {"watchlist": [], "positions": {}, "alerts": []})
         kv_sadd("users", email)
         send_welcome_email(email, effective_plan(rec))
-        return jsonify({"ok": True, "token": make_token(email), "user": email,
+        return jsonify({"ok": True, "token": make_token(email), "user": email, "display_name": "",
                         "subscription": subscription_info(email, rec)})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
@@ -1093,7 +1114,7 @@ def login():
         if not u or not verify_password(password, u.get("salt", ""), u.get("hash", "")):
             return jsonify({"ok": False, "error": "Špatný e-mail nebo heslo."}), 401
         portfolio = kv_get_json(f"portfolio:{email}") or {"watchlist": [], "positions": {}, "alerts": []}
-        return jsonify({"ok": True, "token": make_token(email), "user": email,
+        return jsonify({"ok": True, "token": make_token(email), "user": email, "display_name": _clean_name(u.get("display_name")),
                         "portfolio": portfolio, "subscription": subscription_info(email, u)})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
@@ -1143,6 +1164,44 @@ def reset_password():
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
 
+def _clean_name(raw):
+    """Jméno k oslovení: jen text, bez řídicích znaků a < >, max 30 znaků. Prázdné = bez oslovení."""
+    t = re.sub(r"[\x00-\x1f\x7f<>]", "", str(raw or ""))
+    return re.sub(r"\s+", " ", t).strip()[:30]
+
+
+def _display_name(email):
+    """Jméno, které si uživatel nastavil (nikdy ne odvozené z e-mailu)."""
+    try:
+        return _clean_name((kv_get_json(f"user:{email}") or {}).get("display_name"))
+    except Exception:
+        return ""
+
+
+@app.route("/api/profile/name", methods=["POST"])
+def save_display_name():
+    """Uloží jméno, kterým appka a ranní e-maily oslovují. Prázdné = bez oslovení."""
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    if not _rate_ok("profile_name", 30, 3600):
+        return jsonify({"ok": False, "error": "Moc změn, zkus to za chvíli."}), 429
+    raw = (request.get_json(silent=True) or {}).get("name")
+    name = _clean_name(raw)
+    try:
+        rec = kv_get_json(f"user:{user}")
+        if not rec:
+            return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
+        if name:
+            rec["display_name"] = name
+        else:
+            rec.pop("display_name", None)
+        kv_set_json(f"user:{user}", rec)
+        return jsonify({"ok": True, "name": name})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
+
+
 @app.route("/api/me")
 def me():
     user = _auth_user()
@@ -1153,7 +1212,7 @@ def me():
         if not rec:
             return jsonify({"ok": False, "error": "Účet neexistuje."}), 404
         return jsonify({"ok": True, "user": user, "subscription": subscription_info(user, rec),
-                        "notif": rec.get("notif", {"morning": False})})
+                        "notif": rec.get("notif", {"morning": False}), "display_name": _clean_name(rec.get("display_name"))})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Chyba úložiště: {e}"}), 500
 
@@ -3093,9 +3152,13 @@ def track_record():
     """Agregovaná úspěšnost dosavadních verdiktů (re-fetch aktuálních cen)."""
     try:
         model = _model_record()
+        try:
+            basket = {str(k): v for k, v in _basket_perf_all().items()}
+        except Exception:
+            basket = {}
         verdicts = kv_lrange("verdicts", -400, -1)
         if not verdicts:
-            return jsonify({"ok": True, "count": 0, "items": [], "stats": {}, "model": model})
+            return jsonify({"ok": True, "count": 0, "items": [], "stats": {}, "model": model, "basket": basket})
         # Aktuální ceny (unikátní tickery)
         prices, paths = _price_paths({v.get("ticker") for v in verdicts if v.get("ticker")})
 
@@ -3133,7 +3196,7 @@ def track_record():
                 "high_conf_threshold": HIGH_CONF,
             }
         return jsonify({"ok": True, "count": len(verdicts), "items": items, "stats": stats,
-                        "model": model})
+                        "model": model, "basket": basket})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -5109,15 +5172,14 @@ def _close_at(path, date_iso):
     return last
 
 
-def _basket_perf(n=10):
-    """Živý záznam koše tipů: měsíční koše (prvních n v pořadí), rovnoměrně, řetězeno přes měsíce,
-    proti SPY za stejné období. Kešováno 3 h."""
-    n = 6 if n == 6 else 10
-    ck = f"basketperf:{n}:{_today_iso()}"
+def _basket_perf_all():
+    """Živý záznam koše tipů pro 10 i 6 akcií: měsíční koše (prvních n v pořadí), rovnoměrně, řetězeno přes měsíce,
+    proti SPY za stejné období. Jeden průchod cen pro oba koše, kešováno 3 h. {10: {...}, 6: {...}} nebo {}."""
+    ck = f"basketperf2:{_today_iso()}"
     try:
         c = kv_get_json(ck)
         if c and time.time() - c.get("ts", 0) < 3 * 3600:
-            return c
+            return {int(k): v for k, v in (c.get("by_n") or {}).items()}
     except Exception:
         pass
     try:
@@ -5126,46 +5188,53 @@ def _basket_perf(n=10):
     except Exception:
         baskets = []
     if not baskets:
-        return None
+        return {}
     first = baskets[0]["date"]
     try:
         age = (datetime.now(timezone.utc).date() - datetime.strptime(first, "%Y-%m-%d").date()).days
     except Exception:
         age = 0
     rng = "1y" if age < 330 else ("2y" if age < 700 else "5y")
-    tick = sorted({k.replace(".", "-") for b in baskets for k, _s in b["order"][:n]} | {"SPY"})
+    tick = sorted({k.replace(".", "-") for b in baskets for k, _s in b["order"][:10]} | {"SPY"})
     prices, paths = _price_paths(tick, rng)
+
     def _prev_day(d):     # ceny v koši jsou z ranního skenu = zavření PŘEDCHOZÍHO obchodního dne
         return (datetime.strptime(d, "%Y-%m-%d").date() - timedelta(days=1)).isoformat()
-    tot, spy_tot, periods = 1.0, 1.0, []
-    for i, b in enumerate(baskets):
-        end = _prev_day(baskets[i + 1]["date"]) if i + 1 < len(baskets) else None
-        rets = []
-        for k, _s in b["order"][:n]:
-            y = k.replace(".", "-")
-            p0 = (b.get("px") or {}).get(k)
-            p1 = _close_at(paths.get(y), end) if end else prices.get(y)
-            if p0 and p1:
-                rets.append(p1 / p0 - 1)
-        if not rets:
-            continue
-        r = sum(rets) / len(rets)
-        s0 = _close_at(paths.get("SPY"), _prev_day(b["date"])) or b.get("spy")
-        s1 = _close_at(paths.get("SPY"), end) if end else prices.get("SPY")
-        rs = (s1 / s0 - 1) if (s0 and s1) else 0.0
-        tot *= 1 + r
-        spy_tot *= 1 + rs
-        periods.append({"month": b["month"], "since": b["date"], "until": end, "ret": round(r * 100, 2),
-                        "spy": round(rs * 100, 2), "n": len(rets)})
-    if not periods:
-        return None
-    out = {"ts": int(time.time()), "n": n, "since": periods[0]["since"], "ret": round((tot - 1) * 100, 2),
-           "spy": round((spy_tot - 1) * 100, 2), "periods": periods}
-    try:
-        kv_set_json(ck, out)
-    except Exception:
-        pass
+    out = {}
+    for n in (10, 6):
+        tot, spy_tot, periods = 1.0, 1.0, []
+        for i, b in enumerate(baskets):
+            end = _prev_day(baskets[i + 1]["date"]) if i + 1 < len(baskets) else None
+            rets = []
+            for k, _s in b["order"][:n]:
+                y = k.replace(".", "-")
+                p0 = (b.get("px") or {}).get(k)
+                p1 = _close_at(paths.get(y), end) if end else prices.get(y)
+                if p0 and p1:
+                    rets.append(p1 / p0 - 1)
+            if not rets:
+                continue
+            r = sum(rets) / len(rets)
+            s0 = _close_at(paths.get("SPY"), _prev_day(b["date"])) or b.get("spy")
+            s1 = _close_at(paths.get("SPY"), end) if end else prices.get("SPY")
+            rs = (s1 / s0 - 1) if (s0 and s1) else 0.0
+            tot *= 1 + r
+            spy_tot *= 1 + rs
+            periods.append({"month": b["month"], "since": b["date"], "until": end, "ret": round(r * 100, 2),
+                            "spy": round(rs * 100, 2), "n": len(rets)})
+        if periods:
+            out[n] = {"ts": int(time.time()), "n": n, "since": periods[0]["since"], "ret": round((tot - 1) * 100, 2),
+                      "spy": round((spy_tot - 1) * 100, 2), "periods": periods}
+    if out:
+        try:
+            kv_set_json(ck, {"ts": time.time(), "by_n": {str(k): v for k, v in out.items()}})
+        except Exception:
+            pass
     return out
+
+
+def _basket_perf(n=10):
+    return _basket_perf_all().get(6 if n == 6 else 10)
 
 
 def _holdings_perf(user, rows):
@@ -5559,6 +5628,84 @@ def _short_flags(tickers, fetch=True):
         if v is not None and v >= si["thr"]:
             out[t] = {"dtc": round(v, 1), "thr": si["thr"], "settle": si["settle"]}
     return out
+
+
+@app.route("/api/picks")
+def api_picks():
+    """Koš tipů na tento měsíc (stejný jako v Moje portfolio) + dalších ~15 kandidátů za košem + živý záznam koše.
+    Jediný zdroj pro Příležitosti, Přehled i e-maily – žádný jiný seznam „co koupit“ už neexistuje."""
+    n = 6 if request.args.get("n") == "6" else 10
+    try:
+        scan = _ensure_scan_maps(market_scan(allow_step=False) or {})
+        if not scan or not (scan.get("rank_map") or scan.get("mom_rank_map")):
+            return jsonify({"ok": True, "scanning": True, "picks": None})
+        try:
+            flags = _red_flags([t.replace(".", "-") for t, _s in _mix_basket(scan, 10)[:40]])
+        except Exception:
+            flags = {}
+        picks = _picks(scan, n, (), flags)
+        mb = _month_basket(scan) or {}
+        inb = {p_["ticker"] for p_ in picks["basket"]}
+        more = []
+        for k, src in (mb.get("order") or [])[:30]:
+            t = k.replace(".", "-")
+            if t in inb or (flags.get(t) or {}).get("pause"):
+                continue
+            more.append(_pick_item(k, src, scan))
+            if len(more) >= 15:
+                break
+        tick = [p_["ticker"] for p_ in picks["basket"]] + [m_["ticker"] for m_ in more]
+        out = {"ok": True, "picks": picks, "more": more, "scan_date": scan.get("date")}
+        for key, fn in (("basket_perf", lambda: _basket_perf(n)), ("earnings", lambda: _earnings_for(tick)),
+                        ("short", lambda: _short_flags(tick))):
+            try:
+                out[key] = fn()
+            except Exception:
+                out[key] = None if key == "basket_perf" else {}
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+_MONTH_CZ = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec", "srpen", "září", "říjen", "listopad", "prosinec"]
+
+
+def _basket_email_html(email=None, n=5):
+    """Jeden společný blok „Koš tipů“ pro ranní i týdenní e-mail (nahrazuje dřívější „nákupní signály“ a „podhodnocené“)."""
+    try:
+        scan = _ensure_scan_maps(market_scan(allow_step=False) or {})
+        if not scan:
+            return ""
+        held = set()
+        if email:
+            try:
+                held = {_spx_key(l["ticker"]) for l in (kv_get_json(f"holdings:{email}") or {}).get("holdings") or []}
+            except Exception:
+                pass
+        picks = _picks(scan, 10, held, {})
+        new = picks["new"][:n]
+        if not new:
+            return ""
+        mon = _MONTH_CZ[int((picks.get("month") or _today_iso()[:7])[5:7]) - 1]
+        rows = "".join(
+            f"<div style='padding:8px 0;border-top:1px solid #23262f;font-size:13px;line-height:1.5'><b>{_html_escape(p_['ticker'].split('.')[0])}</b> "
+            f"<span style='color:#9ba1b0'>{_html_escape(p_['name'])}</span><br>"
+            f"<span style='color:#9ba1b0'>{_html_escape(p_['why'])}</span></div>" for p_ in new)
+        bp = None
+        try:
+            bp = _basket_perf(10)
+        except Exception:
+            pass
+        perf = ""
+        if bp:
+            col = "#00C853" if bp["ret"] >= bp["spy"] else "#FFB347"
+            perf = (f"<div style='font-size:12px;color:#9ba1b0;margin-top:8px'>Živý záznam koše od {bp['since'][8:10].lstrip('0')}. {int(bp['since'][5:7])}.: "
+                    f"<b style='color:{col}'>{bp['ret']:+.1f} %</b> · S&amp;P 500 {bp['spy']:+.1f} % – krátké období je hlavně náhoda.</div>")
+        return (f"<h3 style='font-size:16px;margin:22px 0 8px'>🎯 Koš tipů na {mon}</h3>"
+                "<div style='color:#9ba1b0;font-size:12px;margin-bottom:4px'>Nejsilnější akce S&amp;P 500, které ještě nemáš. Koš se mění jednou měsíčně; "
+                "kupuj celý koš, ne jednu akcii.</div>" + rows + perf)
+    except Exception:
+        return ""
 
 
 @app.route("/api/plan", methods=["POST"])
@@ -6092,7 +6239,10 @@ def api_holdings_import():
     if csv_text:
         if len(csv_text) > 3_000_000:
             return jsonify({"ok": False, "error": "Soubor je moc velký (max ~3 MB)."}), 400
-        raw, csv_info = _parse_broker_csv(csv_text)
+        try:
+            raw, csv_info = _parse_broker_csv(csv_text)
+        except Exception:
+            return jsonify({"ok": False, "error": "Soubor se nepodařilo přečíst jako CSV (poškozený nebo jiný formát)."}), 400
         if csv_info.get("error"):
             return jsonify({"ok": False, "error": csv_info["error"]}), 400
         if not FEATURE_QTY:
@@ -6779,7 +6929,21 @@ změna vedení, velký pohyb ceny s uvedeným důvodem), napiš česky:
   kvůli podvodu, přepočet dřívějších výsledků, bankrot nebo vážnou hrozbu bankrotu, vyřazení z burzy.
   Pokuta, prohraný soud, slabé výsledky nebo snížený výhled NEJSOU severe. Jinak false.
 Tickery, kde jsou jen obecné články, rady nebo nic podstatného, VYNECH. Žádné rady kupovat/prodat, žádné předpovědi.
+VŠECHNY texty ("what", "why") piš ČESKY, i když jsou zprávy anglicky – nic nepřepisuj anglicky, jen názvy firem a produktů nech.
 Odpověz JEN JSON: {{"items": [{{"ticker": "...", "what": "...", "why": "...", "impact": "...", "severe": false, "sources": []}}]}}"""
+
+
+_EN_WORDS = {"the", "and", "of", "to", "in", "for", "on", "with", "as", "at", "by", "its", "is", "are", "was", "were", "said",
+             "after", "from", "that", "this", "has", "have", "will", "over", "into", "says", "reports", "stock", "shares"}
+
+
+def _looks_english(text):
+    """Hrubá detekce anglického textu (AI občas odpoví anglicky): hodně anglických spojek a žádná česká diakritika."""
+    t = (text or "").strip()
+    if not t or re.search(r"[ěščřžýáíéúůďťňó]", t.lower()):
+        return False
+    words = re.findall(r"[a-z']+", t.lower())
+    return len(words) >= 4 and sum(1 for w in words if w in _EN_WORDS) >= max(2, len(words) // 8)
 
 
 _NAME_SUFFIX = re.compile(r"\b(inc|incorporated|corp|corporation|co|company|holdings?|group|plc|n\.?v|s\.?a|ag|se|ltd|limited|the|class [a-c])\b\.?", re.I)
@@ -6829,7 +6993,7 @@ def _mine_digest(tickers, names=None, cap=20):
         except Exception:
             c = None
         age = time.time() - (c or {}).get("generated", 0)
-        if c and age < ttl and (c.get("ai") or not analysis_enabled() or age < 900):
+        if c and age < ttl and (c.get("ai") or not analysis_enabled() or age < 180):
             got[t] = c
         else:
             missing.append(t)
@@ -6879,6 +7043,7 @@ def _mine_compute(tickers, names):
         raw = call_llm(MINE_PROMPT.format(items="\n".join(
             f"{p['id']} | {p['ticker']} | {p['src']} | {p['title']} | {p['text']}" for p in pool)))
         by_id = {p["id"]: p for p in pool}
+        dropped_en = 0
         for e in ((raw or {}).get("items") or [])[:10]:
             if not isinstance(e, dict):
                 continue
@@ -6887,6 +7052,9 @@ def _mine_compute(tickers, names):
             srcs = [by_id[s] for s in (e.get("sources") or [])
                     if isinstance(s, str) and s in by_id and by_id[s]["ticker"] == t]
             if not srcs or t not in tickers or not e.get("what"):
+                continue
+            if _looks_english(str(e.get("what"))) or _looks_english(str(e.get("why") or "")):
+                dropped_en += 1                       # uživatel chce všechno česky – anglické shrnutí nezobrazíme
                 continue
             imp = (e.get("impact") or "").lower()
             severe = e.get("severe") is True
@@ -6901,7 +7069,7 @@ def _mine_compute(tickers, names):
                         "reason": "ze zpráv: " + str(e["what"])[:200], "url": srcs[0]["link"]})
                 except Exception:
                     pass
-        res["ai"] = raw is not None
+        res["ai"] = raw is not None and not (dropped_en and not res["items"])   # samé anglické odpovědi = jako by AI nebyla
     return res
 
 
@@ -7508,7 +7676,7 @@ def _parse_rss_time(pub):
 def api_portfolio_history():
     """Vrátí denní kumulativní výkon watchlist (equal-weighted) vs SPY.
     Base = 100 v den [today - N]. Data pro rychlé vykreslení line chartu."""
-    tickers = [t.strip().upper() for t in (request.args.get("tickers") or "").split(",") if t.strip()][:30]
+    tickers = [t.strip().upper() for t in (request.args.get("tickers") or "").split(",") if t.strip()][:40]
     days = max(7, min(365, int(request.args.get("days", "90") or 90)))
     if not tickers:
         return jsonify({"ok": True, "series": [], "baseline": [], "labels": []})
@@ -7526,8 +7694,7 @@ def api_portfolio_history():
         rng = "1y"
 
     # Sesbírej denní close pro každý ticker (unifikované na 'YYYY-MM-DD')
-    per_ticker = {}
-    for t in tickers:
+    def _hist_one(t):
         try:
             d = yahoo_chart(t, rng, "1d")
             ts_list = d.get("timestamp") or []
@@ -7539,9 +7706,15 @@ def api_portfolio_history():
                 if c is None: continue
                 dt = datetime.fromtimestamp(ts + gmt, tz=timezone.utc).strftime("%Y-%m-%d")
                 series[dt] = c
-            per_ticker[t] = series
+            return t, series
         except Exception:
-            continue
+            return t, None
+    from concurrent.futures import ThreadPoolExecutor
+    per_ticker = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:        # 30+ akcií po jedné trvalo desítky sekund
+        for t, series in ex.map(_hist_one, tickers):
+            if series is not None:
+                per_ticker[t] = series
 
     # SPY baseline
     spy_series = {}
@@ -7914,16 +8087,23 @@ def api_alerts_events():
     """Vrátí souhrn klíčových událostí pro seznam tickerů. Cache 2h."""
     tickers_param = (request.args.get("tickers") or "").upper()
     since_days = max(1, min(30, int(request.args.get("days", "10") or 10)))
-    tickers = [t.strip() for t in tickers_param.split(",") if t.strip()][:20]
+    tickers = [t.strip() for t in tickers_param.split(",") if t.strip()][:40]
     if not tickers:
         return jsonify({"ok": True, "events": []})
     ck = f"alerts:{','.join(tickers)}:{since_days}"
     cached = kv_get_json(ck)
     if cached and (time.time() - cached.get("ts", 0) < 7200):
         return jsonify({"ok": True, "cached": True, **cached})
+    def _ev_one(t):
+        try:
+            return _events_for_ticker(t, since_days=since_days)
+        except Exception:
+            return []
+    from concurrent.futures import ThreadPoolExecutor
     events = []
-    for t in tickers:
-        events += _events_for_ticker(t, since_days=since_days)
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        for lst in ex.map(_ev_one, tickers):
+            events += lst
     events.sort(key=lambda x: x.get("date") or "", reverse=True)
     out = {"ts": int(time.time()), "events": events[:15],
            "updated": datetime.now(timezone.utc).strftime("%H:%M UTC")}
@@ -9031,22 +9211,15 @@ def _todays_action(email, top_signals, risk=None):
     cap = (lambda t: t[:1].upper() + t[1:]) if lead else (lambda t: t)
     slots = (f"{free} volnou pozici" if free == 1 else f"{free} volné pozice" if 2 <= free <= 4
              else f"{free} volných pozic")
-    if top_signals:
-        smap = ((market_scan(allow_step=False) or {}).get("sector_map") or {})
-        held = {}
-        for i in pos["items"]:
-            if i["status"] == "open":
-                sct = smap.get(i["ticker"]) or "?"
-                held[sct] = held.get(sct, 0) + 1
-        mine = {i["ticker"] for i in pos["items"] if i["status"] == "open"}
-        top_signals = [x for x in top_signals if x["ticker"] not in mine
-                       and held.get(x.get("sector") or "?", 0) < SECTOR_CAP]
-    if free and top_signals:
-        s0 = top_signals[0]
-        vm = f"hodnota+momentum {s0['vm']}/100, " if s0.get("vm") is not None else ""
-        return (f"Dnes: {lead}{cap('máš')} {slots} z {alloc['slots_max']}. Nejsilnější "
-                f"signál je {s0.get('ticker')} ({vm}váha {alloc['per_position_pct']} %). "
-                f"Zbytek drží indexové jádro.")
+    if free:
+        try:      # jediný seznam „co koupit“ = koš tipů (ne zvláštní denní signály)
+            held_k = {_spx_key(i["ticker"]) for i in pos["items"] if i["status"] == "open"}
+            nw = _picks(_ensure_scan_maps(market_scan(allow_step=False) or {}), 10, held_k, {})["new"][:1]
+        except Exception:
+            nw = []
+        if nw:
+            return (f"Dnes: {lead}{cap('máš')} {slots} z {alloc['slots_max']}. První v koši tipů na tento měsíc je "
+                    f"{nw[0]['ticker'].split('.')[0]} (váha {alloc['per_position_pct']} %). Zbytek drží indexové jádro.")
     if free:
         return (f"Dnes: {lead}{cap('žádný')} nový signál. Nech kapitál v indexovém jádru – "
                 "hotovost bez důvodu nevydělává.")
@@ -9404,13 +9577,7 @@ def build_morning_summary_html(email, top_opps, top_signals=None, mark_sent=Fals
     watch_html = (f"<div style='color:#9ba1b0;font-size:12px;margin:14px 0 4px'>Sledované akcie:</div>"
                   f"<table style='width:100%;border-collapse:collapse;font-size:14px'>{rows}</table>") if rows else ""
     opp_html = ""
-    if top_opps:
-        opp_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>💎 Podhodnocené s momentem</h3>"
-                    + _opps_email_rows(top_opps))
-    sig_html = ""
-    if top_signals:
-        sig_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>✅ Dnešní nákupní signály</h3>"
-                    + _signals_email_rows(top_signals))
+    sig_html = _basket_email_html(email)     # jediný seznam „co koupit“: koš tipů (dřív signály + podhodnocené)
     # Otevřené pozice – co dnes vyžaduje akci podle plánu (cíl/stop/horizont).
     # Celý stav portfolia, ne jen to, co křičí. Uživatel chce ráno vidět,
     # co se s jeho penězi děje – i když se zrovna nic dělat nemá.
@@ -9525,8 +9692,9 @@ def build_morning_summary_html(email, top_opps, top_signals=None, mark_sent=Fals
         portfolio_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>📊 Tvé portfolio</h3>"
                           + pos_html + watch_html + why_html)
 
+    _nm = _display_name(email)
     return _email_shell("Ranní přehled trhu ☀️",
-                        "<p style='line-height:1.6'>Dobré ráno!</p>" +
+                        f"<p style='line-height:1.6'>Dobré ráno{', ' + _html_escape(_nm) if _nm else ''}!</p>" +
                         brief_html + portfolio_html + action_html +
                         sig_html + opp_html +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>Notifikace vypneš v appce v profilu. "
@@ -9631,11 +9799,8 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
         except Exception:
             perf_html = ""
 
-    # Top signály týdne
-    sig_html = ""
-    if top_signals:
-        sig_html = ("<h3 style='font-size:16px;margin:22px 0 10px'>🎯 Nákupní signály</h3>"
-                    + _signals_email_rows(top_signals))
+    # Co koupit: koš tipů (dřív zvlášť signály a podhodnocené)
+    sig_html = _basket_email_html(email)
 
     # Klíčové události u sledovaných akcií (last 7 days)
     events_html = ""
@@ -9655,14 +9820,10 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
     except Exception:
         events_html = ""
 
-    # Příležitosti
     opp_html = ""
-    if top_opps:
-        opp_html = ("<h3 style='font-size:16px;margin:22px 0 10px'>💎 Podhodnocené s momentem</h3>"
-                    + _opps_email_rows(top_opps))
 
     intro = ("<p style='line-height:1.6'>Hezký víkend! Tady je tvé <b>shrnutí týdne</b> " +
-             "— jak si vedla tvá watchlist, nejlepší signály z modelu a klíčové události.</p>")
+             "— jak si vedla tvá watchlist, koš tipů na tento měsíc a klíčové události.</p>")
 
     cta = (f"<div style='text-align:center;margin:28px 0 12px'>"
            f"<a href='{APP_URL}/' style='display:inline-block;background:#FF7A00;color:#1a0e00;"
@@ -9810,6 +9971,9 @@ def admin_email_status():
                     "ai_enabled": analysis_enabled(), "news_status": kv_get_json("news:digest:status"),
                     "import_last": kv_get_json("import:last"), "llm_last": kv_get_json("llm:last"),
                     "daily_last": kv_get_json("auto:last"), "scan_last": _scan_brief(),
+                    "security": {"site_password": bool((os.environ.get("SITE_PASSWORD") or "").strip()),
+                                 "app_secret": bool(os.environ.get("APP_SECRET") or os.environ.get("APP_PASSWORD")),
+                                 "site_lock": site_lock_enabled()},
                     "verdict_count": len(kv_lrange("verdicts", -400, -1) or []),
                     "paper_count": len(kv_lrange("paper:trades", -400, -1) or [])})
 
