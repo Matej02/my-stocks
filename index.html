@@ -1750,6 +1750,13 @@ body.modal-open {overflow:hidden;}
 .rec-ai .n {font-size:11.5px; color:var(--text3); margin-top:6px;}
 .rec-ai.loading, .rec-ai.muted {background:var(--surface); border-color:var(--border); color:var(--text2); font-size:13px;}
 @media (max-width:640px) { .rec-perf-row {grid-template-columns:minmax(0,1fr) auto;} .rec-perf-row .b {grid-column:1 / -1;} }
+.mp-earn {font-size:12px; color:var(--text2); margin-top:8px; line-height:1.45;}
+.mp-earn i {color:var(--text3);}
+.mp-earn.soon {color:var(--text);}
+.mp-earn.soon i {color:var(--amber);}
+.mp-earn .n {font-size:11px; color:var(--text3); margin-top:2px;}
+.mp-short {font-size:12px; color:var(--text2); margin-top:8px; line-height:1.45;}
+.mp-short i {color:var(--amber);}
 .mp-bperf {display:flex; gap:8px; align-items:flex-start; font-size:12.5px; color:var(--text2); margin:0 0 12px; line-height:1.5;}
 .mp-bperf i {color:var(--accent); margin-top:2px;}
 .mp-verdict {display:inline-block; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:8px; white-space:nowrap;}
@@ -1992,7 +1999,7 @@ body.modal-open {overflow:hidden;}
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.10.27·b</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.11.04·a</div>
 
 <div class="container">
   
@@ -6944,6 +6951,16 @@ const mpQty = q => (q == null) ? '–' : Number(q).toLocaleString('cs-CZ', { max
 const mpEsc = s => (typeof escapeHtml === 'function') ? escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const mpDate = iso => iso ? `${parseInt(iso.slice(8, 10), 10)}. ${parseInt(iso.slice(5, 7), 10)}.` : '';
 const MP_MONTH_CZ = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
+const mpDays = n => n === 0 ? 'dnes' : (n === 1 ? 'zítra' : `za ${n} ${n < 5 ? 'dny' : 'dní'}`);
+function mpEarnHTML(er) {
+    if (!er) return '';
+    const when = er.when === 'pre' ? ', před otevřením burzy' : (er.when === 'post' ? ', po zavření burzy' : '');
+    return `<div class="mp-earn${er.days <= 7 ? ' soon' : ''}"><i class="ti ti-calendar-event"></i> Výsledky <b>${mpDays(er.days)}</b> (${mpDate(er.date)}${when})${er.eps != null ? ` · analytici čekají zisk ${mpEsc(er.eps.toFixed(2).replace('.', ','))} $/akcii${er.n ? ` (${er.n} odhadů)` : ''}` : ''}${er.days <= 7 ? '<div class="n">Kolem výsledků akcie kolísá víc než obvykle – na hodnocení to nic nemění, jen s tím počítej.</div>' : ''}</div>`;
+}
+function mpShortHTML(sh) {
+    if (!sh) return '';
+    return `<div class="mp-short"><i class="ti ti-alert-triangle"></i> <b>Vysoký short interest</b> – uzavřít všechny sázky na pokles by trvalo ${mpEsc(String(sh.dtc).replace('.', ','))} dní obchodování (horní pětina S&amp;P 500, údaj k ${mpDate(sh.settle)}). Takové akcie za rok zaostávaly zhruba o 3 body za průměrem. Informace, ne signál k prodeji.</div>`;
+}
 const mpSigned = (v, d = 1) => (v == null || isNaN(v)) ? '–' : (v >= 0 ? '+' : '') + mpPct(v, d);
 const mpThisMonth = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
 
@@ -7285,6 +7302,7 @@ function planNamesHTML(d) {
         if (ev.approx_weight != null) bits.push(`~${mpPct(ev.approx_weight, 0)} portfolia (odhad)`);
         const pi = d.perf && d.perf.items && d.perf.items[r.ticker];
         const perfL = pi ? `<div class="mp-stock-perf">Od ${mpDate(pi.since)}: <b style="color:var(--${pi.ret >= (pi.spy || 0) ? 'up' : 'amber'})">${mpSigned(pi.ret)}</b> · S&amp;P 500 ${mpSigned(pi.spy)}</div>` : '';
+        const earnL = r.status !== 'core' ? mpEarnHTML(d.earnings && d.earnings[r.ticker]) + mpShortHTML(d.short && d.short[r.ticker]) : '';
         const sz = r.size || '';
         const sizeL = r.status !== 'core' ? `<div class="mp-size"><span>Velikost:</span>${['S', 'M', 'L'].map(k => `<button class="${sz === k ? 'on' : ''}" onclick="planSetSize('${mpEsc(r.ticker)}','${k}')">${{ S: 'malá', M: 'střední', L: 'velká' }[k]}</button>`).join('')}</div>` : '';
         return `<div class="mp-stock ${ev.level}">
@@ -7298,6 +7316,7 @@ function planNamesHTML(d) {
           ${bar}
           <div class="mp-ev-why">${mpEsc(ev.why || '')}</div>
           ${perfL}
+          ${earnL}
           ${(ev.warn || []).map(w => `<div class="mp-flag">⚠ ${mpEsc(w)}</div>`).join('')}${flag}
           ${news}
           ${sizeL}
@@ -8365,6 +8384,7 @@ function planPicksHTML(d) {
         <div class="mp-pick-n">${mpEsc(p.name)}${p.sector ? ' · ' + mpEsc(MP_SECTOR_CZ[p.sector] || p.sector) : ''}</div>
         <div class="mp-pick-w">${mpEsc(p.why)}</div>
         ${p.price ? `<div class="mp-pick-p">${mpQty(p.price)} ${mpEsc(p.currency || '')}${p.chg != null ? ` <span style="color:var(--${p.chg >= 0 ? 'up' : 'down'})">${p.chg >= 0 ? '+' : ''}${mpPct(p.chg, 1)}</span>` : ''}</div>` : ''}
+        ${mpEarnHTML(d.earnings && d.earnings[p.ticker])}${mpShortHTML(d.short && d.short[p.ticker])}
         ${heldT.has(p.ticker) ? '' : planTipNewsHTML(p.ticker, 'buy')}
       </div>`).join('');
     return `<div class="mp-card" id="mp-picks"><h4><i class="ti ti-target-arrow"></i> Co koupit teď</h4>

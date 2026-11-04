@@ -193,17 +193,82 @@ def _pct(v, n=1):
         return None
 
 
+_NQ_ROWS = {"5d": 8, "1mo": 25, "3mo": 70, "6mo": 135, "1y": 260, "2y": 520, "5y": 1300}
+_nq_fail = {"ts": 0}
+
+
+def _nasdaq_chart(ticker, rng):
+    """ZÁLOHA za Yahoo (jen US akcie/ETF, denní data): bezklíčové historické ceny z Nasdaq.com. Vrací výsledek ve
+    tvaru Yahoo chart (meta, timestamp, indicators.quote). Ceny jsou bez úpravy o dividendy – na signály stačí."""
+    sym = ticker.upper().replace("-", ".") if re.match(r"^[A-Z]{1,5}([.\-][A-Z])?$", ticker.upper()) else None
+    if not sym or sym.endswith(".") or rng not in _NQ_ROWS:
+        raise ValueError("Nasdaq záloha jen pro US tituly a denní data")
+    if time.time() - _nq_fail["ts"] < 60:
+        raise ValueError("Nasdaq záloha chvíli odpočívá")
+    n = _NQ_ROWS[rng]
+    today = datetime.now(timezone.utc).date()
+    frm = (today - timedelta(days=int(n * 1.6) + 7)).isoformat()
+    last_err, net_err = None, False
+    for cls in ("stocks", "etf"):
+        try:
+            r = requests.get(f"https://api.nasdaq.com/api/quote/{quote(sym)}/historical",
+                             params={"assetclass": cls, "fromdate": frm, "todate": today.isoformat(), "limit": n + 5},
+                             headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
+                                      "Accept": "application/json"}, timeout=10)
+            rows = ((((r.json() or {}).get("data") or {}).get("tradesTable") or {}).get("rows")) or []
+            if not rows:
+                continue
+            num = lambda x: float(str(x).replace("$", "").replace(",", "")) if x not in (None, "", "N/A") else None
+            rows = rows[::-1][-n:]                        # Nasdaq vrací nejnovější první
+            ts, o, h, l, c, v = [], [], [], [], [], []
+            for x in rows:
+                d = datetime.strptime(x["date"], "%m/%d/%Y").replace(hour=21, tzinfo=timezone.utc)
+                cl = num(x.get("close"))
+                if cl is None:
+                    continue
+                ts.append(int(d.timestamp())); c.append(cl); o.append(num(x.get("open"))); h.append(num(x.get("high")))
+                l.append(num(x.get("low"))); v.append(int(num(x.get("volume")) or 0))
+            if len(c) < 2:
+                continue
+            year = [x for x in c[-252:]]
+            return {"meta": {"symbol": ticker, "currency": "USD", "regularMarketPrice": c[-1], "chartPreviousClose": c[-2],
+                             "previousClose": c[-2], "shortName": ticker, "instrumentType": "ETF" if cls == "etf" else "EQUITY",
+                             "fiftyTwoWeekHigh": max(year), "fiftyTwoWeekLow": min(year), "source": "nasdaq"},
+                    "timestamp": ts, "indicators": {"quote": [{"open": o, "high": h, "low": l, "close": c, "volume": v}],
+                                                    "adjclose": [{"adjclose": c}]}}
+        except Exception as e:
+            last_err, net_err = e, True
+    if net_err:
+        _nq_fail["ts"] = time.time()                     # pauza jen při chybě sítě, ne když ticker prostě neexistuje
+    raise ValueError(f"Nasdaq záloha nenašla data ({last_err or 'prázdná odpověď'})")
+
+
 def yahoo_chart(ticker, rng, interval):
-    """Stáhne data z Yahoo chart endpointu. Vrací result dict (meta, timestamp, quote)."""
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(ticker, safe='')}"
+    """Stáhne data z Yahoo chart endpointu. Vrací result dict (meta, timestamp, quote).
+    Z Vercelu Yahoo občas neodpoví → zkusí druhý hostitel a u US titulů (denní data) bezklíčovou zálohu z Nasdaq."""
     params = {"range": rng, "interval": interval, "includePrePost": "false"}
-    r = requests.get(url, headers=HEADERS, params=params, timeout=10)
-    j = r.json()
-    res = (j.get("chart") or {}).get("result")
-    if not res:
-        err = (j.get("chart") or {}).get("error")
-        raise ValueError(err or "Yahoo nevrátil data")
-    return res[0]
+    err = None
+    for host in ("query1", "query2"):
+        try:
+            r = requests.get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{quote(ticker, safe='')}",
+                             headers=HEADERS, params=params, timeout=10)
+            j = r.json()
+            res = (j.get("chart") or {}).get("result")
+            if res:
+                return res[0]
+            err = (j.get("chart") or {}).get("error") or "Yahoo nevrátil data"
+            if isinstance(err, dict) and (err.get("code") == "Not Found"):
+                raise ValueError(err)                    # titul neexistuje – druhý host ani záloha nepomůže
+        except ValueError:
+            raise
+        except Exception as e:
+            err = str(e)
+    if interval == "1d":
+        try:
+            return _nasdaq_chart(ticker, rng)
+        except Exception:
+            pass
+    raise ValueError(err or "Yahoo nevrátil data")
 
 
 def _prev_close(closes, meta=None):
@@ -3950,12 +4015,62 @@ def _spx_key(t):
     return (t or "").upper().replace("-", ".")
 
 
+_cnb_mem = {"ts": 0, "rates": None, "date": None}
+
+
+def _cnb_rates():
+    """Oficiální denní kurzy ČNB (zdarma, bez klíče): {měna: Kč za 1 jednotku}. Kešováno 6 h v paměti i v KV,
+    při výpadku poslední známé (ČNB je pro českého investora přesnější než kurz z Yahoo a nezávisí na něm)."""
+    if _cnb_mem["rates"] and time.time() - _cnb_mem["ts"] < 6 * 3600:
+        return _cnb_mem["rates"]
+    cached = None
+    try:
+        cached = kv_get_json("fx:cnb")
+        if cached and time.time() - cached.get("ts", 0) < 6 * 3600:
+            _cnb_mem.update(ts=cached["ts"], rates=cached["rates"], date=cached.get("date"))
+            return cached["rates"]
+    except Exception:
+        pass
+    try:
+        r = requests.get("https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt",
+                         headers={"User-Agent": UA}, timeout=8)
+        lines = r.content.decode("utf-8", "replace").splitlines()
+        rates = {}
+        for ln in lines[2:]:
+            p = ln.split("|")
+            if len(p) == 5:
+                try:
+                    rates[p[3].strip().upper()] = float(p[4].replace(",", ".")) / float(p[2].replace(",", "."))
+                except ValueError:
+                    pass
+        if len(rates) >= 10 and "USD" in rates and "EUR" in rates:
+            date = (lines[0].split("#")[0] or "").strip()
+            _cnb_mem.update(ts=time.time(), rates=rates, date=date)
+            try:
+                kv_set_json("fx:cnb", {"ts": time.time(), "rates": rates, "date": date})
+            except Exception:
+                pass
+            return rates
+    except Exception:
+        pass
+    if cached and cached.get("rates") and time.time() - cached.get("ts", 0) < 14 * 86400:
+        return cached["rates"]
+    return _cnb_mem["rates"] if (_cnb_mem["rates"] and time.time() - _cnb_mem["ts"] < 14 * 86400) else None
+
+
 def _fx_czk(cur):
-    """Kurz měny → CZK (kešováno hodinu). Londýnské ceny v pencích (GBp) /100."""
+    """Kurz měny → CZK. Primárně oficiální kurz ČNB (umí i CAD, DKK, SEK, NOK, JPY…), záloha Yahoo
+    s hodinovou keší a posledním známým kurzem. Londýnské ceny v pencích (GBp) /100."""
     if not cur or cur.upper() == "CZK":
         return 1.0
     pence = cur in ("GBp", "GBX")
     c = "GBP" if pence else cur.upper()
+    try:
+        cn = _cnb_rates()
+        if cn and c in cn:
+            return cn[c] / 100 if pence else cn[c]
+    except Exception:
+        pass
     sym = FX_SYMBOLS.get(c)
     if not sym:
         return None
@@ -5287,6 +5402,165 @@ def _eval_changes(user, ev, record=True):
     return {"since": prev_d, "items": items}
 
 
+# ---------------------------------------------------------------------------
+# KALENDÁŘ VÝSLEDKŮ (bezklíčový z Nasdaq.com): kdy kterou akcii čekají čtvrtletní výsledky + odhad zisku analytiků.
+# Jen KONTEXT (kolem výsledků akcie víc kolísá) – výzkum nepotvrdil, že by se podle toho dalo obchodovat.
+# ---------------------------------------------------------------------------
+def _earn_norm(sym):
+    return re.sub(r"[^A-Z0-9]", "", (sym or "").upper())
+
+
+def _earn_cal(days=21, budget_s=8.0, fetch=True):
+    """{normalizovaný symbol: {date, when, eps, n}} – nejbližší výsledky v příštích `days` dnech. Kešováno 12 h."""
+    key = f"earncal:{_today_iso()}"
+    try:
+        c = kv_get_json(key)
+        if c and time.time() - c.get("ts", 0) < 12 * 3600 and c.get("map"):
+            return c["map"]
+    except Exception:
+        pass
+    if not fetch:
+        return {}
+    today = datetime.now(timezone.utc).date()
+    ds = [today + timedelta(days=i) for i in range(days + 1) if (today + timedelta(days=i)).weekday() < 5]
+
+    def one(d):
+        try:
+            r = requests.get("https://api.nasdaq.com/api/calendar/earnings", params={"date": d.isoformat()},
+                             headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
+                                      "Accept": "application/json"}, timeout=8)
+            return d, ((r.json().get("data") or {}).get("rows")) or []
+        except Exception:
+            return d, None
+    from concurrent.futures import ThreadPoolExecutor
+    out, ok_days, t0 = {}, 0, time.time()
+    ex = ThreadPoolExecutor(max_workers=6)
+    try:
+        futs = [ex.submit(one, d) for d in ds]
+        for f in futs:
+            try:
+                d, rows = f.result(timeout=max(0.5, budget_s - (time.time() - t0)))
+            except Exception:
+                continue
+            if rows is None:
+                continue
+            ok_days += 1
+            for x in rows:
+                k = _earn_norm(x.get("symbol"))
+                if not k or (k in out and out[k]["date"] <= d.isoformat()):
+                    continue
+                eps = None
+                try:
+                    eps = float(str(x.get("epsForecast") or "").replace("$", "").replace(",", "").replace("(", "-").replace(")", ""))
+                except ValueError:
+                    pass
+                tm = x.get("time") or ""
+                out[k] = {"date": d.isoformat(), "when": "pre" if "pre" in tm else ("post" if "after" in tm else None),
+                          "eps": eps, "n": int(x["noOfEsts"]) if str(x.get("noOfEsts") or "").isdigit() else None}
+    finally:
+        ex.shutdown(wait=False)
+    if ok_days >= max(3, len(ds) // 2) and out:
+        try:
+            kv_set_json(key, {"ts": time.time(), "map": out})
+        except Exception:
+            pass
+    return out
+
+
+def _earnings_for(tickers, fetch=True):
+    """{ticker: {date, days, when, eps, n}} pro dané tickery (jen US – Nasdaq kalendář evropské firmy nemá)."""
+    cal = _earn_cal(fetch=fetch)
+    if not cal:
+        return {}
+    today = datetime.now(timezone.utc).date()
+    out = {}
+    for t in tickers:
+        e = cal.get(_earn_norm(t))
+        if e:
+            try:
+                dd = (datetime.strptime(e["date"], "%Y-%m-%d").date() - today).days
+            except Exception:
+                continue
+            if 0 <= dd <= 21:
+                out[t] = dict(e, days=dd)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# SHORT INTEREST (FINRA, zdarma, 2× měsíčně): kolik dní obchodování by trvalo uzavřít všechny short pozice.
+# Test 2018–2025 na S&P 500: nejvyšší pětina takových akcií zaostávala za indexem o ~3 b. ročně víc než průměr
+# (v obou obdobích). Do výběru koše to NEJDE (nesplnilo předem dané pravidlo), proto jen jako VAROVÁNÍ u akcie.
+# ---------------------------------------------------------------------------
+def _si_latest(fetch=True, budget_s=10.0):
+    """{ts, settle, thr, map{SYMBOL: dny k pokrytí}} z nejnovějšího souboru FINRA; kešováno 3 dny. thr = hranice horní pětiny S&P 500."""
+    key = "si:latest"
+    c = None
+    try:
+        c = kv_get_json(key)
+        if c and c.get("map") and time.time() - c.get("ts", 0) < 3 * 86400:
+            return c
+    except Exception:
+        pass
+    if not fetch:
+        return c if (c and c.get("map")) else None
+    today = datetime.now(timezone.utc).date()
+    cands = []
+    for back in range(5, 50):
+        d = today - timedelta(days=back)
+        if d.weekday() < 5 and (11 <= d.day <= 17 or d.day >= 26 or d.day <= 3):     # vypořádání ~15. a poslední den měsíce
+            cands.append(d)
+    t0 = time.time()
+    for d in cands[:16]:
+        if time.time() - t0 > budget_s:
+            break
+        try:
+            r = requests.get(f"https://cdn.finra.org/equity/otcmarket/biweekly/shrt{d:%Y%m%d}.csv",
+                             headers={"User-Agent": "Mozilla/5.0"}, timeout=12)
+            if r.status_code != 200 or "accountingYearMonthNumber" not in r.text[:60]:
+                continue
+            mp = {}
+            for ln in r.text.splitlines()[1:]:
+                p_ = [x.strip().strip('"') for x in ln.split("|")]        # novější soubory mají hodnoty v uvozovkách
+                if len(p_) < 10:
+                    continue
+                try:
+                    adv, dtc = float(p_[8] or 0), float(p_[9] or 0)
+                except ValueError:
+                    continue
+                if adv >= 100000 and dtc > 0:
+                    mp[_earn_norm(p_[1])] = dtc
+            if len(mp) < 500:
+                continue
+            try:
+                sc = kv_get_json(f"scan:{_today_iso()}") or kv_get_json("scan:last") or {}
+                uni = sorted(mp[k] for k in {_earn_norm(x) for x in (sc.get("name_map") or {})} if k in mp)
+            except Exception:
+                uni = []
+            thr = uni[int(len(uni) * 0.8)] if len(uni) >= 100 else 5.0
+            out = {"ts": time.time(), "settle": d.isoformat(), "thr": round(thr, 2), "map": mp}
+            try:
+                kv_set_json(key, out)
+            except Exception:
+                pass
+            return out
+        except Exception:
+            continue
+    return c if (c and c.get("map")) else None
+
+
+def _short_flags(tickers, fetch=True):
+    """{ticker: {dtc, thr, settle}} jen pro akcie v horní pětině short interestu (varování)."""
+    si = _si_latest(fetch=fetch)
+    if not si:
+        return {}
+    out = {}
+    for t in tickers:
+        v = si["map"].get(_earn_norm(t))
+        if v is not None and v >= si["thr"]:
+            out[t] = {"dtc": round(v, 1), "thr": si["thr"], "settle": si["settle"]}
+    return out
+
+
 @app.route("/api/plan", methods=["POST"])
 def api_plan():
     """Celý dlouhodobý plán z pozic: ocenění, cíl, stavy pozic, rentgen a
@@ -5324,6 +5598,15 @@ def api_plan():
         out = {"ok": True, "rows": rows, "total_czk": round(total), "missing": missing, "plan": plan,
                "xray": _xray(rows, total, scan), "scan_date": scan.get("date"), "picks": picks, "evaluation": ev,
                "feature_qty": FEATURE_QTY}
+        try:
+            out["earnings"] = _earnings_for([r["ticker"] for r in rows] + [p_["ticker"] for p_ in picks["basket"]])
+        except Exception:
+            out["earnings"] = {}
+        try:
+            out["short"] = _short_flags([r["ticker"] for r in rows if r.get("kind") != "core" and not _is_fund(r)]
+                                        + [p_["ticker"] for p_ in picks["basket"]])
+        except Exception:
+            out["short"] = {}
         if not FEATURE_QTY:
             out["sectors"] = _sector_mix(rows, scan)
             for k, fn in (("basket_perf", lambda: _basket_perf(picks["n"])),
@@ -8973,6 +9256,20 @@ def _portfolio_email_html(email, mark_sent=False):
             chg_html = ("<div style='padding:10px 14px;border-radius:12px;background:rgba(255,179,71,0.08);border:1px solid rgba(255,179,71,0.3);"
                         "margin:0 0 10px'><div style='font-size:13px;font-weight:700;margin-bottom:2px'>Co se změnilo od včera</div>"
                         f"{chg_html}</div>")
+        earn_html = ""
+        try:
+            er = {t: e for t, e in _earnings_for([r["ticker"] for r in rows if r.get("kind") != "core"]).items() if e["days"] <= 7}
+            if er:
+                dn = ["po", "út", "st", "čt", "pá", "so", "ne"]
+                parts = []
+                for t, e in sorted(er.items(), key=lambda x: (x[1]["date"], x[0])):
+                    d_ = datetime.strptime(e["date"], "%Y-%m-%d")
+                    parts.append(f"<b>{_html_escape(t.split('.')[0])}</b> ({dn[d_.weekday()]} {d_.day}. {d_.month}."
+                                 f"{' před otevřením' if e.get('when') == 'pre' else (' po zavření' if e.get('when') == 'post' else '')})")
+                earn_html = ("<div style='font-size:13px;margin-top:8px'>📅 Tento týden hlásí výsledky: " + ", ".join(parts[:8]) +
+                             "<span style='color:#9ba1b0'> – kolem výsledků akcie víc kolísá, hodnocení to nemění.</span></div>")
+        except Exception:
+            pass
         perf_html = ""
         if perf and perf.get("n"):
             pc = "#00C853" if perf["ret"] >= perf.get("spy", 0) else "#FFB347"
@@ -8983,7 +9280,7 @@ def _portfolio_email_html(email, mark_sent=False):
                          f"({'podle velikostí' if perf.get('weighted') else 'rovnoměrně'})</div>")
         html = ("<h3 style='font-size:16px;margin:22px 0 8px'>🧭 Tvoje akcie</h3>" + chg_html +
                 "<div style='background:#12141c;border:1px solid #23262f;border-radius:12px;padding:12px 16px;margin-bottom:10px'>"
-                f"{head}{body}{perf_html}{foot}</div>")
+                f"{head}{body}{perf_html}{earn_html}{foot}</div>")
     if total and nq:
         html += (f"<div style='color:#9ba1b0;font-size:12px;margin:0 0 8px'>U {len(nq)} {'akcie' if len(nq) == 1 else 'akcií'} neznám počet kusů "
                  f"({_html_escape(', '.join(r['ticker'].split('.')[0] for r in nq[:6]))}), proto nejsou v hodnotě.</div>")
@@ -9767,6 +10064,19 @@ def _daily_auto(budget_s=None):
         finally:
             ex.shutdown(wait=False)
         st["verdicts_done"] = not [1 for t, _sr in todo if t not in st["tried"]]
+        if not st.get("si_done"):
+            try:
+                si = _si_latest(budget_s=min(10.0, max(3.0, budget - (time.time() - t0) - 4)))
+                st["si_settle"] = (si or {}).get("settle")
+            except Exception:
+                pass
+            st["si_done"] = True
+        if not st.get("earn_done"):
+            try:
+                st["earn_n"] = len(_earn_cal(budget_s=min(8.0, max(3.0, budget - (time.time() - t0) - 4))))
+            except Exception:
+                st["earn_n"] = 0
+            st["earn_done"] = True
         # Evropské velké firmy (žebříček podle momenta) – resumovatelné
         left = budget - (time.time() - t0)
         if st["verdicts_done"] and not st.get("eu_done") and left > 6:
