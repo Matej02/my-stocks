@@ -4786,6 +4786,186 @@ def _allocate_basket(amount, rows, picks):
             "stocks_full": False, "legacy_pct": 0}
 
 
+def _deposit_names(amount, rows, picks, ev, mode="app", n=None, pick=None, amounts=None):
+    """Kam s penězi v režimu „jen názvy akcií“ (počty kusů neznáme). Režimy:
+    app    – doporučení aplikace: dokup silných akcií, které už máš, + nové tipy z koše (podle velikosti portfolia),
+    mine   – jen dokup silných akcií, které už držíš,
+    new    – jen nové tipy z koše,
+    custom – vybereš si sám (`pick` = tickery, `amounts` = volitelné vlastní částky).
+    Nic se neprodává, žádné ETF. Pod MIN_ORDER_CZK se nenakupuje. Vrací i `candidates` pro vlastní výběr."""
+    amount = float(amount)
+    mode = mode if mode in ("app", "mine", "new", "custom") else "app"
+    held = {_spx_key(r["ticker"]): r for r in rows if r.get("kind") != "core" and not _is_fund(r)}
+    evby = {_spx_key(i["ticker"]): i for i in ((ev or {}).get("items") or [])}
+    basket_new = [p for p in picks["basket"] if _spx_key(p["ticker"]) not in held]
+
+    def line(ticker, name, action, amt, price, cur, why, sector=None, rank=None, level=None):
+        fx = _fx_czk(cur) if (price and cur) else None
+        px_czk = price * fx if (price and fx) else None
+        return {"ticker": ticker, "name": name, "action": action, "amount_czk": int(round(amt)),
+                "shares": round(amt / px_czk, 4) if px_czk else None, "price": price, "currency": cur,
+                "why": why, "sector": sector, "vm_rank": rank, "level": level}
+
+    def mine_pool():
+        out = []
+        for k, r in held.items():
+            e = evby.get(k) or {}
+            if e.get("level") == "strong" and r.get("price") and not r.get("no_price"):
+                out.append((r, e))
+        out.sort(key=lambda x: (x[0].get("size") == "L", x[1].get("rank") or 9999))       # velké pozice až nakonec
+        return out
+
+    def mine_line(r, e, amt):
+        why = (f"Držíš ji a patří mezi nejsilnější (#{e.get('rank')} z {e.get('of')} v S&P 500) – dokoupení dává smysl."
+               if e.get("rank") else "Držíš ji a hodnocení je Silná – dokoupení dává smysl.")
+        if r.get("size") == "L":
+            why += " Pozor: u ní máš nastavenou velkou pozici."
+        return line(r["ticker"], r.get("name") or r["ticker"], "topup", amt, r.get("price"), r.get("currency"), why,
+                    r.get("sector"), e.get("rank"), "strong")
+
+    def new_line(p, amt):
+        return line(p["ticker"], p["name"], "new", amt, p.get("price"), p.get("currency"), "Nový tip: " + p["why"],
+                    p.get("sector"), p.get("vm_rank") or p.get("mom_rank"))
+
+    def pick_sector_capped(cands, k, used=None, cap=2):
+        """Prvních k tipů v pořadí koše, z jednoho odvětví nejvýš `cap` (včetně už vybraných)."""
+        used = dict(used or {})
+        out = []
+        if k <= 0:
+            return out
+        for p in cands:
+            s = p.get("sector") or "?"
+            if used.get(s, 0) >= cap:
+                continue
+            used[s] = used.get(s, 0) + 1
+            out.append(p)
+            if len(out) >= k:
+                break
+        return out
+
+    advice, lines = [], []
+    mp = mine_pool()
+    n_held = len(held)
+
+    if mode == "custom":
+        sel = []
+        for t in (pick or []):
+            k = _spx_key(t)
+            if k in held:
+                r = held[k]; e = evby.get(k) or {}
+                if e.get("level") == "weak":
+                    sel.append(("w", r, e))
+                else:
+                    sel.append(("m", r, e))
+            else:
+                p = next((x for x in basket_new if _spx_key(x["ticker"]) == k), None)
+                if p:
+                    sel.append(("n", p, None))
+        if sel:
+            am = amounts or {}
+            given = {t: _num(am.get(t)) for t in [x[1]["ticker"] for x in sel] if _num(am.get(t))}
+            free_n = len([1 for x in sel if x[1]["ticker"] not in given])
+            eq = max(0.0, amount - sum(given.values())) / free_n if free_n else 0.0     # zbytek po vlastních částkách
+            for kind, obj, e in sel:
+                amt = given.get(obj["ticker"]) or eq
+                if kind == "n":
+                    lines.append(new_line(obj, amt))
+                else:
+                    l = mine_line(obj, e or {}, amt)
+                    if kind == "w":
+                        l["why"] = "Držíš ji, ale hodnocení je Slabší – appka dokupování nedoporučuje (tvoje volba)."
+                        l["level"] = "weak"
+                    elif (e or {}).get("level") != "strong":
+                        l["why"] = "Držíš ji (hodnocení: " + str((e or {}).get("verdict") or "bez hodnocení") + ")."
+                        l["level"] = (e or {}).get("level")
+                    lines.append(l)
+            small = [l for l in lines if l["amount_czk"] < MIN_ORDER_CZK]
+            if small:
+                advice.append(f"U {', '.join(mpb(l['ticker']) for l in small)} je částka pod {MIN_ORDER_CZK} Kč – nákup je nepraktický, "
+                              "zvaž méně akcií.")
+            tot = sum(l["amount_czk"] for l in lines)
+            if abs(tot - amount) > 1:
+                advice.append(f"Částky dávají {_kc(tot)}, zadáno máš {_kc(amount)}.")
+        else:
+            advice.append("Zaškrtni akcie, do kterých chceš investovat. Částka se rozdělí rovnoměrně, každou ji můžeš upravit.")
+    else:
+        T = max(1, min(6, int(amount // MIN_ORDER_CZK)))              # cílový počet pozic: ať žádná není pod minimem
+        if mode == "app":
+            if not mp:
+                k_mine, k_new = 0, T
+                advice.append("Žádná z tvých akcií teď nemá hodnocení Silná – dokupovat nemám co, peníze jdou do nových tipů z koše.")
+            else:
+                share = 0.25 if n_held < 6 else (0.5 if n_held < 15 else 0.6)
+                k_mine = min(len(mp), max(1, round(T * share)))
+                k_new = max(0, T - k_mine)
+                if k_new > len(basket_new):
+                    k_new = len(basket_new); k_mine = min(len(mp), T - k_new)
+                advice.append(
+                    f"Ze svých {n_held} {_cz_akcie(n_held)} hodnotí aplikace jako silné {len(mp)}. "
+                    + ("S tak malým portfoliem je důležitější přidat nové firmy, proto víc peněz jde do nových tipů. " if n_held < 6 else
+                       "S takovým portfoliem nové jméno už málo rozšíří rozložení, proto jde víc peněz do dokupu tvých nejsilnějších. " if n_held >= 15 else
+                       "Rozdělil jsem to zhruba půl na půl: dokup tvých nejsilnějších a nové tipy z koše. ")
+                    + "Obojí vybírá stejné pořadí S&P 500; není to předpověď, jen pravidlo.")
+            mine_sel = mp[:k_mine]
+            used = {}
+            for r, e in mine_sel:
+                used[r.get("sector") or "?"] = used.get(r.get("sector") or "?", 0) + 1
+            new_sel = pick_sector_capped(basket_new, k_new, used)
+            if len(new_sel) < k_new and mp and len(mine_sel) < len(mp):
+                extra = min(len(mp) - len(mine_sel), k_new - len(new_sel))
+                mine_sel = mp[:len(mine_sel) + extra]
+            advice.append("Z jednoho odvětví vybírám nejvýš 2 akcie, ať to není sázka na jedno téma.")
+        elif mode == "mine":
+            k = max(1, min(int(n or 5), len(mp), T)) if mp else 0
+            mine_sel, new_sel = mp[:k], []
+            if mp and k < int(n or 5):
+                advice.append(f"Silné jsou jen {len(mp)} {_cz_akcie(len(mp))} z tvých, proto {k} {'řádek' if k == 1 else 'řádky' if k < 5 else 'řádků'}.")
+            if mp and k == 1 and amount >= 3 * MIN_ORDER_CZK:
+                advice.append("Všechny peníze do jedné akcie je silná koncentrace – zvaž „Doporučení aplikace“, které je rozloží.")
+            if not mp:
+                advice.append("Žádná z tvých akcií teď nemá hodnocení Silná – podle aplikace není co dokupovat. "
+                              "Zkus „Jen nové tipy“ nebo „Vyberu si sám“.")
+        else:  # new
+            k = max(1, min(int(n or 5), len(basket_new), T)) if basket_new else 0
+            mine_sel, new_sel = [], basket_new[:k]
+            if not basket_new:
+                advice.append("Všechny tipy z koše už máš – nic nového k otevření není.")
+        cnt = len(mine_sel) + len(new_sel)
+        if cnt:
+            eq = amount / cnt
+            for r, e in mine_sel:
+                lines.append(mine_line(r, e, eq))
+            for p in new_sel:
+                lines.append(new_line(p, eq))
+        if mode != "custom" and amount < MIN_ORDER_CZK * 2:
+            advice.append(f"Je to malá částka (pod {MIN_ORDER_CZK * 2} Kč) – raději jedna až dvě akcie.")
+
+    diff = int(round(amount)) - sum(l["amount_czk"] for l in lines)
+    if lines and diff and mode != "custom":
+        lines[0]["amount_czk"] += diff
+        if lines[0].get("shares") and lines[0].get("price"):
+            lines[0]["shares"] = None
+    cands = []
+    for r, e in ((r, evby.get(k) or {}) for k, r in held.items()):
+        cands.append({"ticker": r["ticker"], "name": r.get("name") or r["ticker"], "group": "mine", "level": e.get("level"),
+                      "rank": e.get("rank"), "size": r.get("size")})
+    for p in basket_new:
+        cands.append({"ticker": p["ticker"], "name": p["name"], "group": "new", "level": None, "rank": p.get("vm_rank") or p.get("mom_rank")})
+    return {"amount_czk": int(round(amount)), "lines": lines, "mode": "basket", "strategy": mode, "min_order": MIN_ORDER_CZK,
+            "deferred": [], "advice": advice, "candidates": cands,
+            "split": {"core": 0, "topup": sum(l["amount_czk"] for l in lines if l["action"] == "topup"),
+                      "new": sum(l["amount_czk"] for l in lines if l["action"] == "new")},
+            "stocks_full": False, "legacy_pct": 0}
+
+
+def mpb(t):
+    return str(t).split(".")[0]
+
+
+def _cz_akcie(n):
+    return "akcie" if n == 1 else ("akcií" if n == 0 or n >= 5 else "akcie")
+
+
 def _build_plan(rows, risk, scan):
     """Cílové portfolio podle ověřených pravidel (sloty, limit sektoru, vítěze
     nechat běžet). Každé pozici doplní stav a případnou akci (ořez/prodej)."""
@@ -5814,8 +5994,18 @@ def api_plan():
                     out[k] = None
         amount = _num(body.get("amount_czk"))
         if amount and 0 < amount < 1e10:
-            out["deposit"] = (_allocate_basket(amount, rows, picks) if risk == "maximum"
-                              else _allocate(amount, rows, total, plan))
+            if not FEATURE_QTY:
+                try:
+                    pk = body.get("deposit_pick")
+                    out["deposit"] = _deposit_names(amount, rows, picks, ev, str(body.get("deposit_mode") or "app"),
+                                                    int(_num(body.get("deposit_n")) or 0) or None,
+                                                    [str(x) for x in pk][:40] if isinstance(pk, list) else None,
+                                                    body.get("deposit_amounts") if isinstance(body.get("deposit_amounts"), dict) else None)
+                except Exception:
+                    out["deposit"] = _allocate_basket(amount, rows, picks)        # pojistka: původní rovnoměrné rozdělení
+            else:
+                out["deposit"] = (_allocate_basket(amount, rows, picks) if risk == "maximum"
+                                  else _allocate(amount, rows, total, plan))
             if user:       # ranní e-mail pak ukáže rozdělení pravidelného vkladu
                 try:
                     rec = kv_get_json(f"holdings:{user}") or {}
@@ -9577,8 +9767,12 @@ def _portfolio_email_html(email, mark_sent=False):
     due = today.day <= 10 and hrec.get("deposit_month") != month
     if due:
         if amount and amount > 0:
-            dep = (_allocate_basket(float(amount), rows, picks) if (picks and (names_only or risk == "maximum"))
-                   else _allocate(float(amount), rows, total, plan))
+            try:
+                dep = (_deposit_names(float(amount), rows, picks, ev, "app") if (picks and ev and names_only)
+                       else _allocate_basket(float(amount), rows, picks) if (picks and (names_only or risk == "maximum"))
+                       else _allocate(float(amount), rows, total, plan))
+            except Exception:
+                dep = (_allocate_basket(float(amount), rows, picks) if picks else _allocate(float(amount), rows, total, plan))
             lines = "".join(
                 f"<div style='padding:4px 0;font-size:14px'><b>{_html_escape(l['ticker'].split('.')[0])}</b> "
                 f"<span style='color:#9ba1b0;font-size:12px'>{_html_escape((l.get('name') or '')[:34])}</span>"
