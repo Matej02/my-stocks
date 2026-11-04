@@ -4644,6 +4644,44 @@ def _extra_evals(rows, scan, eu=None, budget_s=14.0):
     return out
 
 
+# Co s akcií DNES (hodnocení držené akcie). Čtyři věci, na kterých záleží, bez ohledu na to, kolik kusů držíš:
+#  buy       podhodnocená → dokup (levná podle zisků a cash flow A zároveň roste; to je ověřená část modelu)
+#  risk      vážný problém (bankrot, hrozba vyřazení z burzy, neplatné výkazy – oznámila to firma sama v SEC 8-K) → zvaž prodej
+#  stretched natažená (P/E nad 40 nebo ztráta a zároveň +100 % za rok): historicky se NEPOTVRDILO, že pak v průměru zaostává
+#            (2015–22 +2,8 b., 2023–25 +24,5 b. proti průměru), ale propad o víc než 30 % za rok je 2–3× častější
+#            (20 % / 11 % případů proti 6 % u všech akcií) → jen upozornění na výkyvy, ne signál k prodeji
+#  nobuy     slabší → nedokupuj; hold = drž
+# „Prodej na stropu" podle ceny model NEUMÍ (test 2015–2025) – proto ho neslibuje.
+STRETCHED_NOTE = ("Po takovém růstu se akcie za rok propadla o víc než 30 % v 11–20 % případů (běžně v ~6 %), ale častěji "
+                  "i vyrostla o víc než 50 %. Prodávat jen podle ceny nemá v datech oporu – nedokupuj hodně a výběr zisku řeš podle toho, kolik výkyvů snesou tvoje nervy.")
+ACTION_LABEL = {"buy": "Podhodnocená – dokup", "hold": "Drž", "nobuy": "Nedokupuj", "stretched": "Natažená – větší výkyvy",
+                "risk": "Pozor – vážný problém", "na": ""}
+
+
+def _holding_action(e, r, scan):
+    if r.get("kind") == "core" or e.get("level") == "na":
+        return "na", ""
+    flag = r.get("flag") or {}
+    if flag.get("pause"):
+        reason = ((flag.get("reasons") or [{}])[0]).get("reason") or "vážná zpráva od firmy"
+        return "risk", f"{reason}. Zvaž prodej, nebo aspoň nedokupuj a sleduj další zprávy."
+    mom, pe = e.get("mom_pct"), e.get("pe")
+    if mom is not None and mom >= 100 and (pe is None or pe <= 0 or pe >= 40):
+        return "stretched", STRETCHED_NOTE
+    rk = (scan.get("rank_map") or {})
+    vm = rk.get(_spx_key(r["ticker"]))
+    if e.get("level") == "strong" and vm is not None and vm <= max(60, int(0.15 * len(rk))):
+        bits = [f"#{vm} z {len(rk)} podle hodnoty+momenta", "levná podle zisků a cash flow a zároveň roste"]
+        if pe and pe > 0:
+            bits.append(f"P/E {int(round(pe))}")
+        if mom is not None:
+            bits.append(f"za rok {'+' if mom >= 0 else ''}{int(round(mom))} %")
+        return "buy", " · ".join(bits)
+    if e.get("level") == "weak":
+        return "nobuy", "Horší polovina podle hodnoty+momenta – nedokupuj, ale neprodávej jen kvůli tomu (skóre prodej spolehlivě nepozná)."
+    return "hold", ""
+
+
 def _evaluate_holdings(rows, scan, basket_set, extra=None, eu=None):
     """Hodnocení každé držené akcie: pořadí mezi S&P 500, momentum, P/E, verdikt (a váha, když jsou známé kusy).
     Titul mimo S&P 500 dostane orientační hodnocení z modelu hloubkové analýzy (`extra`)."""
@@ -4712,6 +4750,8 @@ def _evaluate_holdings(rows, scan, basket_set, extra=None, eu=None):
         else:
             e["level"], e["verdict"] = "na", "Zatím bez hodnocení"
             e["why"] = "Pro tenhle titul teď nemám dost dat (ceny nebo fundamenty se nenačetly) – zkus to za chvíli."
+        e["action"], e["action_why"] = _holding_action(e, r, scan)
+        e["action_label"] = ACTION_LABEL.get(e["action"], "")
         if r.get("weight") and r["weight"] >= HOLD_CONC_PCT and r["kind"] != "core":
             e["warn"].append(f"Tvoří {_pc(r['weight'], 0)} % portfolia – velké riziko jedné firmy.")
         elif sized and aw.get(r["ticker"], 0) >= CONC_WARN and r["kind"] != "core" and len(rows) >= 3:
@@ -4730,7 +4770,10 @@ def _evaluate_holdings(rows, scan, basket_set, extra=None, eu=None):
         headline = f"Portfolio je v dobré kondici: {strong} z {ranked_n} hodnocených akcií patří k nejsilnějším."
     else:
         headline = f"Smíšené: {strong} silných, {counts['hold']} na držení, {weak} slabších."
-    return {"items": out, "counts": counts, "headline": headline, "n": len(out)}
+    acts = {}
+    for e in out:
+        acts[e["action"]] = acts.get(e["action"], 0) + 1
+    return {"items": out, "counts": counts, "headline": headline, "n": len(out), "actions": acts}
 
 
 def _allocate_basket(amount, rows, picks):
@@ -4784,6 +4827,187 @@ def _allocate_basket(amount, rows, picks):
             "split": {"core": 0, "topup": sum(o["amount_czk"] for o in out if o["action"] == "topup"),
                       "new": sum(o["amount_czk"] for o in out if o["action"] == "new")},
             "stocks_full": False, "legacy_pct": 0}
+
+
+def _deposit_names(amount, rows, picks, ev, mode="app", n=None, pick=None, amounts=None):
+    """Kam s penězi v režimu „jen názvy akcií“ (počty kusů neznáme). Režimy:
+    app    – doporučení aplikace: dokup silných akcií, které už máš, + nové tipy z koše (podle velikosti portfolia),
+    mine   – jen dokup silných akcií, které už držíš,
+    new    – jen nové tipy z koše,
+    custom – vybereš si sám (`pick` = tickery, `amounts` = volitelné vlastní částky).
+    Nic se neprodává, žádné ETF. Pod MIN_ORDER_CZK se nenakupuje. Vrací i `candidates` pro vlastní výběr."""
+    amount = float(amount)
+    mode = mode if mode in ("app", "mine", "new", "custom") else "app"
+    held = {_spx_key(r["ticker"]): r for r in rows if r.get("kind") != "core" and not _is_fund(r)}
+    evby = {_spx_key(i["ticker"]): i for i in ((ev or {}).get("items") or [])}
+    basket_new = [p for p in picks["basket"] if _spx_key(p["ticker"]) not in held]
+
+    def line(ticker, name, action, amt, price, cur, why, sector=None, rank=None, level=None):
+        fx = _fx_czk(cur) if (price and cur) else None
+        px_czk = price * fx if (price and fx) else None
+        return {"ticker": ticker, "name": name, "action": action, "amount_czk": int(round(amt)),
+                "shares": round(amt / px_czk, 4) if px_czk else None, "price": price, "currency": cur,
+                "why": why, "sector": sector, "vm_rank": rank, "level": level}
+
+    def mine_pool():
+        out = []
+        for k, r in held.items():
+            e = evby.get(k) or {}
+            if e.get("level") == "strong" and e.get("action") not in ("risk", "stretched") and r.get("price") and not r.get("no_price"):
+                out.append((r, e))
+        out.sort(key=lambda x: (x[1].get("action") != "buy", x[0].get("size") == "L", x[1].get("rank") or 9999))   # podhodnocené první, velké pozice nakonec
+        return out
+
+    def mine_line(r, e, amt):
+        why = (f"Podhodnocená: {e['action_why']} – dokoupení dává smysl." if e.get("action") == "buy" and e.get("action_why") else
+               f"Držíš ji a patří mezi nejsilnější (#{e.get('rank')} z {e.get('of')} v S&P 500) – dokoupení dává smysl."
+               if e.get("rank") else "Držíš ji a hodnocení je Silná – dokoupení dává smysl.")
+        if r.get("size") == "L":
+            why += " Pozor: u ní máš nastavenou velkou pozici."
+        return line(r["ticker"], r.get("name") or r["ticker"], "topup", amt, r.get("price"), r.get("currency"), why,
+                    r.get("sector"), e.get("rank"), "strong")
+
+    def new_line(p, amt):
+        return line(p["ticker"], p["name"], "new", amt, p.get("price"), p.get("currency"), "Nový tip: " + p["why"],
+                    p.get("sector"), p.get("vm_rank") or p.get("mom_rank"))
+
+    def pick_sector_capped(cands, k, used=None, cap=2):
+        """Prvních k tipů v pořadí koše, z jednoho odvětví nejvýš `cap` (včetně už vybraných)."""
+        used = dict(used or {})
+        out = []
+        if k <= 0:
+            return out
+        for p in cands:
+            s = p.get("sector") or "?"
+            if used.get(s, 0) >= cap:
+                continue
+            used[s] = used.get(s, 0) + 1
+            out.append(p)
+            if len(out) >= k:
+                break
+        return out
+
+    advice, lines = [], []
+    mp = mine_pool()
+    n_held = len(held)
+
+    if mode == "custom":
+        sel = []
+        for t in (pick or []):
+            k = _spx_key(t)
+            if k in held:
+                r = held[k]; e = evby.get(k) or {}
+                if e.get("level") == "weak":
+                    sel.append(("w", r, e))
+                else:
+                    sel.append(("m", r, e))
+            else:
+                p = next((x for x in basket_new if _spx_key(x["ticker"]) == k), None)
+                if p:
+                    sel.append(("n", p, None))
+        if sel:
+            am = amounts or {}
+            given = {t: _num(am.get(t)) for t in [x[1]["ticker"] for x in sel] if _num(am.get(t))}
+            free_n = len([1 for x in sel if x[1]["ticker"] not in given])
+            eq = max(0.0, amount - sum(given.values())) / free_n if free_n else 0.0     # zbytek po vlastních částkách
+            for kind, obj, e in sel:
+                amt = given.get(obj["ticker"]) or eq
+                if kind == "n":
+                    lines.append(new_line(obj, amt))
+                else:
+                    l = mine_line(obj, e or {}, amt)
+                    if kind == "w":
+                        l["why"] = "Držíš ji, ale hodnocení je Slabší – appka dokupování nedoporučuje (tvoje volba)."
+                        l["level"] = "weak"
+                    elif (e or {}).get("level") != "strong":
+                        l["why"] = "Držíš ji (hodnocení: " + str((e or {}).get("verdict") or "bez hodnocení") + ")."
+                        l["level"] = (e or {}).get("level")
+                    lines.append(l)
+            small = [l for l in lines if l["amount_czk"] < MIN_ORDER_CZK]
+            if small:
+                advice.append(f"U {', '.join(mpb(l['ticker']) for l in small)} je částka pod {MIN_ORDER_CZK} Kč – nákup je nepraktický, "
+                              "zvaž méně akcií.")
+            tot = sum(l["amount_czk"] for l in lines)
+            if abs(tot - amount) > 1:
+                advice.append(f"Částky dávají {_kc(tot)}, zadáno máš {_kc(amount)}.")
+        else:
+            advice.append("Zaškrtni akcie, do kterých chceš investovat. Částka se rozdělí rovnoměrně, každou ji můžeš upravit.")
+    else:
+        T = max(1, min(6, int(amount // MIN_ORDER_CZK)))              # cílový počet pozic: ať žádná není pod minimem
+        if mode == "app":
+            if not mp:
+                k_mine, k_new = 0, T
+                advice.append("Žádná z tvých akcií teď nemá hodnocení Silná – dokupovat nemám co, peníze jdou do nových tipů z koše.")
+            else:
+                share = 0.25 if n_held < 6 else (0.5 if n_held < 15 else 0.6)
+                k_mine = min(len(mp), max(1, round(T * share)))
+                k_new = max(0, T - k_mine)
+                if k_new > len(basket_new):
+                    k_new = len(basket_new); k_mine = min(len(mp), T - k_new)
+                advice.append(
+                    f"Ze svých {n_held} {_cz_akcie(n_held)} hodnotí aplikace jako silné {len(mp)}. "
+                    + ("S tak malým portfoliem je důležitější přidat nové firmy, proto víc peněz jde do nových tipů. " if n_held < 6 else
+                       "S takovým portfoliem nové jméno už málo rozšíří rozložení, proto jde víc peněz do dokupu tvých nejsilnějších. " if n_held >= 15 else
+                       "Rozdělil jsem to zhruba půl na půl: dokup tvých nejsilnějších a nové tipy z koše. ")
+                    + "Obojí vybírá stejné pořadí S&P 500; není to předpověď, jen pravidlo.")
+            mine_sel = mp[:k_mine]
+            used = {}
+            for r, e in mine_sel:
+                used[r.get("sector") or "?"] = used.get(r.get("sector") or "?", 0) + 1
+            new_sel = pick_sector_capped(basket_new, k_new, used)
+            if len(new_sel) < k_new and mp and len(mine_sel) < len(mp):
+                extra = min(len(mp) - len(mine_sel), k_new - len(new_sel))
+                mine_sel = mp[:len(mine_sel) + extra]
+            advice.append("Z jednoho odvětví vybírám nejvýš 2 akcie, ať to není sázka na jedno téma.")
+        elif mode == "mine":
+            k = max(1, min(int(n or 5), len(mp), T)) if mp else 0
+            mine_sel, new_sel = mp[:k], []
+            if mp and k < int(n or 5):
+                advice.append(f"Silné jsou jen {len(mp)} {_cz_akcie(len(mp))} z tvých, proto {k} {'řádek' if k == 1 else 'řádky' if k < 5 else 'řádků'}.")
+            if mp and k == 1 and amount >= 3 * MIN_ORDER_CZK:
+                advice.append("Všechny peníze do jedné akcie je silná koncentrace – zvaž „Doporučení aplikace“, které je rozloží.")
+            if not mp:
+                advice.append("Žádná z tvých akcií teď nemá hodnocení Silná – podle aplikace není co dokupovat. "
+                              "Zkus „Jen nové tipy“ nebo „Vyberu si sám“.")
+        else:  # new
+            k = max(1, min(int(n or 5), len(basket_new), T)) if basket_new else 0
+            mine_sel, new_sel = [], basket_new[:k]
+            if not basket_new:
+                advice.append("Všechny tipy z koše už máš – nic nového k otevření není.")
+        cnt = len(mine_sel) + len(new_sel)
+        if cnt:
+            eq = amount / cnt
+            for r, e in mine_sel:
+                lines.append(mine_line(r, e, eq))
+            for p in new_sel:
+                lines.append(new_line(p, eq))
+        if mode != "custom" and amount < MIN_ORDER_CZK * 2:
+            advice.append(f"Je to malá částka (pod {MIN_ORDER_CZK * 2} Kč) – raději jedna až dvě akcie.")
+
+    diff = int(round(amount)) - sum(l["amount_czk"] for l in lines)
+    if lines and diff and mode != "custom":
+        lines[0]["amount_czk"] += diff
+        if lines[0].get("shares") and lines[0].get("price"):
+            lines[0]["shares"] = None
+    cands = []
+    for r, e in ((r, evby.get(k) or {}) for k, r in held.items()):
+        cands.append({"ticker": r["ticker"], "name": r.get("name") or r["ticker"], "group": "mine", "level": e.get("level"),
+                      "rank": e.get("rank"), "size": r.get("size"), "action": e.get("action"), "action_label": e.get("action_label")})
+    for p in basket_new:
+        cands.append({"ticker": p["ticker"], "name": p["name"], "group": "new", "level": None, "rank": p.get("vm_rank") or p.get("mom_rank")})
+    return {"amount_czk": int(round(amount)), "lines": lines, "mode": "basket", "strategy": mode, "min_order": MIN_ORDER_CZK,
+            "deferred": [], "advice": advice, "candidates": cands,
+            "split": {"core": 0, "topup": sum(l["amount_czk"] for l in lines if l["action"] == "topup"),
+                      "new": sum(l["amount_czk"] for l in lines if l["action"] == "new")},
+            "stocks_full": False, "legacy_pct": 0}
+
+
+def mpb(t):
+    return str(t).split(".")[0]
+
+
+def _cz_akcie(n):
+    return "akcie" if n == 1 else ("akcií" if n == 0 or n >= 5 else "akcie")
 
 
 def _build_plan(rows, risk, scan):
@@ -5814,8 +6038,18 @@ def api_plan():
                     out[k] = None
         amount = _num(body.get("amount_czk"))
         if amount and 0 < amount < 1e10:
-            out["deposit"] = (_allocate_basket(amount, rows, picks) if risk == "maximum"
-                              else _allocate(amount, rows, total, plan))
+            if not FEATURE_QTY:
+                try:
+                    pk = body.get("deposit_pick")
+                    out["deposit"] = _deposit_names(amount, rows, picks, ev, str(body.get("deposit_mode") or "app"),
+                                                    int(_num(body.get("deposit_n")) or 0) or None,
+                                                    [str(x) for x in pk][:40] if isinstance(pk, list) else None,
+                                                    body.get("deposit_amounts") if isinstance(body.get("deposit_amounts"), dict) else None)
+                except Exception:
+                    out["deposit"] = _allocate_basket(amount, rows, picks)        # pojistka: původní rovnoměrné rozdělení
+            else:
+                out["deposit"] = (_allocate_basket(amount, rows, picks) if risk == "maximum"
+                                  else _allocate(amount, rows, total, plan))
             if user:       # ranní e-mail pak ukáže rozdělení pravidelného vkladu
                 try:
                     rec = kv_get_json(f"holdings:{user}") or {}
@@ -9245,6 +9479,7 @@ def _todays_action(email, top_signals, risk=None):
     if alloc.get("cash_pct"):
         lead = (f"Trh je rozkolísaný (volatilita {alloc.get('spy_vol')} %) – drž {alloc['exposure_pct']} % "
                 f"v akciích a {alloc['cash_pct']:.0f} % v hotovosti. ")
+    cap = (lambda t: t[:1].upper() + t[1:]) if lead else (lambda t: t)
     if act:
         parts = []
         for i in act[:3]:
@@ -9256,18 +9491,32 @@ def _todays_action(email, top_signals, risk=None):
                 parts.append(f"přehodnoť {i['ticker']} (vypršel horizont)")
         return "Dnes: " + lead + cap(", ".join(parts)) + "."
     free = alloc["slots_max"] - alloc["slots_used"]
-    # Za „Trh je rozkolísaný… ." pokračuje nová věta → velké písmeno.
-    cap = (lambda t: t[:1].upper() + t[1:]) if lead else (lambda t: t)
     slots = (f"{free} volnou pozici" if free == 1 else f"{free} volné pozice" if 2 <= free <= 4
              else f"{free} volných pozic")
+    if top_signals:
+        smap = ((market_scan(allow_step=False) or {}).get("sector_map") or {})
+        held = {}
+        for i in pos["items"]:
+            if i["status"] == "open":
+                sct = smap.get(i["ticker"]) or "?"
+                held[sct] = held.get(sct, 0) + 1
+        mine = {i["ticker"] for i in pos["items"] if i["status"] == "open"}
+        top_signals = [x for x in top_signals if x["ticker"] not in mine
+                       and held.get(x.get("sector") or "?", 0) < SECTOR_CAP]
+    if free and top_signals:
+        s0 = top_signals[0]
+        vm = f"hodnota+momentum {s0['vm']}/100, " if s0.get("vm") is not None else ""
+        return (f"Dnes: {lead}{cap('máš')} {slots} z {alloc['slots_max']}. Nejsilnější "
+                f"signál je {s0.get('ticker')} ({vm}váha {alloc['per_position_pct']} %). "
+                f"Zbytek drží indexové jádro.")
     if free:
-        try:      # jediný seznam „co koupit“ = koš tipů (ne zvláštní denní signály)
+        try:      # bez signálu: první tip z měsíčního koše
             held_k = {_spx_key(i["ticker"]) for i in pos["items"] if i["status"] == "open"}
             nw = _picks(_ensure_scan_maps(market_scan(allow_step=False) or {}), 10, held_k, {})["new"][:1]
         except Exception:
             nw = []
         if nw:
-            return (f"Dnes: {lead}{cap('máš')} {slots} z {alloc['slots_max']}. První v koši tipů na tento měsíc je "
+            return (f"Dnes: {lead}{cap('žádný')} nový signál. První v koši tipů na tento měsíc je "
                     f"{nw[0]['ticker'].split('.')[0]} (váha {alloc['per_position_pct']} %). Zbytek drží indexové jádro.")
     if free:
         return (f"Dnes: {lead}{cap('žádný')} nový signál. Nech kapitál v indexovém jádru – "
@@ -9562,8 +9811,12 @@ def _portfolio_email_html(email, mark_sent=False):
     due = today.day <= 10 and hrec.get("deposit_month") != month
     if due:
         if amount and amount > 0:
-            dep = (_allocate_basket(float(amount), rows, picks) if (picks and (names_only or risk == "maximum"))
-                   else _allocate(float(amount), rows, total, plan))
+            try:
+                dep = (_deposit_names(float(amount), rows, picks, ev, "app") if (picks and ev and names_only)
+                       else _allocate_basket(float(amount), rows, picks) if (picks and (names_only or risk == "maximum"))
+                       else _allocate(float(amount), rows, total, plan))
+            except Exception:
+                dep = (_allocate_basket(float(amount), rows, picks) if picks else _allocate(float(amount), rows, total, plan))
             lines = "".join(
                 f"<div style='padding:4px 0;font-size:14px'><b>{_html_escape(l['ticker'].split('.')[0])}</b> "
                 f"<span style='color:#9ba1b0;font-size:12px'>{_html_escape((l.get('name') or '')[:34])}</span>"
@@ -9606,7 +9859,202 @@ def _portfolio_email_html(email, mark_sent=False):
     return html, action
 
 
+_MORNING_HEAD = {}          # e-mail → hlavní zpráva dne (jde do předmětu e-mailu)
+_CZ_DAYS = ["pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle"]
+
+
+def _eml_sec(title, inner, tone=None):
+    """Jedna přehledná sekce e-mailu (nadpis + obsah)."""
+    border = {"red": "rgba(255,61,0,0.35)", "green": "rgba(0,200,83,0.30)", "amber": "rgba(255,179,71,0.35)"}.get(tone, "#23262f")
+    bg = {"red": "rgba(255,61,0,0.07)", "green": "rgba(0,200,83,0.06)", "amber": "rgba(255,179,71,0.07)"}.get(tone, "#12141c")
+    return (f"<div style='margin:14px 0;padding:12px 14px;border-radius:12px;background:{bg};border:1px solid {border}'>"
+            f"<div style='font-size:13px;font-weight:700;margin-bottom:6px'>{title}</div>{inner}</div>")
+
+
+def _eml_row(ticker, name, text, color="#E6E8EE", right=""):
+    return (f"<div style='padding:6px 0;border-top:1px solid #23262f;font-size:13px;line-height:1.5'>"
+            f"<b style='color:{color}'>{_html_escape(ticker.split('.')[0])}</b> "
+            f"<span style='color:#9ba1b0'>{_html_escape((name or '')[:30])}</span>"
+            + (f"<span style='float:right;font-weight:700'>{right}</span>" if right else "")
+            + f"<div style='color:#c9ccd6;font-size:12.5px'>{text}</div></div>")
+
+
+def _morning_digest_html(email, top_opps, top_signals, mark_sent=False):
+    """Ranní e-mail pro uživatele s uloženými akcemi: nahoře hlavní zpráva dne, pak jen to, co vyžaduje pozornost
+    (problémy, podhodnocené k dokoupení, výsledky, změny, zprávy), vklad, trh a nové příležitosti. Vše stručně a bez dohledávání.
+    Vrací HTML, nebo None, když uživatel nemá žádné akce (pak platí starší sestavení)."""
+    d = _user_eval_saved(email)
+    if not d:
+        return None
+    rows, ev, picks, scan, hrec = d["rows"], d["ev"], d["picks"], d["scan"], d["hrec"]
+    by = {r["ticker"]: r for r in rows}
+    items = [i for i in ev["items"] if by.get(i["ticker"])]
+    nm = lambda i: (by[i["ticker"]].get("name") or i["ticker"])
+    base = lambda t: t.split(".")[0]
+    risk = [i for i in items if i["action"] == "risk"]
+    buy = sorted([i for i in items if i["action"] == "buy"], key=lambda i: i.get("rank") or 9999)
+    stretched = [i for i in items if i["action"] == "stretched"]
+    # výsledky hospodaření do 7 dnů
+    earn = {}
+    try:
+        earn = {t: e for t, e in _earnings_for([r["ticker"] for r in rows if r.get("kind") != "core" and not _is_fund(r)]).items()
+                if e["days"] <= 7}
+    except Exception:
+        pass
+    # změny hodnocení od včera
+    try:
+        chg = (_eval_changes(email, ev) or {}).get("items") or []
+    except Exception:
+        chg = []
+    # pravidelný vklad (1× měsíčně, do 10. dne)
+    today = datetime.now(timezone.utc)
+    month = today.strftime("%Y-%m")
+    amount = hrec.get("deposit_czk")
+    due = today.day <= 10 and hrec.get("deposit_month") != month
+    dep = None
+    if due and amount and amount > 0:
+        try:
+            dep = _deposit_names(float(amount), rows, picks, ev, "app")
+        except Exception:
+            dep = None
+    # --- hlavní zpráva dne (jde i do předmětu) ---
+    dn = ["po", "út", "st", "čt", "pá", "so", "ne"]
+    soon = sorted(earn.items(), key=lambda x: (x[1]["days"], x[0]))
+    if risk:
+        head = f"🔴 Pozor: {', '.join(base(i['ticker']) for i in risk[:3])} – vážný problém firmy"
+        lead = f"Pozor u {', '.join('<b>' + base(i['ticker']) + '</b>' for i in risk[:3])}: firma oznámila vážný problém. Zvaž prodej, nebo aspoň nedokupuj."
+    elif soon and soon[0][1]["days"] <= 1:
+        t0, e0 = soon[0]
+        head = f"📅 {base(t0)} hlásí výsledky {'dnes' if e0['days'] == 0 else 'zítra'}"
+        lead = f"<b>{base(t0)}</b> hlásí výsledky {'dnes' if e0['days'] == 0 else 'zítra'} – cena může výrazně kolísat."
+    elif dep and dep.get("lines"):
+        head = f"📅 Den vkladu: {_kc(amount)} rozděl do {len(dep['lines'])} akcií"
+        lead = f"Dnes je den pravidelného vkladu – rozdělení <b>{_kc(amount)}</b> máš níž."
+    elif buy:
+        head = f"🟢 {len(buy)} {'podhodnocená' if len(buy) == 1 else 'podhodnocené' if len(buy) < 5 else 'podhodnocených'} z tvých akcií: {', '.join(base(i['ticker']) for i in buy[:3])}"
+        lead = f"Z tvých akcií jsou teď podhodnocené: {', '.join('<b>' + base(i['ticker']) + '</b>' for i in buy[:4])} – tam dává smysl dokupovat."
+    else:
+        head = "✅ Dnes nic dělat nemusíš"
+        lead = "Dnes nemusíš nic dělat – žádná tvá akce nemá problém ani signál k dokoupení."
+    _MORNING_HEAD[email] = head.replace("<b>", "").replace("</b>", "")
+    nm_user = _display_name(email)
+    greet = (f"<div style='font-size:15px;margin:0 0 10px'>Dobré ráno{', ' + _html_escape(_vocative(nm_user)) if nm_user else ''}! "
+             f"<span style='color:#9ba1b0'>{_CZ_DAYS[today.weekday()]} {today.day}. {today.month}.</span></div>")
+    out = greet + (f"<div style='padding:14px 16px;border-radius:12px;background:rgba(255,122,0,0.10);border:1px solid rgba(255,122,0,0.30);"
+                   f"font-size:15px;line-height:1.5;margin-bottom:6px'><b style='color:#F0A030'>Dnes:</b> {lead}</div>")
+    # --- problémy ---
+    if risk:
+        out += _eml_sec("🔴 Pozor – vážný problém", "".join(
+            _eml_row(i["ticker"], nm(i), _html_escape(i["action_why"]), "#FF6B4A") for i in risk), "red")
+    # --- dokoupit ---
+    if buy:
+        rws = "".join(_eml_row(i["ticker"], nm(i), _html_escape(i["action_why"]), "#00C853",
+                               (f"{_kc(next((l['amount_czk'] for l in (dep or {}).get('lines', []) if l['ticker'] == i['ticker']), 0))}"
+                                if dep and any(l['ticker'] == i['ticker'] for l in dep['lines']) else "")) for i in buy[:5])
+        more = f"<div style='color:#9ba1b0;font-size:12px;padding-top:4px'>… a dalších {len(buy) - 5}</div>" if len(buy) > 5 else ""
+        out += _eml_sec("🟢 Podhodnocené z tvých akcií – dá se dokoupit", rws + more +
+                        "<div style='color:#9ba1b0;font-size:11.5px;padding-top:6px'>Levná podle zisků a cash flow a zároveň roste – ověřená část modelu. Není to záruka.</div>", "green")
+    # --- natažené ---
+    if stretched:
+        out += _eml_sec("🟠 Natažené – větší výkyvy (nedokupuj hodně)", "".join(
+            _eml_row(i["ticker"], nm(i), f"P/E {int(round(i['pe']))} · za rok +{int(round(i['mom_pct']))} %" if i.get("pe") and i.get("pe") > 0
+                     else f"bez zisku · za rok +{int(round(i['mom_pct']))} %", "#FFB347") for i in stretched[:3]) +
+            "<div style='color:#9ba1b0;font-size:11.5px;padding-top:6px'>Po takovém růstu se v historii častěji propadly o &gt;30 % (11–20 % vs 6 %), ale v průměru nezaostávaly – prodej jen podle ceny data nepotvrzují.</div>", "amber")
+    # --- výsledky, změny, hýbání, zprávy ---
+    extra = ""
+    if soon:
+        parts = []
+        for t, e in soon[:8]:
+            d_ = datetime.strptime(e["date"], "%Y-%m-%d")
+            parts.append(f"<b>{base(t)}</b> {dn[d_.weekday()]} {d_.day}. {d_.month}.{' před otevřením' if e.get('when') == 'pre' else (' po zavření' if e.get('when') == 'post' else '')}")
+        extra += f"<div style='padding:6px 0;font-size:13px'>📅 <b>Výsledky do týdne:</b> {' · '.join(parts)}</div>"
+    for c in chg[:4]:
+        up = c["dir"] == "up"
+        extra += (f"<div style='padding:6px 0;border-top:1px solid #23262f;font-size:13px'><b style='color:{'#00C853' if up else '#FFB347'}'>"
+                  f"{'▲' if up else '▼'}</b> {_html_escape(c['text'])}</div>")
+    mv = sorted([r for r in rows if r.get("chg") is not None and r.get("kind") != "core"], key=lambda r: -abs(r["chg"]))[:4]
+    mv = [r for r in mv if abs(r["chg"]) >= 3]
+    if mv:
+        extra += ("<div style='padding:6px 0;border-top:1px solid #23262f;font-size:13px'>📈 <b>Dnes se hýbou:</b> " + " · ".join(
+            f"<b>{base(r['ticker'])}</b> <span style='color:{'#00C853' if r['chg'] >= 0 else '#FF3D00'}'>{'+' if r['chg'] >= 0 else '−'}{_pc(abs(r['chg']), 1)} %</span>"
+            for r in mv) + "</div>")
+    try:
+        top = sorted([r for r in rows if r.get("kind") != "core" and not _is_fund(r)], key=lambda r: (r.get("action") != "x", r["ticker"]))
+        pri = [by[i["ticker"]] for i in risk + buy + stretched][:6]
+        pool = (pri + [r for r in top if r not in pri])[:8]
+        mine = _mine_digest([r["ticker"] for r in pool], {r["ticker"]: r.get("name") for r in pool}) if pool else {}
+    except Exception:
+        mine = {}
+    for it in (mine.get("items") or [])[:3]:
+        src = (it.get("sources") or [{}])[0]
+        link = f" <a href='{_html_escape(src.get('link') or '#')}' style='color:#9ba1b0'>({_html_escape(src.get('src') or '')})</a>" if src.get("link") else ""
+        extra += (f"<div style='padding:6px 0;border-top:1px solid #23262f;font-size:13px;line-height:1.5'>"
+                  f"<b style='color:{ {'pozitivní': '#00C853', 'negativní': '#FF3D00'}.get(it['impact'], '#FFB347') }'>●</b> <b>{base(it['ticker'])}</b> – "
+                  f"{_html_escape(it['what'])}{link}</div>")
+    n_hold = len([i for i in items if i["action"] in ("hold", "nobuy")])
+    c = ev["counts"]
+    tail = (f"<div style='padding:8px 0 0;border-top:1px solid #23262f;font-size:12.5px;color:#9ba1b0'>Ostatních {n_hold} akcií: beze změny – nic dělat nemusíš. "
+            f"Celkem {len(items)}: {c.get('strong', 0)} silných, {c.get('hold', 0)} drž, {c.get('weak', 0)} slabších (nedokupuj).</div>")
+    out += _eml_sec("🧭 U tvých akcií dnes", (extra or "<div style='font-size:13px;color:#c9ccd6'>Nic dalšího – žádné výsledky, změny hodnocení ani velké zprávy.</div>") + tail)
+    # --- pravidelný vklad ---
+    if due and amount and amount > 0 and dep and dep.get("lines"):
+        ls = "".join(f"<div style='padding:4px 0;font-size:13.5px'><b>{base(l['ticker'])}</b> "
+                     f"<span style='color:#9ba1b0;font-size:12px'>{_html_escape((l.get('name') or '')[:28])} · {'dokup' if l['action'] == 'topup' else 'nový tip'}</span>"
+                     f"<span style='float:right'><b>{_kc(l['amount_czk'])}</b></span></div>" for l in dep["lines"][:8])
+        out += _eml_sec(f"📅 Pravidelný vklad {_kc(amount)} – kam s ním", ls +
+                        (f"<div style='color:#9ba1b0;font-size:12px;padding-top:6px'>{_html_escape(' '.join(dep.get('advice') or [])[:300])}</div>" if dep.get("advice") else "") +
+                        "<div style='color:#9ba1b0;font-size:11.5px;padding-top:4px'>V appce (Moje portfolio → Kam s penězi) si můžeš rozdělení změnit. Nic se neprodává.</div>", "green")
+        if mark_sent:
+            try:
+                hrec["deposit_month"] = month
+                kv_set_json(f"holdings:{email}", hrec)
+            except Exception:
+                pass
+    elif due and not (amount and amount > 0):
+        out += _eml_sec("📅 Začátek měsíce – čas na vklad", "<div style='font-size:13px'>Otevři appku → Moje portfolio → <i>Kam s penězi</i>, zadej částku a appka řekne, co koupit.</div>", "green")
+    # --- trh dnes (stručně) ---
+    try:
+        b = _market_brief()
+        try:
+            st = (_news_digest() or {}).get("story") or {}
+        except Exception:
+            st = {}
+        _rc = {"calm": "#00C853", "stress": "#FF3D00", "high": "#FFB347"}
+        mac = " · ".join(f"{m['label']} <b style='color:{_rc.get(m.get('regime'), '#9ba1b0')}'>{m['price']}{m['unit']}</b>"
+                         for m in b["macro"] if m.get("price") is not None)
+        txt = ""
+        if st.get("what"):
+            txt = (f"<div style='font-size:13.5px;line-height:1.5'><b>{_html_escape(st.get('label') or '')}:</b> {_html_escape(st['what'])}"
+                   + (f" <span style='color:#9ba1b0'>{_html_escape(st['why'])}</span>" if st.get("why") else "") + "</div>")
+        out += _eml_sec("🌍 Trh dnes", txt + (f"<div style='font-size:12px;color:#9ba1b0;margin-top:6px'>{mac}</div>" if mac else ""))
+    except Exception:
+        pass
+    # --- nové příležitosti (krátce) ---
+    ideas = ""
+    if top_signals:
+        ideas += "<div style='font-size:13px;font-weight:700;margin:2px 0 2px'>✅ Dnešní nákupní signál</div>" + _signals_email_rows(top_signals, n=2)
+    if top_opps:
+        ideas += "<div style='font-size:13px;font-weight:700;margin:10px 0 2px'>💎 Podhodnocené s momentem</div>" + _opps_email_rows(top_opps[:3])
+    bk = _basket_email_html(email, n=3)
+    if ideas or bk:
+        out += _eml_sec("🎯 Nové příležitosti (ještě je nemáš)", ideas + (bk.replace("<h3 style='font-size:16px;margin:22px 0 8px'>", "<div style='font-size:13px;font-weight:700;margin:10px 0 2px'>").replace("</h3>", "</div>", 1) if bk else ""))
+    out += (f"<div style='text-align:center;margin:18px 0 4px'><a href='{APP_URL}/' style='display:inline-block;background:#FF7A00;color:#1a0e00;"
+            f"padding:11px 24px;font-weight:700;text-decoration:none;border-radius:12px'>🚀 Otevřít MY ADVANTAGE</a></div>"
+            "<p style='color:#9ba1b0;font-size:11.5px;margin-top:14px'>Notifikace vypneš v appce v profilu. Není to investiční doporučení – hodnocení je pravidlo z historických dat, ne záruka.</p>")
+    return _email_shell("Ranní přehled ☀️", out)
+
+
 def build_morning_summary_html(email, top_opps, top_signals=None, mark_sent=False):
+    try:        # uživatel s uloženými akcemi: nový stručný přehled
+        html = _morning_digest_html(email, top_opps, top_signals, mark_sent)
+        if html:
+            return html
+    except Exception:
+        pass
+    return _build_morning_summary_legacy(email, top_opps, top_signals, mark_sent)
+
+
+def _build_morning_summary_legacy(email, top_opps, top_signals=None, mark_sent=False):
     pf = kv_get_json(f"portfolio:{email}") or {}
     watch = (pf.get("watchlist") or [])[:8]
     rows = ""
@@ -9626,7 +10074,14 @@ def build_morning_summary_html(email, top_opps, top_signals=None, mark_sent=Fals
     watch_html = (f"<div style='color:#9ba1b0;font-size:12px;margin:14px 0 4px'>Sledované akcie:</div>"
                   f"<table style='width:100%;border-collapse:collapse;font-size:14px'>{rows}</table>") if rows else ""
     opp_html = ""
-    sig_html = _basket_email_html(email)     # jediný seznam „co koupit“: koš tipů (dřív signály + podhodnocené)
+    if top_opps:
+        opp_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>💎 Podhodnocené s momentem</h3>"
+                    + _opps_email_rows(top_opps))
+    sig_html = ""
+    if top_signals:
+        sig_html = ("<h3 style='font-size:16px;margin:22px 0 8px'>✅ Dnešní nákupní signály</h3>"
+                    + _signals_email_rows(top_signals))
+    basket_html = _basket_email_html(email)   # měsíční koš tipů (dlouhodobě) – navíc k signálům
     # Otevřené pozice – co dnes vyžaduje akci podle plánu (cíl/stop/horizont).
     # Celý stav portfolia, ne jen to, co křičí. Uživatel chce ráno vidět,
     # co se s jeho penězi děje – i když se zrovna nic dělat nemá.
@@ -9745,7 +10200,7 @@ def build_morning_summary_html(email, top_opps, top_signals=None, mark_sent=Fals
     return _email_shell("Ranní přehled trhu ☀️",
                         f"<p style='line-height:1.6'>Dobré ráno{', ' + _html_escape(_vocative(_nm)) if _nm else ''}!</p>" +
                         brief_html + portfolio_html + action_html +
-                        sig_html + opp_html +
+                        sig_html + opp_html + basket_html +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>Notifikace vypneš v appce v profilu. "
                         "Není to investiční doporučení.</p>")
 
@@ -9848,8 +10303,12 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
         except Exception:
             perf_html = ""
 
-    # Co koupit: koš tipů (dřív zvlášť signály a podhodnocené)
-    sig_html = _basket_email_html(email)
+    # Co koupit: nákupní signály týdne + měsíční koš tipů
+    sig_html = ""
+    if top_signals:
+        sig_html = ("<h3 style='font-size:16px;margin:22px 0 10px'>🎯 Nákupní signály</h3>"
+                    + _signals_email_rows(top_signals))
+    basket_html = _basket_email_html(email)
 
     # Klíčové události u sledovaných akcií (last 7 days)
     events_html = ""
@@ -9870,9 +10329,12 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
         events_html = ""
 
     opp_html = ""
+    if top_opps:
+        opp_html = ("<h3 style='font-size:16px;margin:22px 0 10px'>💎 Podhodnocené s momentem</h3>"
+                    + _opps_email_rows(top_opps))
 
     intro = ("<p style='line-height:1.6'>Hezký víkend! Tady je tvé <b>shrnutí týdne</b> " +
-             "— jak si vedla tvá watchlist, koš tipů na tento měsíc a klíčové události.</p>")
+             "— jak si vedla tvá watchlist, nejlepší signály z modelu, koš tipů na tento měsíc a klíčové události.</p>")
 
     cta = (f"<div style='text-align:center;margin:28px 0 12px'>"
            f"<a href='{APP_URL}/' style='display:inline-block;background:#FF7A00;color:#1a0e00;"
@@ -9885,7 +10347,7 @@ def build_weekly_digest_html(email, top_signals=None, top_opps=None):
         plan_html = ""
 
     return _email_shell("Týdenní shrnutí 📊",
-                        intro + plan_html + perf_html + sig_html + events_html + opp_html + cta +
+                        intro + plan_html + perf_html + sig_html + events_html + opp_html + basket_html + cta +
                         "<p style='color:#9ba1b0;font-size:12px;margin-top:20px'>"
                         "Sobotní digest posíláme, pokud jsi ho zapnul v profilu. "
                         "Vypneš ho tam samým přepínačem. Není to investiční doporučení.</p>")
@@ -9956,7 +10418,8 @@ def _broadcast(notif_key, subject, build_html, limit=200):
     else:
         for email in recips:
             try:
-                if send_email(email, subject, build_html(email)):
+                body = build_html(email)
+                if send_email(email, subject(email) if callable(subject) else subject, body):
                     stat["sent"] += 1
                 else:
                     stat["failed"] += 1
@@ -10509,7 +10972,7 @@ def cron_morning():
                 return jsonify({"ok": True, "sent": 0, "skipped": True, "already_sent": True, "prague_hour": hour})
         except Exception:
             pass
-        sent = _broadcast("morning", "☀️ Ranní přehled trhu – MY ADVANTAGE",
+        sent = _broadcast("morning", lambda em: "☀️ " + (_MORNING_HEAD.pop(em, None) or "Ranní přehled trhu") + " – MY ADVANTAGE",
                           lambda em: build_morning_summary_html(em, top_opps, top_signals, mark_sent=True))
         if digest_sending_enabled():
             try:

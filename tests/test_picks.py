@@ -53,7 +53,7 @@ chk("1. měsíc ve zisku ≈ +25 % (tehdejší ceny 0,8×, konec den před dalš
 tr = J(c.get("/api/track-record"))
 chk("/api/track-record vrací koš (10 i 6)", set((tr.get("basket") or {})) == {"10", "6"}, str(tr.get("basket"))[:120])
 
-print("== e-maily: jeden seznam „co koupit“ ==")
+print("== e-maily: signály + podhodnocené + koš tipů ==")
 held = bk[0]
 m.kv_set_json(f"holdings:{EM}", {"holdings": [{"ticker": held, "qty": None, "name": held}], "risk": "balanced"})
 bh = m._basket_email_html(EM)
@@ -63,14 +63,19 @@ chk("max 5 řádků + živý záznam koše", bh.count("border-top:1px solid #232
 sig = [{"ticker": "DELL", "name": "Dell", "price": 1, "currency": "USD", "score": 80, "vm": 60, "change_pct": 1, "target": 2, "stop": 1, "reward_pct": 5, "risk_pct": 3, "rr": 1.5, "sector": "Information Technology"}]
 opps = [{"ticker": "XOM", "name": "Exxon", "vm_rank": 3, "score": 70, "pe": 12}]
 mh = m.build_morning_summary_html(EM, opps, sig)
-chk("ranní e-mail: koš ano, staré seznamy ne", "Koš tipů na" in mh and "nákupní signály" not in mh and "Podhodnocené s momentem" not in mh, txt(mh)[:200])
+chk("ranní e-mail: nákupní signály + podhodnocené + koš tipů navíc", all(x in mh for x in ("Dnešní nákupní signál", "Podhodnocené s momentem", "Koš tipů na")), txt(mh)[:200])
+chk("ranní e-mail: pořadí signály → podhodnocené → koš", mh.index("Dnešní nákupní signál") < mh.index("Podhodnocené s momentem") < mh.index("Koš tipů na"))
+mh0 = m.build_morning_summary_html(EM, [], [])
+chk("bez signálů a příležitostí zůstane jen koš", "Koš tipů na" in mh0 and "Dnešní nákupní signál" not in mh0 and "Podhodnocené s momentem" not in mh0)
 wh = m.build_weekly_digest_html(EM, sig, opps)
-chk("týdenní e-mail: koš ano, staré seznamy ne", "Koš tipů na" in wh and "Nákupní signály" not in wh and "Podhodnocené" not in wh)
+chk("týdenní e-mail: signály + podhodnocené + koš tipů", all(x in wh for x in ("Nákupní signály", "Podhodnocené s momentem", "Koš tipů na")))
 m.market_scan = lambda allow_step=False: None
 chk("blok koše bez skenu = prázdný řetězec", m._basket_email_html(EM) == "")
 m.market_scan = real_ms
 act = m._todays_action(EM, sig)
-chk("„dnešní akce“ odkazuje na koš, ne na denní signál", act and "signál" not in act.lower(), str(act))
+chk("„dnešní akce“ s denním signálem: Nejsilnější signál je DELL", act and "Nejsilnější signál je DELL" in act, str(act))
+act0 = m._todays_action(EM, [])
+chk("„dnešní akce“ bez signálu odkazuje na koš tipů", act0 and "koši tipů" in act0, str(act0))
 
 print("== podpisový klíč (_secret) ==")
 m._secret_mem.clear(); kvfake.store.pop(m._pk("app:secret"), None)

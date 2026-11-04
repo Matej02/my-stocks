@@ -9,6 +9,9 @@ let planLots = (() => { try { return JSON.parse(localStorage.getItem('ma_holding
 let planData = null, planLoading = false, planErr = '', planTs = 0;
 let planAmount = (() => { try { return localStorage.getItem('ma_plan_amount') || ''; } catch (e) { return ''; } })();
 let planShowDeposit = false;
+// „Kam s penězi“ (režim jen názvů akcií): app = doporučení aplikace, mine = jen dokup mých silných, new = jen nové tipy, custom = vyberu si sám
+let planDepMode = (() => { try { const v = localStorage.getItem('ma_dep_mode'); return ['app', 'mine', 'new', 'custom'].includes(v) ? v : 'app'; } catch (e) { return 'app'; } })();
+let planDepN = 5, planDepPick = [], planDepAmts = {}, planDepDirty = false;
 // Profil plánu = profil rizika appky, navíc „maximum" (jen pro dlouhodobý plán)
 let planRisk = FEATURE_QTY ? (() => { try { return localStorage.getItem('ma_plan_risk') || 'maximum'; } catch (e) { return 'maximum'; } })() : 'maximum';
 // 2026-10: výchozí je „Jen akcie" (hodnocení + koš tipů, bez ETF) – jednorázový přechod i pro dřívější volbu
@@ -116,12 +119,18 @@ async function planRefresh() {
     try {
         const body = { holdings: FEATURE_QTY ? planLots : planNamesOnly(), risk: planRisk, picks_n: planPicksN };
         const amt = parseFloat(String(planAmount).replace(/\s/g, '').replace(',', '.'));
-        if (planShowDeposit && amt > 0) body.amount_czk = amt;
+        if (planShowDeposit && amt > 0) {
+            body.amount_czk = amt;
+            if (!FEATURE_QTY) {
+                body.deposit_mode = planDepMode; body.deposit_n = planDepN;
+                if (planDepMode === 'custom') { body.deposit_pick = planDepPick; body.deposit_amounts = planDepAmts; }
+            }
+        }
         const r = await fetch(`${BACKEND_URL}/api/plan`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
         let d;
         try { d = await r.json(); } catch (e) { throw new Error(`Server teď neodpověděl (HTTP ${r.status}) – tvoje akcie jsou uložené, zkus to za chvíli.`); }
         if (!d.ok) throw new Error(d.error || 'Plán se nepodařilo spočítat.');
-        planData = d; planTs = Date.now();
+        planData = d; planTs = Date.now(); planDepDirty = false;
     } catch (e) {
         planErr = e.message || 'Plán se nepodařilo spočítat.';
     }
@@ -404,12 +413,15 @@ function planNamesHTML(d) {
           <div class="mp-stock-h">
             <div class="who"><span class="tk">${mpEsc(mpBase(r.ticker))}</span>${r.chg != null ? `<span class="chg" style="color:var(--${r.chg >= 0 ? 'up' : 'down'})">${r.chg >= 0 ? '+' : ''}${mpPct(r.chg, 1)}</span>` : ''}${price ? `<span class="px">${price}</span>` : ''}
               <div class="nm">${mpEsc(r.name)}</div></div>
+            ${ev.action === 'buy' ? '<span class="mp-verdict strong">🟢 Podhodnocená – dokup</span>' : ev.action === 'risk' ? '<span class="mp-verdict risk">🔴 Pozor – vážný problém</span>' : ev.action === 'stretched' ? '<span class="mp-verdict weak">🟠 Natažená</span>' : ''}
             <span class="mp-verdict ${ev.level}">${mpEsc(ev.verdict)}</span>
             <button class="mp-icon-btn" onclick="planRemove('${mpEsc(r.ticker)}')" title="Odebrat z portfolia"><i class="ti ti-x"></i></button>
           </div>
           <div class="mp-stock-meta">${bits.filter(Boolean).map(mpEsc).join(' · ')}</div>
           ${bar}
           <div class="mp-ev-why">${mpEsc(ev.why || '')}</div>
+          ${ev.action === 'buy' ? `<div class="mp-ev-why" style="color:var(--up)">Proč podhodnocená: ${mpEsc(ev.action_why)}</div>` : ''}
+          ${ev.action === 'risk' || ev.action === 'stretched' ? `<div class="mp-flag">${ev.action === 'risk' ? '🔴' : '🟠'} ${mpEsc(ev.action_why)}</div>` : ''}
           ${perfL}
           ${earnL}
           ${(ev.warn || []).map(w => `<div class="mp-flag">⚠ ${mpEsc(w)}</div>`).join('')}${flag}
@@ -418,7 +430,7 @@ function planNamesHTML(d) {
         </div>`;
     }).join('');
     return `<div class="mp-card"><h4><i class="ti ti-briefcase"></i> Moje akcie – hodnocení každé</h4>
-      <div class="mp-sub">Od nejsilnější. Hodnocení říká, co dělat s <b>novými penězi</b> – prodávat podle něj nedoporučuji, na historii slabší akcie spolehlivě nezaostávaly.</div>
+      <div class="mp-sub">Od nejsilnější. Hodnocení říká, co dělat s <b>novými penězi</b>: 🟢 podhodnocené dokupuj, slabší nedokupuj. Prodávat jen podle skóre ani podle „vysoké ceny“ nedoporučuji – na historii to spolehlivě nefungovalo. Výjimka: 🔴 <b>vážný problém firmy</b> (bankrot, neplatné výkazy, hrozba vyřazení z burzy) – tam zvaž prodej.</div>
       <div class="mp-stocks">${cards}</div>
     </div>`;
 }
@@ -467,7 +479,7 @@ function planDepositHTML(d) {
     let html = `<div class="mp-card" id="mp-deposit">
       <h4><i class="ti ti-coins"></i> Kam s penězi</h4>
       <div class="mp-sub">${!FEATURE_QTY
-        ? 'Napiš, kolik můžeš teď investovat. Peníze půjdou rovnoměrně do tipů z koše, které ještě nemáš. Žádné ETF, nic se neprodává.'
+        ? 'Napiš, kolik můžeš teď investovat, a vyber, jak to rozdělit – nechej poradit aplikaci, nebo si vyber sám. Žádné ETF, nic se neprodává.'
         : planRisk === 'maximum'
         ? 'Napiš, kolik můžeš teď investovat. Peníze půjdou rovnoměrně do koše tipů – akcie z koše, které už držíš, dokoupí, ostatní otevře. Žádné ETF, nic se neprodává.'
         : 'Napiš, kolik můžeš teď investovat. Peníze půjdou tam, kde nejvíc chybí do cíle – doplní jádro, dokoupí akcie z plánu, nebo otevřou nový titul. Nic se neprodává.'}</div>
@@ -476,6 +488,7 @@ function planDepositHTML(d) {
         <button class="btn-primary" style="flex:none; display:inline-flex; align-items:center; gap:6px;" onclick="planDeposit()"><i class="ti ti-arrows-split-2"></i> Rozdělit</button>
         <div class="mp-quick">${quick}</div>
       </div>`;
+    if (!FEATURE_QTY) html += planDepModeHTML();
     if (planShowDeposit && planLoading && !dep) html += `<div class="mp-progress"><i class="ti ti-loader spin"></i> Počítám rozdělení…</div>`;
     if (dep) {
         const p = d.plan;
@@ -485,13 +498,14 @@ function planDepositHTML(d) {
             ${dep.split.topup ? `<span><i class="mp-dot" style="background:var(--up)"></i> dokoupit <b>${mpKc(dep.split.topup)}</b></span>` : ''}
             ${dep.split.new ? `<span><i class="mp-dot" style="background:#8FB0FF"></i> nové tituly <b>${mpKc(dep.split.new)}</b></span>` : ''}
           </div>`;
+        if (!FEATURE_QTY) html += planDepAdviceHTML(dep);
         if (dep.stocks_full && d.total_czk) {
             html += `<div class="mp-note warn"><i class="ti ti-scale"></i><span><b>Akciová část je plná.</b> V jednotlivých akciích mimo plán máš ${mpPct(dep.legacy_pct, 0)} portfolia, profil ${MP_RISK[p.risk].label.toLowerCase()} chce akcie celkem ${p.stocks_pct} %. Proto jde vklad do jádra, dokud se poměr nesrovná.${p.risk === 'maximum' ? '' : (p.risk === 'aggressive' ? ' Chceš víc akcií? Profil Maximum je 100 % akcie.' : ' Chceš víc akcií? Přepni profil na Odvážný nebo Maximum.')}</span></div>`;
         }
-        html += `<div class="mp-lines" style="margin-top:10px">` + dep.lines.map(l => {
+        html += `<div class="mp-lines" style="margin-top:10px">` + ((!FEATURE_QTY && planDepMode === 'custom' && planDepDirty) ? [] : dep.lines).map(l => {
             const b = { core: ['core', 'Jádro'], topup: ['topup', 'Dokoupit'], new: ['new', dep.mode === 'basket' ? 'Nový tip' : 'Nový titul'] }[l.action] || ['hold', l.action];
             const sh = l.shares != null ? `≈ ${mpQty(l.shares)} ks · ${mpQty(l.price)} ${mpEsc(l.currency || '')}` : '';
-            return `<div class="mp-line">
+            return `<div class="mp-line click" title="Otevřít detail akcie" onclick="if(!event.target.closest('a'))loadStockDetail('${mpEsc(l.ticker)}')">
               <span class="mp-badge ${b[0]}">${b[1]}</span>
               <div class="nm"><div class="t">${mpEsc(mpBase(l.ticker))}<small>${mpEsc(l.name || '')}</small></div><div class="w">${mpEsc(l.why)}</div>${l.action !== 'core' ? planTipNewsHTML(l.ticker, 'buy') : ''}</div>
               <div class="amt"><div class="a">${mpKc(l.amount_czk)}</div><div class="q">${sh}</div></div>
@@ -501,14 +515,72 @@ function planDepositHTML(d) {
         if (dep.deferred && dep.deferred.length) {
             html += `<div class="mp-note"><i class="ti ti-clock"></i><span>Na řadu příště: <b>${dep.deferred.slice(0, 12).map(x => mpEsc(mpBase(x.ticker))).join(', ')}</b>${dep.deferred.length > 12 ? ' a další' : ''}. Nákup pod ${dep.min_order} Kč nedává smysl – každý měsíc dostanou peníze tituly s největší mezerou, takže se vystřídají.</span></div>`;
         }
+        const showLines = (dep.lines || []).length && !(!FEATURE_QTY && planDepMode === 'custom' && planDepDirty);
+        if (showLines) {
         html += `<div class="mp-btnrow">
             <button class="tool-btn" onclick="planCopy()"><i class="ti ti-copy"></i> Kopírovat seznam</button>
             <button class="tool-btn" onclick="openBought()"><i class="ti ti-circle-check"></i> ${FEATURE_QTY ? 'Nakoupeno – připsat do portfolia' : 'Koupil jsem – přidat do portfolia'}</button>
           </div>
           <div class="mp-note"><i class="ti ti-device-mobile"></i><span>V Trading 212: vyhledej ticker → <b>Koupit</b> → přepni na <b>hodnotu</b> a zadej částku v Kč. Zlomky akcií jsou v pořádku. ${FEATURE_QTY ? 'Po nákupu klikni „Nakoupeno" – appka si zapamatuje měsíc nákupu kvůli 3letému testu.' : 'Po nákupu klikni „Koupil jsem" – appka akcii přidá mezi tvoje a bude ji hodnotit.'}</span></div>`;
+        }
     }
     return html + `</div>`;
 }
+
+const MP_DEP_DESC = {
+    app: 'Aplikace sama vybere, kolik půjde do dokupu tvých nejsilnějších akcií a kolik do nových tipů z koše – podle toho, jak velké portfolio máš.',
+    mine: 'Peníze půjdou jen do akcií, které už máš a které aplikace hodnotí jako silné (nejlepší první).',
+    new: 'Peníze půjdou rovnoměrně do nejlepších nových tipů z koše, které ještě nemáš.',
+    custom: 'Zaškrtni akcie, které chceš koupit. Částka se rozdělí rovnoměrně, u každé ji můžeš změnit.',
+};
+function planDepModeHTML() {
+    const chip = (k, label, ic) => `<button class="risk-pill ${planDepMode === k ? 'active' : ''}" onclick="planDepSetMode('${k}')"><i class="ti ${ic}"></i> ${label}</button>`;
+    const nChip = k => `<button class="risk-pill ${planDepN === k ? 'active' : ''}" onclick="planDepSetN(${k})">${k}</button>`;
+    return `<div class="mp-dep-modes">${chip('app', 'Doporučení aplikace', 'ti-sparkles')}${chip('mine', 'Jen do mých akcií', 'ti-wallet')}${chip('new', 'Jen nové tipy', 'ti-basket')}${chip('custom', 'Vyberu si sám', 'ti-hand-click')}
+        ${(planDepMode === 'mine' || planDepMode === 'new') ? `<span class="mp-pill-sep">do kolika akcií:</span>${[2, 3, 5, 6].map(nChip).join('')}` : ''}
+      </div><div class="mp-sub" style="margin:8px 0 0">${MP_DEP_DESC[planDepMode]}</div>`;
+}
+function planDepAdviceHTML(dep) {
+    let h = (dep.advice || []).map(a => `<div class="mp-note"><i class="ti ti-bulb"></i><span>${mpEsc(a)}</span></div>`).join('');
+    if (planDepMode === 'custom' && (dep.candidates || []).length) h += planDepCustomHTML(dep);
+    return h;
+}
+function planDepCustomHTML(dep) {
+    const amt = parseFloat(String(planAmount).replace(/\s/g, '').replace(',', '.')) || 0;
+    const sel = new Set(planDepPick), eq = sel.size && amt ? Math.round(amt / sel.size) : 0;
+    const badge = c => c.group === 'new' ? '<span class="mp-pick-src vm">Nový tip</span>'
+        : (c.action === 'buy' ? '<span class="mp-verdict strong">Podhodnocená</span>' : c.action === 'risk' ? '<span class="mp-verdict risk">Pozor – problém</span>' : c.action === 'stretched' ? '<span class="mp-verdict weak">Natažená</span>'
+            : { strong: '<span class="mp-verdict strong">Silná</span>', hold: '<span class="mp-verdict hold">Drž</span>', weak: '<span class="mp-verdict weak">Slabší</span>' }[c.level] || '');
+    const row = c => `<div class="mp-cand ${sel.has(c.ticker) ? 'on' : ''}">
+        <label><input type="checkbox" ${sel.has(c.ticker) ? 'checked' : ''} onchange="planDepToggle('${mpEsc(c.ticker)}')"> <b>${mpEsc(mpBase(c.ticker))}</b> <small>${mpEsc(c.name)}</small> ${badge(c)}</label>
+        ${sel.has(c.ticker) ? `<span class="mp-cand-a"><input type="text" inputmode="decimal" placeholder="${eq || ''}" value="${mpEsc(planDepAmts[c.ticker] || '')}" oninput="planDepAmt('${mpEsc(c.ticker)}', this.value)"> Kč</span>` : ''}
+        <a class="mp-cand-d" onclick="loadStockDetail('${mpEsc(c.ticker)}')" title="Otevřít detail akcie"><i class="ti ti-chevron-right"></i></a></div>`;
+    const ord = { strong: 0, hold: 1, weak: 2 };
+    const mine = dep.candidates.filter(c => c.group === 'mine').sort((a, b) => (ord[a.level] ?? 3) - (ord[b.level] ?? 3) || (a.rank || 9999) - (b.rank || 9999));
+    const nw = dep.candidates.filter(c => c.group === 'new');
+    return `<div class="mp-cands">
+        <div class="mp-cand-h">Moje akcie <small>(silné nahoře)</small></div>${mine.map(row).join('') || '<div class="mp-sub">Zatím žádné.</div>'}
+        <div class="mp-cand-h">Nové tipy z koše</div>${nw.map(row).join('') || '<div class="mp-sub">Všechny tipy z koše už máš.</div>'}
+        <button class="btn-primary" style="margin-top:10px" onclick="planDeposit()"><i class="ti ti-arrows-split-2"></i> Rozdělit mezi vybrané (${sel.size})</button>
+      </div>`;
+}
+function planDepRecalc() {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    const el = document.getElementById('mp-amount'); if (el) planAmount = el.value;
+    const amt = parseFloat(String(planAmount).replace(/\s/g, '').replace(',', '.'));
+    if (!(amt > 0)) { renderPlan(); return; }          // bez částky jen přepni volbu
+    planShowDeposit = true;
+    planRefresh();
+}
+function planDepSetMode(k) { planDepMode = k; try { localStorage.setItem('ma_dep_mode', k); } catch (e) {} planDepRecalc(); }
+function planDepSetN(k) { planDepN = k; planDepRecalc(); }
+function planDepToggle(t) {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    const i = planDepPick.indexOf(t);
+    if (i >= 0) { planDepPick.splice(i, 1); delete planDepAmts[t]; } else planDepPick.push(t);
+    planDepDirty = true; renderPlan();
+}
+function planDepAmt(t, v) { if (String(v).trim()) planDepAmts[t] = v; else delete planDepAmts[t]; planDepDirty = true; }
 
 function planTasksHTML(d) {
     const acts = d.plan.actions || [];
