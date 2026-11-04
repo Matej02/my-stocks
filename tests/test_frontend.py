@@ -44,6 +44,7 @@ for name in ("loadExitSignals", "renderSimpleBuy", "exit-box", "simple-buy", "ap
 chk("Příležitosti: původní boxy (Sleva v trendu, Podhodnocené s momentem) jsou zpět", all(x in html for x in ('id="signals-box"', 'id="opp-box"')) and all(x in js for x in ("loadSignals", "loadOpportunities", "renderSignals", "renderOpportunities")))
 chk("Přehled: ⭐ Top signál dne a „Další top příležitosti“ jsou zpět, koš tipů je navíc", 'id="ov-top-signal"' in html and "TOP signál dne" in js and "api/signals" in js and "api/opportunities" in js and 'id="ov-basket"' in html and "fetchOverviewBasket" in js)
 chk("Kam s penězi: volba režimu, vlastní výběr a klikací řádky", all(x in js for x in ("planDepModeHTML", "planDepCustomHTML", "planDepSetMode", 'mp-line click', "loadStockDetail('${mpEsc(l.ticker)}')")) and all(x in js for x in ("'app'", "'mine'", "'new'", "'custom'")))
+chk("tlačítka „Kam s penězi“ / „Celý koš“ čekají na načtení stránky, než odroluje (planGoTo)", "async function planGoTo" in js and js.count("planGoTo('mp-") >= 2 and "setTimeout(()=>{const e=document.getElementById('mp-amount')" not in js)
 chk("Příležitosti: koš tipů je navíc pod nimi", html.index('id="opp-box"') < html.index('id="opp-picks-root"'))
 chk("koš tipů je v Příležitostech", 'id="opp-picks-root"' in html and "loadOppPicks" in js)
 chk("živý záznam koše ve Výsledcích", 'id="tr-basket-body"' in html and "renderResultsBasket" in js)

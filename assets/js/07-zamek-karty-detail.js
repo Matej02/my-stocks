@@ -736,7 +736,7 @@ function recPicksHTML(d) {
         <b>${mpEsc(mpBase(p.ticker))}</b> <span class="mp-pick-src ${p.source}">${p.source === 'vm' ? 'Levná + roste' : 'Silné momentum'}</span>
         <div class="mp-sub" style="margin:2px 0 0">${mpEsc(p.name)} – ${mpEsc(p.why)}</div></div>`).join('');
     return `<div class="mp-card"><h4><i class="ti ti-target-arrow"></i> Co koupit teď (z koše tipů, co ještě nemáš)</h4>${items}
-        <button class="tool-btn" style="margin-top:10px" onclick="switchTab('portfolio'); setTimeout(()=>{const e=document.getElementById('mp-picks'); if(e) e.scrollIntoView({behavior:'smooth',block:'start'});},200)"><i class="ti ti-coins"></i> Celý koš a kam s penězi</button></div>`;
+        <button class="tool-btn" style="margin-top:10px" onclick="planGoTo('mp-picks')" ><i class="ti ti-coins"></i> Celý koš a kam s penězi</button></div>`;
 }
 
 async function loadRecComment(d) {
