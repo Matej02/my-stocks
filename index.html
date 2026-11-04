@@ -527,10 +527,6 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .simple-mode .dash-tabs {display:none !important;}
 .simple-mode #section-opportunities, .simple-mode #section-ai {display:none !important;}
 .simple-mode #dt-analysis, .simple-mode #dt-ai {display:none !important;}
-.simple-buy-box {background:var(--bg-glass); border:1px solid var(--border); border-radius:18px; padding:20px; margin-bottom:22px;}
-.simple-buy-head {font-family:var(--fh); font-size:18px; font-weight:700; display:flex; align-items:center; gap:10px; margin-bottom:4px;}
-.simple-buy-head i {color:var(--accent);}
-.simple-buy-sub {font-size:12.5px; color:var(--text2); margin-bottom:14px;}
 .bg-steps {display:flex; flex-direction:column; gap:10px; margin:14px 0;}
 .bg-step {display:flex; gap:12px; align-items:flex-start; font-size:13.5px; line-height:1.5; color:var(--text2);}
 .bg-step b {color:var(--text);}
@@ -542,11 +538,6 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .bg-gloss summary {cursor:pointer; color:var(--accent); font-weight:600; display:flex; align-items:center; gap:6px;}
 .bg-gloss p {color:var(--text2); line-height:1.8; margin:10px 0 0;}
 .bg-gloss b {color:var(--text);}
-.sbuy-item {display:flex; align-items:center; gap:12px; padding:12px; border:1px solid var(--border); border-radius:12px; margin-bottom:8px; cursor:pointer; transition:all .2s;}
-.sbuy-item:hover {border-color:var(--accent); transform:translateX(3px);}
-.sbuy-up {font-family:var(--fh); font-weight:800; font-size:20px; color:var(--up); min-width:64px;}
-.sbuy-tkr {font-family:var(--fh); font-weight:700; font-size:15px;}
-.sbuy-why {font-size:12px; color:var(--text2); line-height:1.4;}
 
 /* ============ ZÁLOŽKY V DETAILU AKCIE ============ */
 .detail-tabs {display:flex; gap:4px; margin-bottom:16px; background:rgba(255,255,255,0.03); border:1px solid var(--border); padding:5px; border-radius:14px; overflow-x:auto;}
@@ -1082,15 +1073,6 @@ html, body {max-width:100%;}
 .sim-vs {display:flex; align-items:center; color:var(--text2); font-weight:700; font-size:13px;}
 .sim-diff {text-align:center; margin-top:12px; font-size:15px; color:var(--text);}
 .sim-diff b {color:var(--accent); font-family:var(--fh); font-size:18px;}
-.exit-box {background:rgba(255,61,0,0.05); border:1px solid rgba(255,61,0,0.28); border-radius:16px; padding:18px 20px; margin-bottom:18px;}
-.exit-head {font-family:var(--fh); font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; margin-bottom:10px; color:var(--down);}
-.exit-row {display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border); cursor:pointer; flex-wrap:wrap;}
-.exit-row:first-of-type {border-top:none;}
-.exit-tag {font-size:10px; font-weight:700; padding:2px 8px; border-radius:7px; text-transform:uppercase;}
-.exit-tag.sell {background:var(--down-glow); color:var(--down);}
-.exit-tag.weak {background:rgba(255,196,0,0.12); color:#FFC400;}
-.exit-row .er-tk {font-family:var(--fh); font-weight:700; min-width:56px;}
-.exit-row .er-reason {font-size:12.5px; color:var(--text2); flex:1; min-width:160px;}
 .profile-close:hover {color:var(--accent); border-color:var(--accent);}
 .profile-box .btn-primary {display:inline-flex; align-items:center; justify-content:center; gap:8px;}
 .profile-hdr {text-align:center; margin-bottom:1.5rem;}
@@ -1122,63 +1104,7 @@ html, body {max-width:100%;}
 @media (max-width:600px){ .profile-box .port-summary {grid-template-columns:1fr;} }
 
 /* ============ SCANNER PŘÍLEŽITOSTÍ ============ */
-.opp-box {background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:20px; padding:1.6rem; margin-bottom:2.2rem; position:relative; overflow:hidden;}
-.opp-box::before {content:""; position:absolute; top:-40%; right:-10%; width:320px; height:320px; background:radial-gradient(circle, rgba(255,122,0,0.10), transparent 70%); pointer-events:none;}
-.opp-head {display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; position:relative; z-index:1;}
-.opp-title {font-family:var(--fh); font-size:20px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
-.opp-title i {color:var(--accent); font-size:24px;}
-.opp-sub {display:block; width:100%; font-family:var(--fb); font-size:12px; font-weight:400; color:var(--text2); margin-top:3px;}
-.opp-actions {display:flex; align-items:center; gap:10px;}
-.opp-updated {font-size:11px; color:var(--text2); font-family:var(--fb);}
-.opp-filters {display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 4px; position:relative; z-index:1; align-items:center;}
-.opp-chip {background:var(--surface); border:1px solid var(--border); padding:7px 14px; border-radius:10px; color:var(--text2); cursor:pointer; font-family:var(--fb); font-size:13px; transition:all .2s;}
-.opp-chip:hover {border-color:var(--accent); color:var(--text);}
-.opp-chip.active {background:var(--accent-soft); border-color:var(--border-accent); color:var(--accent); font-weight:600;}
-.opp-toggle {display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); cursor:pointer; margin-left:auto; font-family:var(--fb);}
-.opp-toggle input {accent-color:var(--accent); cursor:pointer;}
-.opp-grid {display:grid; grid-template-columns:repeat(auto-fill, minmax(265px, 1fr)); gap:14px; margin-top:16px; position:relative; z-index:1;}
 .opp-loading {color:var(--accent); padding:24px; font-size:14px;}
-.opp-card {background:var(--elev); border:1px solid var(--border); border-radius:16px; padding:17px; cursor:pointer; transition:transform .15s, border-color .2s, box-shadow .2s; position:relative; overflow:hidden;}
-.opp-card:hover {transform:translateY(-3px); border-color:var(--border-accent); box-shadow:0 10px 26px rgba(0,0,0,0.35);}
-.opp-card.moon {border-color:var(--accent); background:linear-gradient(160deg, rgba(255,122,0,0.10), transparent 70%);}
-.opp-rank {position:absolute; top:12px; right:14px; font-family:var(--fh); font-size:11px; color:var(--text2);}
-.opp-c-top {display:flex; align-items:center; gap:10px; margin-bottom:8px;}
-.opp-score {min-width:46px; height:46px; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:var(--fh); font-weight:800; font-size:18px; line-height:1; color:#fff;}
-.opp-score small {font-size:8px; font-weight:600; opacity:.85; letter-spacing:.5px;}
-.opp-score.p-high {background:linear-gradient(135deg,#00C853,#69F0AE); color:#062;}
-.opp-score.p-strong {background:linear-gradient(135deg,#FF7A00,#FF9A3C); color:#1a0e00;}
-.opp-score.p-mid {background:linear-gradient(135deg,#ff7a45,#ffb347);}
-.opp-score.p-low {background:rgba(255,255,255,0.12); color:var(--text2);}
-.opp-upside {margin:10px 0 6px; display:flex; align-items:baseline; gap:8px;}
-.opp-up-val {font-family:var(--fh); font-weight:800; font-size:26px; color:var(--up);}
-.opp-up-lbl {font-size:11px; color:var(--text2);}
-.opp-tier-lbl {margin-left:auto; font-size:11px; font-weight:700; padding:2px 8px; border-radius:8px;}
-.opp-tier-lbl.p-high {background:var(--up-glow); color:var(--up);}
-.opp-tier-lbl.p-strong {background:rgba(255,122,0,0.14); color:var(--accent);}
-.opp-tier-lbl.p-mid {background:rgba(255,122,69,0.15); color:#ff9d6e;}
-.opp-tier-lbl.p-low {background:rgba(255,255,255,0.06); color:var(--text2);}
-.opp-why {font-size:12.5px; line-height:1.5; color:var(--text); background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:10px; padding:9px 11px; margin-bottom:10px;}
-.opp-why i {color:var(--accent);}
-.opp-c-id {min-width:0;}
-.opp-c-tkr {font-family:var(--fh); font-weight:700; font-size:17px; color:var(--text);}
-.opp-c-name {font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;}
-.opp-c-px {display:flex; align-items:baseline; gap:8px; margin:6px 0 10px;}
-.opp-c-price {font-family:var(--fb); font-weight:700; font-size:18px; color:var(--text);}
-.opp-c-chg {font-size:14px; font-weight:700;}
-.opp-c-chg.up {color:var(--up);} .opp-c-chg.down {color:var(--down);}
-.opp-badges {display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px;}
-.opp-badge {font-size:10.5px; font-weight:600; padding:3px 8px; border-radius:8px; font-family:var(--fb); white-space:nowrap;}
-.opp-badge.extreme {background:rgba(255,45,110,0.15); color:#ff6090; border:1px solid rgba(255,45,110,0.35);}
-.opp-badge.hot {background:rgba(255,122,69,0.15); color:#ff9d6e; border:1px solid rgba(255,122,69,0.3);}
-.opp-badge.up {background:var(--up-glow); color:var(--up); border:1px solid rgba(0,200,150,0.3);}
-.opp-badge.down {background:rgba(255,77,109,0.12); color:var(--down); border:1px solid rgba(255,77,109,0.25);}
-.opp-badge.gem {background:rgba(255,179,71,0.15); color:#ffce8a; border:1px solid rgba(255,179,71,0.35);}
-.opp-badge.neutral {background:rgba(255,255,255,0.06); color:var(--text2); border:1px solid var(--border);}
-.opp-c-stats {display:flex; gap:12px; border-top:1px solid var(--border); padding-top:9px; font-family:var(--fb);}
-.opp-stat {display:flex; flex-direction:column; gap:1px;}
-.opp-stat .l {font-size:9px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
-.opp-stat .v {font-size:12px; color:var(--text); font-weight:600;}
-.opp-disclaimer {font-size:10.5px; color:var(--text2); margin-top:14px; position:relative; z-index:1; opacity:.7;}
 
 /* ============ TECHNICKÝ SIGNAL PANEL ============ */
 .verdict-box {background:linear-gradient(150deg, rgba(255,122,0,0.10), transparent 75%); border:1px solid var(--border-accent); border-radius:18px; padding:20px 22px; margin-bottom:20px;}
@@ -1543,9 +1469,8 @@ input[type=month]::-webkit-datetime-edit, input[type=date]::-webkit-datetime-edi
   /* drobné popisky ať se dají přečíst */
   .si-type, .search-grp, .pick-badge, .deep-badge, .dl-cell .l, .track-stat .l, .track-score, .tb-cell .l, .at-cell .l,
   .starter-sector, .ov-event .tag, .ov-news-row .meta, .cmp-picker-grp, .cmp-picker-item .type-badge, .heat-cell .hc-tk,
-  .sim-cell .l, .exit-tag, .opp-stat .l, .signal-scale, .opp-badge, .opp-disclaimer, .mp-badge, .mp-rv-hd, .dg-imp,
+  .sim-cell .l, .signal-scale, .mp-badge, .mp-rv-hd, .dg-imp,
   .news-src-tag, .sec-sum-cell .l, .notif-dot, .lp-footer-links span {font-size:11px;}
-  .opp-score small {font-size:9px;}
   .pfp-r {padding:9px 14px; font-size:12px;}
   .app-footer-col a {display:block; padding:7px 0;}
 
@@ -1767,6 +1692,15 @@ body.modal-open {overflow:hidden;}
 .mp-short i {color:var(--amber);}
 .mp-bperf {display:flex; gap:8px; align-items:flex-start; font-size:12.5px; color:var(--text2); margin:0 0 12px; line-height:1.5;}
 .mp-bperf i {color:var(--accent); margin-top:2px;}
+.mp-more {display:flex; flex-direction:column; gap:6px;}
+.mp-more-row {padding:10px 12px; background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:11px; cursor:pointer; font-size:13px; transition:border-color .2s;}
+.mp-more-row:hover {border-color:var(--border-accent);}
+.mp-more-n {color:var(--text2); font-size:12px; margin-left:4px;}
+.mp-more-w {color:var(--text2); font-size:12px; line-height:1.5; margin-top:2px;}
+.tr-bk-row {display:flex; justify-content:space-between; gap:10px; align-items:center; padding:9px 14px; background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:11px; font-size:13px; flex-wrap:wrap;}
+.tr-bk-row .m {font-weight:600;}
+.tr-bk-row .d {font-size:11px; color:var(--text2);}
+.tr-bk-row .v {font-family:var(--fh); font-weight:700; white-space:nowrap;}
 .mp-verdict {display:inline-block; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:8px; white-space:nowrap;}
 .mp-verdict.strong {background:var(--up-glow); color:var(--up);}
 .mp-verdict.hold {background:var(--elev2); color:var(--text);}
@@ -1898,7 +1832,7 @@ body.modal-open {overflow:hidden;}
         <div class="lp-plan feat">
           <div class="lp-plan-tag">Doporučeno</div>
           <div class="nm">Pro</div><div class="pr">10 €<span> / měs</span></div>
-          <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Skener příležitostí</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Exit signály „co prodat"</li></ul>
+          <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Měsíční koš tipů</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Hodnocení tvých akcií</li></ul>
           <button onclick="openProfile('plans')">Vybrat Pro</button>
         </div>
         <div class="lp-plan">
@@ -1958,7 +1892,7 @@ body.modal-open {overflow:hidden;}
     </div>
     <div class="lp-hero">
       <h1>Vyber si plán a <em>začni</em>.</h1>
-      <p class="lp-lead">Tvůj účet zatím nemá aktivní předplatné. Odemkni dnešní signály, hloubkovou analýzu i skener příležitostí.</p>
+      <p class="lp-lead">Tvůj účet zatím nemá aktivní předplatné. Odemkni koš tipů, hloubkovou analýzu i hodnocení svých akcií.</p>
     </div>
     <div class="lp-sec" style="margin-top:18px;">
       <div class="lp-plans">
@@ -1970,7 +1904,7 @@ body.modal-open {overflow:hidden;}
         <div class="lp-plan feat">
           <div class="lp-plan-tag">Doporučeno</div>
           <div class="nm">Pro</div><div class="pr">10 €<span> / měs</span></div>
-          <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Skener příležitostí</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Exit signály „co prodat"</li></ul>
+          <ul><li><i class="ti ti-check"></i> Vše ze Start</li><li><i class="ti ti-check"></i> Měsíční koš tipů</li><li><i class="ti ti-check"></i> Hloubková analýza 5×/den</li><li><i class="ti ti-check"></i> Hodnocení tvých akcií</li></ul>
           <button onclick="openProfile('plans')">Předplatit Pro</button>
         </div>
         <div class="lp-plan">
@@ -2056,18 +1990,18 @@ body.modal-open {overflow:hidden;}
         <h2>Vítej v <span style="color:var(--accent)">MY ADVANTAGE</span></h2>
         <p>Investiční asistent, který ti řekne <b>kdy koupit, kdy prodat a kolik</b>. Bez slibů — s čísly.</p>
         <ul class="onb-bul">
-          <li><i class="ti ti-check"></i> <b>Top signál dne</b> – jeden konkrétní obchod, ne 50</li>
-          <li><i class="ti ti-check"></i> <b>Ověřeno na 11 letech S&amp;P 500</b> – ~59 % trefnost signálu</li>
-          <li><i class="ti ti-check"></i> <b>Stop-loss u každého obchodu</b> – chráníme tě</li>
+          <li><i class="ti ti-check"></i> <b>Měsíční koš tipů</b> – nejsilnější akce S&amp;P 500, kupuješ celý koš</li>
+          <li><i class="ti ti-check"></i> <b>Ověřeno na historii S&amp;P 500</b> – i na letech, na kterých se nic neladilo</li>
+          <li><i class="ti ti-check"></i> <b>Hodnocení každé tvé akcie</b> – přikupuj / drž / nedokupuj</li>
         </ul>
       </div>
       <div class="onb-page" data-page="1" style="display:none;">
         <div class="onb-icon"><i class="ti ti-layout-dashboard"></i></div>
         <h2>Tvůj <span style="color:var(--accent)">Přehled</span></h2>
-        <p>Hlavní obrazovka shrnuje stav trhu, top signál dne, sektorové trendy, novinky a co se chystá tento týden.</p>
+        <p>Hlavní obrazovka shrnuje stav trhu, první tip z koše, sektorové trendy, novinky a co se chystá tento týden.</p>
         <ul class="onb-bul">
           <li><i class="ti ti-pulse"></i> <b>Stav trhu</b> – VIX, výnosy, dolar, ropa, BTC</li>
-          <li><i class="ti ti-target-arrow"></i> <b>Top signál dne</b> – konkrétní akce</li>
+          <li><i class="ti ti-target-arrow"></i> <b>Koš tipů</b> – nejsilnější akce měsíce</li>
           <li><i class="ti ti-grid-dots"></i> <b>Sektorová heatmapa</b> – kdo dnes roste</li>
         </ul>
       </div>
@@ -2327,7 +2261,7 @@ body.modal-open {overflow:hidden;}
         <div class="level-row" id="notif-week-row" style="display:none;">
           <span class="level-lbl"><i class="ti ti-calendar-week"></i> Sobotní shrnutí týdne:</span>
           <label class="switch"><input type="checkbox" id="notif-weekly" onchange="saveNotif()"><span class="slider"></span></label>
-          <span style="font-size:12px; color:var(--text2);">výkon watchlistu, klíčové události, top signály — každou sobotu ráno</span>
+          <span style="font-size:12px; color:var(--text2);">výkon watchlistu, koš tipů, klíčové události — každou sobotu ráno</span>
         </div>
 
         <div class="level-row" id="notif-push-row" style="display:none;">
@@ -2497,11 +2431,11 @@ body.modal-open {overflow:hidden;}
       </div>
 
       <div class="ov-grid">
-        <!-- TOP SIGNÁL DNE -->
+        <!-- KOŠ TIPŮ: první tip -->
         <div class="ov-col-8">
           <div class="signal-spotlight" id="ov-top-signal">
-            <div class="ss-tag"><i class="ti ti-target-arrow"></i> Top signál dne</div>
-            <div class="ov-load"><i class="ti ti-loader spin"></i> Hledám nejlepší příležitost dneška…</div>
+            <div class="ss-tag"><i class="ti ti-target-arrow"></i> Koš tipů</div>
+            <div class="ov-load"><i class="ti ti-loader spin"></i> Načítám koš tipů…</div>
           </div>
         </div>
 
@@ -2582,7 +2516,7 @@ body.modal-open {overflow:hidden;}
         <!-- TOP PŘÍLEŽITOSTI -->
         <div class="ov-col-12">
           <div class="ov-card">
-            <h3 style="display:flex; justify-content:space-between; align-items:center;"><span><i class="ti ti-rocket"></i> Další top příležitosti</span><a onclick="switchTab('opportunities')" style="color:var(--accent); cursor:pointer; font-size:11px; letter-spacing:.5px;">Vše →</a></h3>
+            <h3 style="display:flex; justify-content:space-between; align-items:center;"><span><i class="ti ti-rocket"></i> Další tipy z koše</span><a onclick="switchTab('opportunities')" style="color:var(--accent); cursor:pointer; font-size:11px; letter-spacing:.5px;">Vše →</a></h3>
             <div id="ov-opps"><div class="ov-load"><i class="ti ti-loader spin"></i> Skenuji trh…</div></div>
           </div>
         </div>
@@ -2593,10 +2527,19 @@ body.modal-open {overflow:hidden;}
     <div class="dash-section" id="section-results" style="display:none;">
       <div class="ov-hero">
         <h1>Naše <em>výsledky</em> — bez příkras.</h1>
-        <div class="sub">11 let celého S&amp;P 500 včetně titulů, které z indexu vypadly, a ověření na letech 2023–2026, na kterých se nic neladilo. Pod tím živý záznam modelu: každý denní signál se zapíše a vyhodnotí automaticky. Nic neretušujeme — ani roky, kdy model index neporazil.</div>
+        <div class="sub">11 let celého S&amp;P 500 včetně titulů, které z indexu vypadly, a ověření na letech 2023–2026, na kterých se nic neladilo. Nahoře živý záznam koše tipů (podle něj dnes doporučujeme kupovat), pod ním starší krátkodobý signál, který už jen sledujeme. Nic neretušujeme — ani roky, kdy model index neporazil.</div>
       </div>
 
-      <!-- HLAVNÍ STATISTIKY -->
+      <!-- ŽIVÝ ZÁZNAM KOŠE TIPŮ (to, podle čeho dnes doporučujeme kupovat) -->
+      <div class="ov-card" style="margin-top:18px;" id="tr-basket">
+        <h3 style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <span><i class="ti ti-basket"></i> Koš tipů — živý záznam</span>
+          <span class="tr-live-meta" id="tr-basket-meta"></span>
+        </h3>
+        <div id="tr-basket-body"><div class="ov-load"><i class="ti ti-loader spin"></i> Načítám záznam koše…</div></div>
+      </div>
+
+      <!-- HLAVNÍ STATISTIKY (starší krátkodobý signál) -->
       <div class="tr-stats" id="tr-stats">
         <div class="ov-load"><i class="ti ti-loader spin"></i> Načítám výsledky backtestu…</div>
       </div>
@@ -2613,7 +2556,7 @@ body.modal-open {overflow:hidden;}
       <!-- LIVE TRACK RECORD -->
       <div class="ov-card" style="margin-top:18px;">
         <h3 style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <span><i class="ti ti-history"></i> Živý záznam modelu — každý denní signál automaticky</span>
+          <span><i class="ti ti-history"></i> Starší krátkodobý signál — živý záznam (už jen sledujeme, nedoporučujeme podle něj kupovat)</span>
           <span class="tr-live-meta" id="tr-live-meta"></span>
         </h3>
         <div id="tr-live-list">
@@ -2646,42 +2589,8 @@ body.modal-open {overflow:hidden;}
 
     <!-- SEKCE: PŘÍLEŽITOSTI -->
     <div class="dash-section" id="section-opportunities" style="display:none;">
-    <!-- ŽIVÉ NÁKUPNÍ SIGNÁLY PODLE OVĚŘENÉHO MODELU -->
-    <div class="opp-box" id="signals-box" style="border-color:rgba(0,230,118,0.35);">
-      <div class="opp-head">
-        <div class="opp-title">
-          <i class="ti ti-target-arrow" style="color:var(--up)"></i> Co koupit teď — signál „Sleva v trendu"
-          <span class="opp-sub">Akcie, které <b>právě teď</b> splňují náš backtestem prověřený nákupní signál. Horizont do 6 týdnů. <span id="signals-proof" style="color:var(--up)"></span> <a class="profile-cloud-link" onclick="openMethod()">Jak hodnotíme?</a></span>
-        </div>
-        <div class="opp-actions">
-          <span class="opp-updated" id="signals-updated"></span>
-          <button class="tool-btn" onclick="loadSignals(true)"><i class="ti ti-refresh"></i> Skenovat</button>
-        </div>
-      </div>
-      <div class="opp-grid" id="signals-grid">
-        <div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh podle ověřeného modelu…</div>
-      </div>
-    </div>
-
-    <!-- SCANNER PŘÍLEŽITOSTÍ – Potenciál -->
-    <div class="opp-box" id="opp-box">
-      <div class="opp-head">
-        <div class="opp-title">
-          <i class="ti ti-target-arrow"></i> Podhodnocené s momentem
-          <span class="opp-sub">Akcie S&amp;P 500, které jsou <b>levné podle zisků a cash flow</b> a zároveň mají <b>roční momentum</b>. Samotná „levnost" ani samotný růst nefungovaly stabilně — jejich kombinace v testu 2015–2026 ano. Kupovat v nákupní zóně, ne naslepo.</span>
-        </div>
-        <div class="opp-actions">
-          <span class="opp-updated" id="opp-updated"></span>
-          <button class="tool-btn" onclick="loadOpportunities()"><i class="ti ti-refresh"></i> Skenovat</button>
-        </div>
-      </div>
-      <div class="opp-filters" id="opp-filters">
-        <span style="font-size:12px;color:var(--text2)">💎 Nejlevnější akcie S&amp;P 500, které zároveň mají roční momentum — ověřená kombinace, ne jen „spadlé" tituly.</span>
-      </div>
-      <div class="opp-grid" id="opp-grid">
-        <div class="opp-loading"><i class="ti ti-loader spin"></i> Hledám příležitosti s potenciálem...</div>
-      </div>
-    </div>
+    <!-- KOŠ TIPŮ: jediný seznam „co koupit“ (stejný jako v Moje portfolio, e-mailech a Přehledu) -->
+    <div id="opp-picks-root"><div class="opp-loading"><i class="ti ti-loader spin"></i> Načítám koš tipů…</div></div>
     </div><!-- /section-opportunities -->
 
     <!-- SEKCE: MOJE PORTFOLIO -->
@@ -2690,7 +2599,6 @@ body.modal-open {overflow:hidden;}
       <div id="simple-banner" class="simple-banner" style="display:none;">
         <div><i class="ti ti-wand" style="color:var(--accent)"></i> <b>Zjednodušený režim</b> — vidíš jen to podstatné. Vypneš ho v profilu.</div>
       </div>
-      <div id="simple-buy"></div>
       <div id="starter-card"></div>
       <div class="ps-toolbar" id="ps-toolbar">
         <span class="live-badge" id="live-badge" style="display:none;"><i class="ti ti-point-filled"></i> LIVE</span>
@@ -2703,12 +2611,6 @@ body.modal-open {overflow:hidden;}
 
       <!-- PŘEHLED PORTFOLIA -->
       <div id="portfolio-summary" class="pf-summary" style="display:none;"></div>
-
-      <!-- CO ZVÁŽIT K PRODEJI (exit signály z watchlistu) -->
-      <div class="exit-box" id="exit-box" style="display:none;">
-        <div class="exit-head"><i class="ti ti-alert-triangle"></i> Co zvážit k prodeji</div>
-        <div id="exit-list"></div>
-      </div>
 
       <!-- SLEDOVANÉ AKCIE -->
       <div class="section-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
@@ -3290,8 +3192,6 @@ async function loadWatchlist() {
         if (typeof renderOverviewPortfolio === 'function') renderOverviewPortfolio();
         if (typeof renderOverviewEvents === 'function') renderOverviewEvents();
 
-        loadExitSignals();  // „Co zvážit k prodeji" (rule-based, Pro)
-
         if(!autoRefreshTimer) {
             autoRefreshTimer = setInterval(() => {
                 if(document.getElementById('dashboard').style.display !== 'none') loadWatchlistSilent();
@@ -3344,18 +3244,8 @@ function switchTab(name) {
         renderStarter();
         planOpen();
     }
-    // Zamykání sekcí podle plánu
-    if (name === 'opportunities') {
-        if (!hasFeature('pro')) {
-            document.getElementById('signals-grid').innerHTML = lockedCardHTML('Co koupit teď — ověřený signál', 'pro',
-                'Akcie, které právě teď splňují náš backtestem prověřený nákupní signál.');
-            document.getElementById('opp-grid').innerHTML = lockedCardHTML('Podhodnocené s momentem', 'pro',
-                'Nejlevnější akcie S&amp;P 500, které zároveň mají roční momentum — ověřená kombinace.');
-        } else {
-            loadSignals();
-            if (!oppData.length && !oppLoading) loadOpportunities();
-        }
-    }
+    // Příležitosti = koš tipů (jediný seznam „co koupit“)
+    if (name === 'opportunities') loadOppPicks();
     if (name === 'ai') {
         const lock = document.getElementById('ai-lock');
         if (!hasFeature('elite')) {
@@ -3773,43 +3663,48 @@ async function fetchOverviewMacro() {
     }
 }
 
+// Přehled: první tip z koše (který ještě nemáš) + další tři. Stejná data jako Příležitosti a Moje portfolio.
+function picksNotHeld(d) {
+    const held = new Set(picksHeldRows().map(r => String(r.ticker).replace('.', '-')));
+    const all = ((d.picks && d.picks.basket) || []).concat(d.more || []);
+    return all.filter(p => !held.has(p.ticker));
+}
 async function fetchOverviewSignal() {
     const box = document.getElementById('ov-top-signal');
     if (!box) return;
     if (!hasFeature('pro')) {
-        box.innerHTML = `<div class="ss-tag"><i class="ti ti-lock"></i> Top signál dne</div>
-            <div style="font-size:15px;line-height:1.5;color:var(--text);margin-bottom:14px;">Konkrétní top nákupní signál dnes — odemkneme ho v plánu <b>Pro</b>.</div>
+        box.innerHTML = `<div class="ss-tag"><i class="ti ti-lock"></i> Koš tipů</div>
+            <div style="font-size:15px;line-height:1.5;color:var(--text);margin-bottom:14px;">Měsíční koš nejsilnějších akcií S&amp;P 500 — odemkneme ho v plánu <b>Pro</b>.</div>
             <button class="ss-cta" onclick="openProfile('plans')"><i class="ti ti-rocket"></i> Vybrat plán Pro</button>`;
         return;
     }
     try {
-        const d = await (await fetch(`${BACKEND_URL}/api/signals`)).json();
-        const list = (d && d.results) || [];
-        const top = list.find(o => o.conviction === 'top') || list[0];
-        if (!top) {
-            box.innerHTML = `<div class="ss-tag"><i class="ti ti-zzz"></i> Top signál dne</div>
-                <div style="font-size:15px;line-height:1.5;color:var(--text);margin-bottom:6px;">Dnes <b>žádný titul nesplňuje</b> náš přísný nákupní signál.</div>
-                <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">To je v pořádku — model nakupuje jen ověřené situace, ne pořád. Mrkni sem zítra.</div>
-                <button class="ss-cta" onclick="switchTab('opportunities')"><i class="ti ti-eye"></i> Mrkni na příležitosti</button>`;
+        const d = await fetchPicksData(planPicksN);
+        const top = d && d.ok ? picksNotHeld(d)[0] : null;
+        if (!d || !d.ok || !d.picks) {
+            box.innerHTML = `<div class="ss-tag"><i class="ti ti-zzz"></i> Koš tipů</div>
+                <div style="font-size:15px;line-height:1.5;color:var(--text);margin-bottom:6px;">${d && d.scanning ? 'Ranní sken ještě běží.' : 'Koš tipů teď není dostupný.'}</div>
+                <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Zkus to za chvíli.</div>`;
             return;
         }
-        const isTop = top.conviction === 'top';
-        const chgTxt = (top.change_pct >= 0 ? '+' : '') + (top.change_pct || 0).toFixed(2) + '%';
-        const chgCol = top.change_pct >= 0 ? 'var(--up)' : 'var(--down)';
+        if (!top) {
+            box.innerHTML = `<div class="ss-tag"><i class="ti ti-check"></i> Koš tipů</div>
+                <div style="font-size:15px;line-height:1.5;color:var(--text);margin-bottom:6px;">Všechny tipy z koše už <b>máš</b>.</div>
+                <div style="color:var(--text2);font-size:13px;margin-bottom:14px;">Nic dokupovat nemusíš – koš se mění jednou měsíčně.</div>
+                <button class="ss-cta" onclick="switchTab('opportunities')"><i class="ti ti-eye"></i> Celý koš</button>`;
+            return;
+        }
+        const month = d.picks.month ? MP_MONTH_CZ[parseInt(d.picks.month.slice(5, 7), 10) - 1] : '';
+        const chgTxt = top.chg != null ? (top.chg >= 0 ? '+' : '') + top.chg.toFixed(2) + '%' : '';
+        const chgCol = (top.chg || 0) >= 0 ? 'var(--up)' : 'var(--down)';
         box.innerHTML = `
-            <div class="ss-tag">${isTop ? '⭐ TOP signál dne' : 'Nejlepší signál dne'}</div>
-            <div class="ss-ticker">${escapeHtml(top.ticker)}</div>
-            <div class="ss-name">${escapeHtml(niceName(top.ticker, top.name))} · <span style="color:${chgCol}">${chgTxt} dnes</span></div>
-            <div class="ss-row">
-                <div class="it"><span class="l">Cena</span><span class="v">${(top.price || 0).toFixed(2)} ${escapeHtml(top.currency || '')}</span></div>
-                <div class="it"><span class="l">MA skóre</span><span class="v g">${top.score}</span></div>
-                <div class="it"><span class="l">Cíl</span><span class="v g">+${top.reward_pct ?? '?'}%</span></div>
-                <div class="it"><span class="l">Stop-loss</span><span class="v">−${top.risk_pct ?? '?'}%</span></div>
-                <div class="it"><span class="l">Zisk:riziko</span><span class="v">${top.rr ?? '—'} : 1</span></div>
-            </div>
-            <button class="ss-cta" onclick="loadStockDetail('${top.ticker}')"><i class="ti ti-zoom-scan"></i> Otevřít hloubkovou analýzu</button>`;
+            <div class="ss-tag">🎯 První v koši tipů${month ? ' na ' + month : ''}</div>
+            <div class="ss-ticker">${escapeHtml(mpBase(top.ticker))}</div>
+            <div class="ss-name">${escapeHtml(top.name || '')}${chgTxt ? ` · <span style="color:${chgCol}">${chgTxt} dnes</span>` : ''}</div>
+            <div style="color:var(--text2);font-size:13px;line-height:1.5;margin:6px 0 14px">${escapeHtml(top.why || '')}<br><b>Kupuj celý koš, ne jednu akcii</b> – jednotlivý tip index porazí jen zhruba v polovině případů, koš častěji.</div>
+            <button class="ss-cta" onclick="switchTab('opportunities')"><i class="ti ti-basket"></i> Celý koš tipů</button>`;
     } catch(e) {
-        box.innerHTML = '<div class="ss-tag">Top signál dne</div><div class="ov-empty">Skener teď není dostupný.</div>';
+        box.innerHTML = '<div class="ss-tag">Koš tipů</div><div class="ov-empty">Koš tipů teď není dostupný.</div>';
     }
 }
 
@@ -3860,29 +3755,28 @@ async function fetchOverviewOpps() {
     const box = document.getElementById('ov-opps');
     if (!box) return;
     if (!hasFeature('pro')) {
-        box.innerHTML = '<div class="ov-empty">Skener příležitostí je k dispozici v plánu <b>Pro</b>.</div>';
+        box.innerHTML = '<div class="ov-empty">Koš tipů je k dispozici v plánu <b>Pro</b>.</div>';
         return;
     }
     try {
-        const d = await (await fetch(`${BACKEND_URL}/api/opportunities`)).json();
-        const list = (d && d.results) || [];
+        const d = await fetchPicksData(planPicksN);
+        const list = d && d.ok && d.picks ? picksNotHeld(d).slice(1, 5) : [];
         if (!list.length) {
-            box.innerHTML = '<div class="ov-empty">Skener zrovna nenašel žádné další příležitosti.</div>';
+            box.innerHTML = '<div class="ov-empty">Další tipy teď nejsou k dispozici.</div>';
             return;
         }
-        box.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:8px;">${list.slice(0, 4).map(o => `
-            <div class="ov-opp-row" onclick="loadStockDetail('${o.ticker}')">
+        box.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:8px;">${list.map(o => `
+            <div class="ov-opp-row" onclick="loadStockDetail('${mpEsc(o.ticker)}')">
                 <div class="l">
-                    <span class="t">${escapeHtml(o.ticker)}</span>
-                    <span class="n">${escapeHtml(niceName(o.ticker, o.name))}</span>
+                    <span class="t">${escapeHtml(mpBase(o.ticker))}</span>
+                    <span class="n">${escapeHtml(o.name || '')}</span>
                 </div>
                 <div class="r">
-                    <span class="s">${o.score ?? '?'}</span>
-                    <span class="h">#${o.vm_rank ?? '?'}${o.pe ? ' · P/E ' + o.pe : ''}</span>
+                    <span class="h">${o.source === 'vm' ? 'Levná + roste' : 'Silné momentum'}</span>
                 </div>
             </div>`).join('')}</div>`;
     } catch(e) {
-        box.innerHTML = '<div class="ov-empty">Skener teď není dostupný.</div>';
+        box.innerHTML = '<div class="ov-empty">Koš tipů teď není dostupný.</div>';
     }
 }
 
@@ -4077,6 +3971,7 @@ async function loadResultsLive() {
         const d = await (await fetch(`${BACKEND_URL}/api/track-record`)).json();
         // Hlavní je ŽIVÝ ZÁZNAM MODELU (každý denní signál automaticky), ne to,
         // co si kdo rozklikl – ten nejde vybrat zpětně, takže je to poctivý důkaz.
+        renderResultsBasket(d && d.basket);
         const md = (d && d.model) || {};
         const items = (md.items && md.items.length) ? md.items.map(x => ({...x, verdict: 'Koupit', ts: null}))
                                                      : ((d && d.items) || []);
@@ -4112,7 +4007,41 @@ async function loadResultsLive() {
         }).join('')}</div>`;
     } catch(e) {
         list.innerHTML = '<div class="ov-empty" style="color:var(--down)">Track record se nepodařilo načíst.</div>';
+        renderResultsBasket(null);
     }
+}
+
+// Živý záznam koše: měsíční koše (prvních n v pořadí), rovnoměrně, řetězeno přes měsíce, proti S&P 500
+async function renderResultsBasket(basket) {
+    const body = document.getElementById('tr-basket-body'), meta = document.getElementById('tr-basket-meta');
+    if (!body) return;
+    const b = basket && basket['10'], b6 = basket && basket['6'];
+    if (!b) {
+        body.innerHTML = '<div class="ov-empty">Záznam koše se teprve plní – první měsíc se vyhodnotí po sestavení dalšího koše.</div>';
+        return;
+    }
+    if (meta) meta.textContent = `od ${mpDate(b.since)}${b.since ? ' ' + b.since.slice(0, 4) : ''} · ${b.periods.length} ${b.periods.length === 1 ? 'měsíc' : (b.periods.length < 5 ? 'měsíce' : 'měsíců')}`;
+    const diff = b.ret - b.spy, col = v => v >= 0 ? 'up' : 'amber';
+    const rows = b.periods.slice().reverse().map(x => {
+        const mon = MP_MONTH_CZ[parseInt(x.month.slice(5, 7), 10) - 1] + ' ' + x.month.slice(0, 4);
+        return `<div class="tr-bk-row"><div><div class="m">${mon}</div><div class="d">od ${mpDate(x.since)}${x.until ? ' do ' + mpDate(x.until) : ' – běží'} · ${x.n} akcií</div></div>
+            <div class="v" style="color:var(--${col(x.ret)})">${mpSigned(x.ret)} <span style="font-weight:500;color:var(--text2)">· S&amp;P ${mpSigned(x.spy)}</span></div></div>`;
+    }).join('');
+    let proof = '';
+    try {
+        const pk = await fetchPicksData(10);
+        const st = pk && pk.picks && pk.picks.stats, tr = st && st.train, ho = st && st.holdout;
+        if (tr && ho) proof = `<div class="tr-fine"><b>Ověření na historii S&amp;P 500:</b> koš 10 tipů porazil index za 12 měsíců v <b>${tr.beat_pct} %</b> případů v letech 2015–2022 a v <b>${ho.beat_pct} %</b> v letech 2023–2026, na kterých se nic neladilo. Jednotlivý tip porazí index jen asi v ${ho.tip_pct} % – kupuj celý koš.</div>`;
+    } catch (e) {}
+    body.innerHTML = `<div class="tr-stats" style="margin-bottom:12px">
+          <div class="tr-kpi hero"><div class="lbl">Koš (10 tipů) celkem</div><div class="val" style="color:var(--${col(b.ret)})">${mpSigned(b.ret)}</div></div>
+          <div class="tr-kpi"><div class="lbl">S&amp;P 500 stejné období</div><div class="val">${mpSigned(b.spy)}</div></div>
+          <div class="tr-kpi ${diff >= 0 ? 'good' : ''}"><div class="lbl">Rozdíl proti indexu</div><div class="val">${mpSigned(diff)}</div></div>
+          ${b6 ? `<div class="tr-kpi"><div class="lbl">Užší koš (6 tipů)</div><div class="val">${mpSigned(b6.ret)}</div></div>` : ''}
+        </div>
+        <div class="tr-live-list">${rows}</div>
+        <div class="tr-fine">Počítáme poctivě: každý měsíc se zmrazí koš tak, jak jsme ho tehdy doporučili (ceny ze dne sestavení), drží se rovnoměrně do dalšího koše a výsledky se řetězí. Krátké období je hlavně náhoda – smysl to dává po měsících až letech, nezaručuje to žádný model. Aktuální měsíc zatím běží.</div>
+        ${proof}`;
 }
 
 // ====================== ONBOARDING TOUR ======================
@@ -4758,8 +4687,7 @@ function setRisk(r) {
     renderStarter();
     // Při změně profilu znovu načti, co na něm závisí. (Dřív se tu volalo
     // neexistující renderOpps() – příležitosti se proto nikdy nepřekreslily.)
-    if (oppData && oppData.length) renderOpportunities();
-    if (typeof signalsLoaded !== 'undefined' && signalsLoaded) loadSignals(true);
+    if (picksCache && Object.keys(picksCache).length) { picksCache = {}; loadOppPicks(true); }
     if (typeof fetchOverviewPositions === 'function') fetchOverviewPositions();
     planOnRisk();
     if (authToken) fetch(`${BACKEND_URL}/api/profile/risk`, {
@@ -5042,44 +4970,7 @@ function applySimple() {
     if (banner) banner.style.display = investorSimple ? 'block' : 'none';
     const t = document.getElementById('simple-toggle');
     if (t) t.checked = investorSimple;
-    if (investorSimple) {
-        switchTab('portfolio');
-        renderSimpleBuy();
-    } else {
-        const sb = document.getElementById('simple-buy');
-        if (sb) sb.innerHTML = '';
-    }
-}
-
-async function renderSimpleBuy() {
-    const box = document.getElementById('simple-buy');
-    if (!box || !investorSimple) { if (box) box.innerHTML = ''; return; }
-    if (!hasFeature('pro')) {
-        box.innerHTML = `<div class="simple-buy-box">
-            <div class="simple-buy-head"><i class="ti ti-shopping-cart"></i> Co koupit teď</div>
-            <div class="simple-buy-sub">Tipy na akcie s potenciálem jsou v plánu Pro a vyšším.</div>
-            <button class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;" onclick="openProfile('plans')"><i class="ti ti-crown"></i> Zobrazit předplatné</button>
-        </div>`;
-        return;
-    }
-    box.innerHTML = `<div class="simple-buy-box"><div class="simple-buy-head"><i class="ti ti-shopping-cart"></i> Co koupit teď</div>
-        <div class="simple-buy-sub"><i class="ti ti-loader spin"></i> Hledám příležitosti...</div></div>`;
-    try {
-        // „Co koupit teď" = jen OVĚŘENÝ nákupní signál (TOP pokles + hodnota&momentum).
-        // Dřív sem šel seznam podhodnocených – ten ale říká, co je levné, ne kdy koupit.
-        const d = await (await fetch(`${BACKEND_URL}/api/signals`)).json();
-        const sig = ((d && d.results) || []).filter(o => (o.sector_rank || 0) <= 2).slice(0, 5);
-        const items = sig.map(o => `
-            <div class="sbuy-item" onclick="loadStockDetail('${o.ticker}')">
-                <span class="sbuy-up">${o.vm}/100</span>
-                <div><div class="sbuy-tkr">${o.ticker} <span style="font-size:11px;color:var(--text2)">${escapeHtml(o.name || '')}</span></div>
-                <div class="sbuy-why">Kup kolem ${o.price} ${o.currency || ''} · cíl ${o.target} · stop ${o.stop} · max 6 týdnů</div></div>
-            </div>`).join('');
-        box.innerHTML = `<div class="simple-buy-box">
-            <div class="simple-buy-head"><i class="ti ti-shopping-cart"></i> Co koupit teď</div>
-            <div class="simple-buy-sub">${sig.length ? 'Ověřené nákupní signály dne. Na jeden titul dej ~10 % portfolia, zbytek nech v indexu.'
-                : 'Dnes žádný ověřený nákupní signál. Nedělej nic — kapitál nech v indexovém fondu.'}</div>${items}</div>`;
-    } catch (e) { box.innerHTML = ''; }
+    if (investorSimple) switchTab('portfolio');
 }
 
 function renderStarter() {
@@ -5162,14 +5053,14 @@ function addAllStarter() {
 const PLANS = [
     { id: 'start', name: 'Start', price: '5 €', period: '/ měsíc', feats: [
         ['Neomezené sledování', 1], ['Grafy, Signal Score & technický budík', 1], ['Aktuální zprávy', 1],
-        ['Cenová upozornění + sync', 1], ['Příležitosti & analytici', 0], ['Hloubková analýza', 0] ] },
+        ['Cenová upozornění + sync', 1], ['Koš tipů & analytici', 0], ['Hloubková analýza', 0] ] },
     { id: 'pro', name: 'Pro', price: '10 €', period: '/ měsíc', featured: true, feats: [
-        ['Vše ze Start', 1], ['Podhodnocené s momentem', 1], ['Doporučení analytiků & cílové ceny', 1],
+        ['Vše ze Start', 1], ['Měsíční koš tipů', 1], ['Doporučení analytiků & cílové ceny', 1],
         ['Fundamenty (P/E, kapitalizace)', 1], ['Hloubková analýza (5/den)', 1],
         ['Asistent, přehled & track record', 0] ] },
     { id: 'elite', name: 'Elite', price: '15 €', period: '/ měsíc', feats: [
         ['Vše z Pro', 1], ['Hloubková analýza (30/den)', 1], ['Asistent k akcii', 1],
-        ['Tržní briefing & „co prodat/přikoupit"', 1], ['Zdůvodnění u příležitostí', 1],
+        ['Tržní briefing & hodnocení akcií', 1], ['Zdůvodnění u tipů', 1],
         ['Track record signálů', 1] ] },
 ];
 
@@ -5359,7 +5250,6 @@ async function adminDailyKick(manual) {
     dailyKickRunning = false;
     if (done) {
         try { localStorage.setItem('ma_daily_kick2', today); } catch (e) {}
-        signalsLoaded = false;
         if (added) showToast(`Denní aktualizace hotová: +${added} ${added === 1 ? 'verdikt' : (added < 5 ? 'verdikty' : 'verdiktů')} v track recordu`, 'up', 'ti-refresh');
         if (typeof activeTab !== 'undefined' && activeTab === 'ai') loadTrackRecord();
     }
@@ -5382,6 +5272,8 @@ async function loadEmailStatus() {
             ok(d.email_enabled, `Odesílání přes Brevo nastavené${d.sender ? ' (odesílatel ' + escapeHtml(d.sender) + ')' : ''}`, 'na Vercelu chybí BREVO_API_KEY nebo SENDER_EMAIL') +
             ok(d.digest_send, 'Rozesílání zapnuté (DIGEST_SEND=on)', 'Vercel → Settings → Environment Variables → přidej DIGEST_SEND = on (Production) a dej Redeploy') +
             ok(d.cron_secret, 'Ranní cron má heslo (CRON_SECRET)', 'na Vercelu chybí CRON_SECRET – bez něj cron nic neudělá') +
+            (d.security ? ok(d.security.site_password, 'Heslo zámku webu je nastavené na Vercelu (SITE_PASSWORD)', 'bez něj platí veřejně známé výchozí heslo – nastav vlastní dlouhé heslo (Vercel → Environment Variables) a dej Redeploy') +
+                ok(d.security.app_secret, 'Podpisový klíč přihlášení je nastavený (APP_SECRET)', 'nastav APP_SECRET (openssl rand -hex 32) a dej Redeploy; do té doby si appka klíč hlídá sama, ale změní se při smazání dat') : '') +
             ok(d.me.morning, `Ty máš ranní souhrn zapnutý (${escapeHtml(d.me.email)})`, 'zapni ho v Profil → Notifikace') +
             ok(d.ai_enabled, 'AI shrnutí zpráv zapnuté (ANALYSIS_API_KEY)', 'bez klíče briefing ukazuje jen čísla a témata, ne vysvětlení příčin') +
             (d.scan_last ? ok(d.scan_last.today, `Dnešní sken S&amp;P 500 hotový (${d.scan_last.scanned || '?'} titulů, ${d.scan_last.signals} signálů, ${escapeHtml(d.scan_last.date || '?')})`, 'poslední hotový sken je ze dne ' + escapeHtml(d.scan_last.date || '?') + ' – spusť „Denní aktualizace“ dole') : '') +
@@ -5491,7 +5383,6 @@ async function adminScan(round) {
         out.innerHTML = d.done
             ? `<span style="color:var(--up)">Hotovo: ${d.scanned} titulů, ${d.signals} ${d.signals === 1 ? 'signál' : 'signálů'} (${escapeHtml(d.updated || '')}).</span>`
             : 'Sken ještě běží – klikni znovu.';
-        signalsLoaded = false;
     } catch (e) {
         out.innerHTML = '<span style="color:var(--down)">Chyba spojení se serverem.</span>';
     }
@@ -5667,157 +5558,6 @@ async function handlePaidReturn() {
     showToast('Předplatné aktivní 🎉', 'up', 'ti-crown');
 }
 
-// ====================== SCANNER PŘÍLEŽITOSTÍ ======================
-let oppData = [];
-let oppLoading = false;
-
-
-let signalsLoaded = false;
-async function loadSignals(force) {
-    const grid = document.getElementById('signals-grid');
-    if (!hasFeature('pro')) {
-        grid.innerHTML = lockedCardHTML('Co koupit teď — ověřený signál', 'pro',
-            'Akcie, které právě teď splňují náš backtestem prověřený nákupní signál.');
-        return;
-    }
-    if (signalsLoaded && !force) return;
-    grid.innerHTML = '<div class="opp-loading"><i class="ti ti-loader spin"></i> Skenuji trh podle ověřeného modelu… (poprvé to chvíli trvá)</div>';
-    try {
-        const data = await (await fetch(`${BACKEND_URL}/api/signals`)).json();
-        if (!data.ok) throw new Error();
-        if (data.scanning) { grid.innerHTML = '<div class="opp-loading" style="color:var(--text2)">První sken S&amp;P 500 ještě neproběhl — spustí se sám ráno v 7:00 našeho času, nebo ho admin pustí hned v Profilu → Admin → Spustit sken.</div>'; return; }
-        signalsLoaded = true;
-        document.getElementById('signals-updated').textContent = `${data.count} ${data.count === 1 ? 'signál' : (data.count < 5 ? 'signály' : 'signálů')} · ${data.updated}`;
-        if (btProof && btProof.buy && btProof.buy.win_rate != null) {
-            document.getElementById('signals-proof').textContent =
-                `Ověřeno na 2023–2026: ${btProof.buy.win_rate} % trefnost, ${btProof.buy.avg_return >= 0 ? '+' : ''}${btProof.buy.avg_return} % na obchod.`;
-        }
-        renderSignals(data.results || []);
-    } catch (e) {
-        grid.innerHTML = `<div class="opp-loading" style="color:var(--down)">Skener se nepodařilo načíst.</div>`;
-    }
-}
-
-function renderSignals(list) {
-    const grid = document.getElementById('signals-grid');
-    const beforeN = list.length;
-    list = (list || []).filter(o => riskFilterPass(o));
-    const filteredOut = beforeN - list.length;
-    if (!list.length) {
-        const extra = filteredOut > 0 ? ` (${filteredOut} ${filteredOut === 1 ? 'titul vyfiltrován' : 'titulů vyfiltrováno'} dle tvého rizikového profilu)` : '';
-        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Dnes žádný titul nesplňuje nákupní signál${extra}. To je v pořádku — model nakupuje jen ověřené situace, ne pořád. Mrkni sem zítra.</div>`;
-        return;
-    }
-    grid.innerHTML = list.map((o, i) => {
-        const chg = o.change_pct;
-        const chgTxt = (chg || chg === 0) ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` : '';
-        const chgCol = (chg >= 0) ? 'var(--up)' : 'var(--down)';
-        const isTop = o.conviction === 'top';
-        const overCap = (o.sector_rank || 0) > 2;
-        const vmLine = o.vm != null
-            ? `<div class="opp-why" style="margin-top:8px"><i class="ti ti-diamond"></i> Hodnota+momentum <b>${o.vm}/100</b>${o.vm_rank ? ` (#${o.vm_rank} v S&amp;P 500)` : ''}${o.pe ? ` · P/E ${o.pe}` : ''}${o.mom_pct != null ? ` · momentum ${o.mom_pct >= 0 ? '+' : ''}${o.mom_pct} %` : ''}</div>` : '';
-        const capLine = overCap
-            ? `<div class="opp-why" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> ${o.sector_rank}. signál z odvětví ${escapeHtml(o.sector || '')} — model drží max 2 na sektor.</div>` : '';
-        return `
-        <div class="opp-card${isTop && !overCap ? ' moon' : ''}" onclick="loadStockDetail('${o.ticker}')" style="${overCap ? 'opacity:.6' : ''}">
-            <span class="opp-rank">${isTop && !overCap ? '⭐ TOP' : '#' + (i + 1)}</span>
-            <div class="opp-c-top">
-                <div class="opp-score p-high">${o.score}<small>SIGNÁL</small></div>
-                <div class="opp-c-id">
-                    <div class="opp-c-tkr">${o.ticker}</div>
-                    <div class="opp-c-name">${escapeHtml(niceName(o.ticker, o.name))}</div>
-                </div>
-            </div>
-            <div class="opp-upside">
-                <span class="opp-up-val" style="color:var(--up)">cíl +${o.reward_pct ?? '?'}%</span>
-                <span class="opp-up-lbl">stop −${o.risk_pct ?? '?'} % · zisk:riziko ${o.rr ?? '—'} : 1</span>
-            </div>
-            <div class="opp-c-px">
-                <span class="opp-c-price">${(o.price ?? 0).toFixed(2)} <span style="font-size:11px;color:var(--text2)">${o.currency || ''}</span></span>
-                <span style="font-size:12px;color:${chgCol}">${chgTxt} · RSI ${o.rsi ?? '—'}</span>
-            </div>
-            ${vmLine}${capLine}
-        </div>`;
-    }).join('');
-}
-
-async function loadOpportunities() {
-    const grid = document.getElementById('opp-grid');
-    if(!hasFeature('pro')) {
-        grid.innerHTML = lockedCardHTML('Podhodnocené s momentem', 'pro',
-            'Nejlevnější akcie S&amp;P 500, které zároveň mají roční momentum — ověřená kombinace.');
-        return;
-    }
-    if(oppLoading) return;
-    oppLoading = true;
-    grid.innerHTML = '<div class="opp-loading"><i class="ti ti-loader spin"></i> Načítám dnešní sken S&amp;P 500…</div>';
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/opportunities`);
-        const data = await res.json();
-        if(!data.ok) throw new Error();
-        if (data.scanning) { grid.innerHTML = '<div class="opp-loading" style="color:var(--text2)">První sken S&amp;P 500 ještě neproběhl — spustí se sám ráno v 7:00 našeho času, nebo ho admin pustí hned v Profilu → Admin → Spustit sken.</div>'; return; }
-        oppData = data.results || [];
-        document.getElementById('opp-updated').textContent = data.count
-            ? `${data.count} kandidátů · ${data.updated}` : '';
-        renderOpportunities();
-    } catch(e) {
-        grid.innerHTML = `<div class="opp-loading" style="color:var(--down)">Scanner se nepodařilo načíst (backend neběží?).</div>`;
-    } finally {
-        oppLoading = false;
-    }
-}
-
-function tierClass(tier) {
-    return ({ 'TOP 2 %': 'p-high', 'TOP 5 %': 'p-strong', 'TOP 10 %': 'p-mid' })[tier] || 'p-low';
-}
-
-function renderOpportunities() {
-    const grid = document.getElementById('opp-grid');
-    const all = oppData.slice();
-    const list = all.filter(o => riskFilterPass(o));
-    const filteredOut = all.length - list.length;
-    if(!list.length) {
-        const extra = filteredOut > 0 ? ` Tvůj rizikový profil ${filteredOut} titulů vyfiltroval — zkus „Vyvážená/Agresivní" v profilu.` : '';
-        grid.innerHTML = `<div class="opp-loading" style="color:var(--text2)">Žádné příležitosti k zobrazení.${extra} Zkus jiný filtr nebo Skenovat.</div>`;
-        return;
-    }
-
-    grid.innerHTML = list.map((o, i) => {
-        const badges = (o.badges || []).slice(0, 3).map(b =>
-            `<span class="opp-badge ${b.k}">${b.t}</span>`).join('');
-        const yr = o.year_pct;
-        const yrTxt = (yr || yr === 0) ? `${yr >= 0 ? '+' : ''}${yr.toFixed(0)}%` : '—';
-        const why = o.why ? `<div class="opp-why"><i class="ti ti-bulb"></i> ${escapeHtml(o.why)}</div>` : '';
-        return `
-        <div class="opp-card" onclick="loadStockDetail('${o.ticker}')" title="${o.exchange || ''}">
-            <span class="opp-rank">#${i+1}</span>
-            <div class="opp-c-top">
-                <div class="opp-score ${tierClass(o.tier)}">${o.score}<small>HODN.+MOM.</small></div>
-                <div class="opp-c-id">
-                    <div class="opp-c-tkr">${o.ticker}</div>
-                    <div class="opp-c-name">${o.name || ''}</div>
-                </div>
-            </div>
-            <div class="opp-upside">
-                <span class="opp-up-val">#${o.vm_rank ?? '—'}</span>
-                <span class="opp-up-lbl">pořadí v S&amp;P 500 · ${escapeHtml(o.sector || '')}</span>
-            </div>
-            <div class="opp-c-px">
-                <span class="opp-c-price">${(o.price ?? 0).toFixed(o.price < 10 ? 2 : 2)} <span style="font-size:11px;color:var(--text2)">${o.currency||''}</span></span>
-                <span class="opp-tier-lbl ${tierClass(o.tier)}">${o.tier}</span>
-            </div>
-            ${why}
-            <div class="opp-badges">${badges}</div>
-            <div class="opp-c-stats">
-                <div class="opp-stat"><span class="l">P/E</span><span class="v">${o.pe ?? '—'}</span></div>
-                <div class="opp-stat"><span class="l">Cash flow / cena</span><span class="v">${o.fcf_yield != null ? o.fcf_yield + ' %' : '—'}</span></div>
-                <div class="opp-stat"><span class="l">Za rok</span><span class="v" style="color:${(yr||0)>=0?'var(--up)':'var(--down)'}">${yrTxt}</span></div>
-            </div>
-        </div>`;
-    }).join('') +
-    `<div class="opp-disclaimer" style="grid-column:1/-1;"><i class="ti ti-info-circle"></i> Skóre hodnota+momentum = průměr pořadí v S&amp;P 500 podle zisku, účetní hodnoty a cash flow vůči ceně a ročního momenta (fundamenty z oficiálních dat SEC). Nejlepších 20 titulů v testu 2015–2026 porazilo průměrnou akcii indexu v obou obdobích. Kupuj je v nákupní zóně, ne naslepo. Není to investiční doporučení.</div>`;
-}
-
 // --- VYKRESLENÍ KARET: rozdělení na Moje pozice vs Sledované ---
 // Hezké názvy pro komodity/indexy/krypto (Yahoo je má ošklivé, např. „Gold Jun 26")
 const NAME_MAP = {
@@ -5870,26 +5610,6 @@ function stockCardHTML(s) {
             <div class="sc-change ${isUp ? 'up':'down'}"><i class="ti ${isUp ? 'ti-trending-up':'ti-trending-down'}"></i> ${isUp?'+':''}${s.change_pct.toFixed(2)}%</div>
         </div>
     </div>`;
-}
-
-async function loadExitSignals() {
-    const box = document.getElementById('exit-box');
-    const list = document.getElementById('exit-list');
-    if (!box) return;
-    if (!hasFeature('pro') || !myStocks.length) { box.style.display = 'none'; return; }
-    try {
-        const d = await (await fetch(`${BACKEND_URL}/api/exit-signals?tickers=${myStocks.join(',')}`)).json();
-        if (!d.ok || !d.count) { box.style.display = 'none'; return; }
-        box.style.display = 'block';
-        list.innerHTML = d.results.map(o => `
-            <div class="exit-row" onclick="loadStockDetail('${o.ticker}')">
-                <span class="exit-tag ${o.level}">${o.level === 'sell' ? 'Prodat' : 'Oslabení'}</span>
-                <span class="er-tk">${escapeHtml(niceName(o.ticker, o.name))} <span style="font-size:11px;color:var(--text3);font-weight:400">${o.ticker}</span></span>
-                <span class="er-reason">${escapeHtml(o.reason)}</span>
-                <span style="font-size:12px;color:var(--text2)">${(o.price ?? 0).toFixed(2)} ${o.currency || ''} · skóre ${o.score}</span>
-            </div>`).join('') +
-            `<div style="font-size:11px;color:var(--text2);margin-top:8px">Z tvého sledování — podle našeho technického skóre právě slábnou. Není to příkaz k prodeji, ale podnět zvážit exit (viz <a class="profile-cloud-link" onclick="event.stopPropagation();openMethod()">metodika</a>).</div>`;
-    } catch (e) { box.style.display = 'none'; }
 }
 
 let myTags = JSON.parse(localStorage.getItem('mystocks_tags') || '{}');
@@ -8404,10 +8124,60 @@ function planEvalHTML(d) {
 function planSetPicks(n) {
     planPicksN = n === 6 ? 6 : 10;
     try { localStorage.setItem('ma_picks_n', String(planPicksN)); } catch (e) {}
-    planRefresh();
+    if (planLots.length) planRefresh(); else renderPlan();
+    if (document.getElementById('opp-picks-root') && picksCache) loadOppPicks(true);
+    if (typeof fetchOverviewSignal === 'function') { fetchOverviewSignal(); fetchOverviewOpps(); }
 }
 
-function planPicksHTML(d) {
+// ---------- koš tipů: jediný seznam „co koupit“ (Příležitosti, Přehled, Moje portfolio, e-maily) ----------
+let picksCache = {};
+async function fetchPicksData(n, force) {
+    n = n === 6 ? 6 : 10;
+    const c = picksCache[n];
+    if (c && !force && Date.now() - c.ts < 5 * 60 * 1000) return c.d;
+    const d = await (await fetch(`${BACKEND_URL}/api/picks?n=${n}`)).json();
+    if (d && d.ok && d.picks) picksCache[n] = { ts: Date.now(), d };
+    return d;
+}
+function picksHeldRows() { return [...new Set((typeof planLots !== 'undefined' ? planLots : []).map(l => l.ticker))].map(t => ({ ticker: t })); }
+
+async function loadOppPicks(force) {
+    const root = document.getElementById('opp-picks-root');
+    if (!root) return;
+    if (!hasFeature('pro')) {
+        root.innerHTML = lockedCardHTML('Co koupit teď — koš tipů', 'pro', 'Měsíční koš nejsilnějších akcií S&amp;P 500, ověřený na historii.');
+        return;
+    }
+    if (!picksCache[planPicksN] || force) root.innerHTML = '<div class="opp-loading"><i class="ti ti-loader spin"></i> Načítám koš tipů…</div>';
+    try {
+        const d = await fetchPicksData(planPicksN, force);
+        if (!d || !d.ok || !d.picks) {
+            root.innerHTML = `<div class="mp-card"><div class="mp-sub">${d && d.scanning ? 'Ranní sken ještě běží – koš tipů bude za chvíli.' : 'Koš tipů se nepodařilo načíst.'} <a style="color:var(--accent);cursor:pointer" onclick="loadOppPicks(true)">Zkusit znovu</a></div></div>`;
+            return;
+        }
+        const dd = Object.assign({ rows: picksHeldRows() }, d);
+        root.innerHTML = planPicksHTML(dd, '-opp') + picksMoreHTML(dd);
+    } catch (e) {
+        root.innerHTML = '<div class="mp-card"><div class="mp-sub">Koš tipů se nepodařilo načíst. <a style="color:var(--accent);cursor:pointer" onclick="loadOppPicks(true)">Zkusit znovu</a></div></div>';
+    }
+}
+
+// Další kandidáti za košem (pořadí 11+ v tomto měsíci) – jako informace, ne jako další nákupní seznam
+function picksMoreHTML(d) {
+    const more = d.more || [];
+    if (!more.length) return '';
+    const held = new Set((d.rows || []).map(r => String(r.ticker).replace('.', '-')));
+    const rows = more.map(p => `<div class="mp-more-row" onclick="loadStockDetail('${mpEsc(p.ticker)}')">
+        <div><b>${mpEsc(mpBase(p.ticker))}</b>${held.has(p.ticker) ? ' <span class="mp-pick-src own">Už máš</span>' : ''} <span class="mp-more-n">${mpEsc(p.name)}</span></div>
+        <div class="mp-more-w">${mpEsc(p.why)}${mpEarnHTML(d.earnings && d.earnings[p.ticker])}${mpShortHTML(d.short && d.short[p.ticker])}</div>
+      </div>`).join('');
+    return `<div class="mp-card"><h4><i class="ti ti-list-details"></i> Další kandidáti za košem</h4>
+      <div class="mp-sub">Akcie hned za hranicí koše (stejné pořadí, jen se do koše nevešly). <b>Nejsou to další doporučení k nákupu</b> – slouží k porovnání, nebo jako náhrada, kdyby tip z koše vypadl kvůli vážné zprávě.</div>
+      <div class="mp-more">${rows}</div></div>`;
+}
+
+function planPicksHTML(d, sfx) {
+    sfx = sfx || '';
     const pk = d.picks;
     if (!pk || !(pk.basket || []).length) return '';
     const st = pk.stats || {}, tr = st.train || {}, ho = st.holdout || {};
@@ -8422,7 +8192,7 @@ function planPicksHTML(d) {
         ${mpEarnHTML(d.earnings && d.earnings[p.ticker])}${mpShortHTML(d.short && d.short[p.ticker])}
         ${heldT.has(p.ticker) ? '' : planTipNewsHTML(p.ticker, 'buy')}
       </div>`).join('');
-    return `<div class="mp-card" id="mp-picks"><h4><i class="ti ti-target-arrow"></i> Co koupit teď</h4>
+    return `<div class="mp-card" id="mp-picks${sfx}"><h4><i class="ti ti-target-arrow"></i> Co koupit teď</h4>
       <div class="mp-sub">${pk.month ? `Koš na <b>${MP_MONTH_CZ[parseInt(pk.month.slice(5, 7), 10) - 1]}</b> (sestaven ${mpDate(pk.since)}) – ` : ''}${pk.n} nejsilnějších akcií z S&amp;P 500: půlka je <b>levná a zároveň roste</b> (hodnota + momentum), půlka má <b>nejsilnější momentum</b>. Mění se jednou měsíčně, mezitím zůstává stejný. ${nHeld ? `${pk.basket.filter(p => heldT.has(p.ticker)).map(p => '<b>' + mpEsc(mpBase(p.ticker)) + '</b>').join(', ')} už máš – peníze ${nHeld > 1 ? 'dostanou' : 'dostane'}, jen když ${nHeld > 1 ? 'jich' : 'jí'} máš méně než ostatních. ` : ''}Klikni na akcii pro detail.</div>
       <div class="mp-riskrow" style="margin:0 0 12px">${tog(10)}${tog(6)}<span class="mp-pill-sep">${pk.n === 6 ? 'koncentrovanější, víc kolísá' : 'doporučeno – stabilnější'}</span></div>
       ${d.basket_perf ? `<div class="mp-bperf"><i class="ti ti-activity"></i><span>Živý záznam koše od ${mpDate(d.basket_perf.since)}: <b style="color:var(--${d.basket_perf.ret >= d.basket_perf.spy ? 'up' : 'amber'})">${mpSigned(d.basket_perf.ret)}</b> · S&amp;P 500 ${mpSigned(d.basket_perf.spy)}. Krátké období je hlavně náhoda – smysl to dává po měsících.</span></div>` : ''}
