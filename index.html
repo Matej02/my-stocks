@@ -233,7 +233,7 @@
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.11.04·j</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.11.07·a</div>
 
 <div class="container">
   
@@ -1058,10 +1058,12 @@
 
         <!-- PŘEHLED -->
         <div class="dpane" id="dpane-overview">
+          <!-- DLOUHODOBĚ: stejné hodnocení jako v Moje portfolio (podhodnocená / drž / nedokupuj / natažená) -->
+          <div class="lt-box" id="lt-box" style="display:none;"></div>
           <div class="verdict-box" id="verdict-box" style="display:none;">
             <div class="vb-main">
               <div>
-                <div class="vb-label">Náš verdikt</div>
+                <div class="vb-label">Krátkodobý pohled (~2 týdny)</div>
                 <div class="vb-verdict" id="vb-verdict">--</div>
               </div>
               <div class="vb-scorewrap">
@@ -1081,7 +1083,7 @@
               <div class="signal-score-num" id="signal-num">--</div>
               <div style="flex:1;">
                 <div class="signal-gauge"><div class="signal-needle" id="signal-needle" style="left:50%;"></div></div>
-                <div class="signal-scale"><span>Prodávat</span><span>Neutrál</span><span>Nakupovat</span></div>
+                <div class="signal-scale"><span>Slabá</span><span>Neutrální</span><span>Silná</span></div>
               </div>
             </div>
             <div class="signal-comps" id="signal-comps"></div>

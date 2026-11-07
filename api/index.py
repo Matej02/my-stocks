@@ -4752,6 +4752,9 @@ def _evaluate_holdings(rows, scan, basket_set, extra=None, eu=None):
             e["why"] = "Pro tenhle titul teď nemám dost dat (ceny nebo fundamenty se nenačetly) – zkus to za chvíli."
         e["action"], e["action_why"] = _holding_action(e, r, scan)
         e["action_label"] = ACTION_LABEL.get(e["action"], "")
+        if e["action"] == "stretched" and "přikupuj" in (e.get("verdict") or ""):
+            e["verdict"] = "Silná – drž"
+            e["why"] = "Je v koši tipů, ale po velkém růstu je natažená – dokupuj jen opatrně, ať jedna akcie nepřeroste portfolio."
         if r.get("weight") and r["weight"] >= HOLD_CONC_PCT and r["kind"] != "core":
             e["warn"].append(f"Tvoří {_pc(r['weight'], 0)} % portfolia – velké riziko jedné firmy.")
         elif sized and aw.get(r["ticker"], 0) >= CONC_WARN and r["kind"] != "core" and len(rows) >= 3:
@@ -8081,6 +8084,11 @@ def api_news_feed():
     # tiskovky GlobeNewswire/PR Newswire) → prosej výsledky přes synonyma firmy.
     if ticker:
         strict_syn = _ticker_synonyms(ticker) if ticker.endswith(".PR") else None
+        try:      # Yahoo vrací i obecné články („5 akcií, které koupit“) – nechat jen ty, které jsou o téhle firmě
+            _nm = ((market_scan(allow_step=False) or {}).get("name_map") or {}).get(_spx_key(ticker))
+        except Exception:
+            _nm = None
+        about_keys = _name_keys(ticker, _nm)
         try:
             r = requests.get(f"https://query2.finance.yahoo.com/v1/finance/search?q={quote(ticker)}&quotesCount=0&newsCount=12",
                              headers=HEADERS, timeout=6)
@@ -8092,6 +8100,8 @@ def api_news_feed():
                     hay = (n.get("title") or "").lower()
                     if not any(s in hay for s in strict_syn):
                         continue
+                elif not _about(n.get("title") or "", ticker, about_keys):
+                    continue
                 items.append({
                     "title": n.get("title"),
                     "link": n.get("link") or "",
@@ -9280,8 +9290,26 @@ def get_stock_detail(ticker):
             except Exception:
                 verdict_model = None
 
+        longterm = None
+        try:
+            _sc = _ensure_scan_maps(market_scan(allow_step=False) or {})
+            _k = _spx_key(ticker)
+            if f.get("pe_ratio") in (None, "N/A") and (_sc.get("pe_map") or {}).get(_k):
+                f["pe_ratio"] = (_sc.get("pe_map") or {})[_k]
+            if f.get("market_cap") in (None, "N/A") and (_sc.get("mcap_map") or {}).get(_k):
+                f["market_cap"] = float((_sc.get("mcap_map") or {})[_k]) * 1e6
+            if want_model and _k in (_sc.get("mix_rank_map") or {}):
+                bset = {_spx_key(k) for k, _s in ((_month_basket(_sc) or {}).get("order") or [])[:10]}
+                row = {"ticker": ticker, "kind": "stock", "name": f.get("name") or ticker, "weight": None}
+                ev1 = _evaluate_holdings([row], _sc, bset)["items"][0]
+                longterm = {k: ev1.get(k) for k in ("level", "verdict", "why", "action", "action_label", "action_why",
+                                                     "rank", "of", "pe", "mom_pct", "in_basket")}
+        except Exception:
+            longterm = None
+
         return jsonify({
             "ok": True,
+            "longterm": longterm,
             "ticker": ticker,
             "name": f.get("name") or meta.get("shortName") or meta.get("longName") or ticker,
             "price": price,

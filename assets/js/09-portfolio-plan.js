@@ -449,7 +449,8 @@ function planNamesHTML(d) {
           ${bar}
           <div class="mp-ev-why">${mpEsc(ev.why || '')}</div>
           ${ev.action === 'buy' ? `<div class="mp-ev-why" style="color:var(--up)">Proč podhodnocená: ${mpEsc(ev.action_why)}</div>` : ''}
-          ${ev.action === 'risk' || ev.action === 'stretched' ? `<div class="mp-flag">${ev.action === 'risk' ? '🔴' : '🟠'} ${mpEsc(ev.action_why)}</div>` : ''}
+          ${ev.action === 'risk' ? `<div class="mp-flag">🔴 ${mpEsc(ev.action_why)}</div>` : ''}
+          ${ev.action === 'stretched' ? `<div class="mp-flag amber" title="${mpEsc(ev.action_why)}">🟠 Velký růst a vysoké ocenění – bývají větší výkyvy. Nedokupuj hodně; prodej jen kvůli ceně data nepotvrzují.</div>` : ''}
           ${perfL}
           ${earnL}
           ${(ev.warn || []).map(w => `<div class="mp-flag">⚠ ${mpEsc(w)}</div>`).join('')}${flag}
@@ -459,6 +460,7 @@ function planNamesHTML(d) {
     }).join('');
     return `<div class="mp-card"><h4><i class="ti ti-briefcase"></i> Moje akcie – hodnocení každé</h4>
       <div class="mp-sub">Od nejsilnější. Hodnocení říká, co dělat s <b>novými penězi</b>: 🟢 podhodnocené dokupuj, slabší nedokupuj. Prodávat jen podle skóre ani podle „vysoké ceny“ nedoporučuji – na historii to spolehlivě nefungovalo. Výjimka: 🔴 <b>vážný problém firmy</b> (bankrot, neplatné výkazy, hrozba vyřazení z burzy) – tam zvaž prodej.</div>
+      ${(d.evaluation && (d.evaluation.items || []).some(e => e.action === 'stretched')) ? `<div class="mp-note"><i class="ti ti-info-circle"></i><span><b>🟠 Natažená</b> = za rok vyrostla o víc než 100 % a je drahá (P/E nad 40 nebo bez zisku). Takové akcie se v historii propadly o víc než 30 % za rok v 11–20 % případů (běžně v ~6 %), ale častěji i vyrostly o víc než 50 % – v průměru nezaostávaly. Je to upozornění na výkyvy, ne signál k prodeji.</span></div>` : ''}
       <div class="mp-stocks">${cards}</div>
     </div>`;
 }

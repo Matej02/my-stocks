@@ -251,6 +251,24 @@ function renderOpportunities() {
     `<div class="opp-disclaimer" style="grid-column:1/-1;"><i class="ti ti-info-circle"></i> Skóre hodnota+momentum = průměr pořadí v S&amp;P 500 podle zisku, účetní hodnoty a cash flow vůči ceně a ročního momenta (fundamenty z oficiálních dat SEC). Nejlepších 20 titulů v testu 2015–2026 porazilo průměrnou akcii indexu v obou obdobích. Kupuj je v nákupní zóně, ne naslepo. Není to investiční doporučení.</div>`;
 }
 
+// Dlouhodobé hodnocení v detailu akcie – stejné jako v Moje portfolio, aby detail a portfolio neradily každý něco jiného.
+function renderLongTerm(data) {
+    const box = document.getElementById('lt-box');
+    if (!box) return;
+    const lt = data && data.longterm;
+    if (!lt || !lt.level || lt.level === 'na') { box.style.display = 'none'; return; }
+    const map = { buy: ['strong', '🟢 Podhodnocená – dokup'], risk: ['risk', '🔴 Pozor – vážný problém'], stretched: ['weak', '🟠 Natažená – větší výkyvy'],
+                  nobuy: ['weak', 'Nedokupuj'], hold: ['hold', 'Drž'] };
+    const [cls, label] = map[lt.action] || [lt.level, lt.verdict];
+    const held = (planLots || []).some(l => mpBase(l.ticker).replace('-', '.') === mpBase(data.ticker).replace('-', '.'));
+    box.innerHTML = `<div class="lt-head"><span class="vb-label">Dlouhodobě (stejně jako v Moje portfolio)</span>
+        <span class="mp-verdict ${cls}">${mpEsc(label)}</span></div>
+      <div class="lt-why">${mpEsc(lt.action_why && (lt.action === 'buy' || lt.action === 'risk' || lt.action === 'stretched') ? lt.action_why : lt.why || '')}</div>
+      <div class="lt-meta">#${lt.rank} z ${lt.of} v S&amp;P 500${lt.pe ? ' · P/E ' + Math.round(lt.pe) : ''}${lt.mom_pct != null ? ' · za rok ' + (lt.mom_pct >= 0 ? '+' : '') + Math.round(lt.mom_pct) + ' %' : ''}${lt.in_basket ? ' · <b>v koši tipů</b>' : ''}${held ? ' · máš ji v portfoliu' : ''}</div>
+      <div class="lt-note">Krátkodobý pohled níž (technika, zprávy na ~2 týdny) se může lišit – pro dlouhodobé investování rozhoduje tohle hodnocení.</div>`;
+    box.style.display = '';
+}
+
 // --- VYKRESLENÍ KARET: rozdělení na Moje pozice vs Sledované ---
 // Hezké názvy pro komodity/indexy/krypto (Yahoo je má ošklivé, např. „Gold Jun 26")
 const NAME_MAP = {
@@ -452,7 +470,12 @@ async function loadStockDetail(ticker, isNew = true) {
         if (shortREl) shortREl.innerText = data.short_ratio != null ? data.short_ratio.toFixed(1)+' d' : '—';
 
         renderSignal(data);
-        if (isNew) renderVerdict(data.model);
+        if (isNew) { renderVerdict(data.model); renderLongTerm(data); }
+        // prázdné ukazatele (zdroj fundamentů je nevrátil) nezobrazovat – řada „N/A“ vypadá jako chyba
+        document.querySelectorAll('#dpane-overview .metric-box').forEach(b => {
+            const v = (b.querySelector('.metric-val') || {}).innerText || '';
+            b.style.display = /^(N\/A|—|--|NaN|)$/.test(v.trim()) ? 'none' : '';
+        });
         // Tyto panely nezávisí na zvoleném období grafu – při pouhé změně období
         // (isNew=false) je nepřekreslujeme, aby nezmizela už vygenerovaná analýza.
         if (isNew) {
@@ -611,7 +634,9 @@ function renderSignal(data) {
     document.getElementById('signal-needle').style.left = data.score + '%';
 
     const verdict = document.getElementById('signal-verdict');
-    verdict.innerText = data.score_label || '';
+    // Technika popisuje STAV grafu, ne pokyn: „prodávat podle techniky“ v našem testu škodilo, a dlouhodobé hodnocení je výš.
+    verdict.innerText = ({ 'SILNĚ NAKUPOVAT': 'Technicky velmi silná', 'NAKUPOVAT': 'Technicky silná', 'NEUTRÁLNÍ': 'Technicky neutrální',
+                           'PRODÁVAT': 'Technicky slabá', 'SILNĚ PRODÁVAT': 'Technicky velmi slabá' })[data.score_label] || data.score_label || '';
     const s = data.score;
     let vc;
     if(s >= 58) vc = ['var(--up)','rgba(0,230,118,0.15)'];

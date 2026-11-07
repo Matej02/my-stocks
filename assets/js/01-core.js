@@ -248,8 +248,9 @@ const SEARCH_TYPE_COL = { INDEX: '#29B6F6', CRYPTOCURRENCY: '#AB47BC', FUTURE: '
 function searchItemHTML(item) {
     const t = item.type || 'EQUITY';
     const badge = `<span class="si-type" style="background:${(SEARCH_TYPE_COL[t] || 'var(--text2)')}22;color:${SEARCH_TYPE_COL[t] || 'var(--text2)'}">${SEARCH_TYPE_CZ[t] || 'Akcie'}</span>`;
-    return `<div class="search-item" onclick="selectSearchItem('${item.ticker}')">
-        <div style="display:flex; align-items:center; gap:10px; min-width:0;"><span class="si-ticker">${item.ticker}</span><span class="si-name">${escapeHtml(niceName(item.ticker, item.name))}</span></div>
+    const tk = String(item.ticker || '').replace(/[^A-Za-z0-9.\-=^!]/g, '');
+    return `<div class="search-item" onclick="selectSearchItem('${tk}')">
+        <div style="display:flex; align-items:center; gap:10px; min-width:0;"><span class="si-ticker">${tk}</span><span class="si-name">${escapeHtml(niceName(item.ticker, item.name))}</span></div>
         <div style="display:flex; align-items:center; gap:8px; flex:none;">${badge}<span class="si-exch">${item.exchange || ''}</span></div>
     </div>`;
 }
@@ -289,7 +290,13 @@ async function fetchSearchResults(query) {
         if(!data.ok || data.results.length === 0) {
             dropdown.innerHTML = '<div style="padding:15px; color:var(--text2); text-align:center;">Nic nenalezeno</div>'; return;
         }
-        dropdown.innerHTML = data.results.map(searchItemHTML).join('');
+        // termínované kontrakty na jednotlivé akcie (CME „… Stock Fut“) běžný investor nekupuje a rozbíjely seznam;
+        // komodity (GC=F apod.) zůstávají. Akcie a ETF nahoře.
+        const rank = { EQUITY: 0, ETF: 1, MUTUALFUND: 2, INDEX: 3, CRYPTOCURRENCY: 4, CURRENCY: 5, FUTURE: 6 };
+        const list = data.results.filter(r => r.type !== 'FUTURE' || /^[A-Z]{1,3}=F$/.test(r.ticker || ''))
+            .sort((a, b) => (rank[a.type] ?? 3) - (rank[b.type] ?? 3));
+        if (!list.length) { dropdown.innerHTML = '<div style="padding:15px; color:var(--text2); text-align:center;">Nic nenalezeno</div>'; return; }
+        dropdown.innerHTML = list.map(searchItemHTML).join('');
     } catch(e) { dropdown.innerHTML = '<div style="padding:15px; color:var(--down); text-align:center;">Chyba připojení k serveru.</div>'; }
 }
 
