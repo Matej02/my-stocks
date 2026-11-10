@@ -2,7 +2,7 @@
 let activeTab = 'overview';
 function switchTab(name) {
     activeTab = name;
-    ['overview', 'portfolio', 'opportunities', 'results', 'ai'].forEach(s => {
+    ['overview', 'portfolio', 'opportunities', 'results'].forEach(s => {
         const sec = document.getElementById('section-' + s);
         const tab = document.getElementById('dtab-' + s);
         if (sec) sec.style.display = (s === name) ? 'block' : 'none';
@@ -16,6 +16,8 @@ function switchTab(name) {
     }
     if (name === 'results') {
         loadResults();
+        loadTrackRecord();
+        loadAdviceRecord();
     }
     // Portfolio: překresli začátečnické portfolio
     if (name === 'portfolio') {
@@ -34,20 +36,6 @@ function switchTab(name) {
             if (!oppData.length && !oppLoading) loadOpportunities();
         }
         loadOppPicks();
-    }
-    if (name === 'ai') {
-        const lock = document.getElementById('ai-lock');
-        if (!hasFeature('elite')) {
-            lock.innerHTML = lockedCardHTML('Doporučení', 'elite',
-                'Hodnocení každé tvé akcie, co se změnilo od včera, živý výkon tvých akcií i koše tipů, shrnutí od AI a track record verdiktů.');
-            lock.style.display = 'block';
-            document.getElementById('rec-root').innerHTML = '';
-            document.getElementById('track-box').style.display = 'none';
-        } else {
-            lock.style.display = 'none';
-            renderRecommendations();
-            loadTrackRecord();
-        }
     }
     // Scroll: skoč na začátek tab-baru (ne úplně nahoru), ať uživatel po přepnutí
     // vždycky vidí taby + nový obsah. Instantně, bez smooth animace — jinak vypadá

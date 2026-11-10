@@ -32,7 +32,8 @@ body::before {content:'';position:fixed;top:-25%;left:50%;transform:translateX(-
 .search-item {padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.2s;}
 .search-item:last-child {border-bottom: none;}
 .search-item:hover {background: rgba(255, 122, 0, 0.1);}
-.si-ticker {font-family: var(--fh); font-weight: bold; color: var(--accent); font-size: 15px; flex:none;}
+.si-ticker {font-family: var(--fh); font-weight: bold; color: var(--accent); font-size: 15px; flex:none; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.si-name {min-width:0; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;}
 .si-type {font-size:10px; font-weight:700; padding:2px 7px; border-radius:7px; text-transform:uppercase; letter-spacing:.5px; flex:none;}
 .search-head {padding:10px 14px 4px; font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:1px;}
 .search-grp {padding:8px 14px 2px; font-size:10px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
@@ -1594,6 +1595,8 @@ input[type=month]::-webkit-datetime-edit, input[type=date]::-webkit-datetime-edi
   background:#0F1218; box-shadow:0 6px 18px rgba(0,0,0,0.45); border:1px solid var(--border2);
   border-radius:12px; color:var(--text); font-family:var(--fb); font-size:14px; font-weight:600; cursor:pointer;}
 @media (max-width:768px) {.dh-back {display:inline-flex;}}
+/* mobil: záložky detailu (Přehled / Analýza / Zprávy / Asistent) zůstanou pod plovoucím „Zpět“, místo aby pod ním mizely */
+@media (max-width:768px) {.detail-tabs {position:sticky; top:60px; z-index:25; background:var(--bg); box-shadow:0 8px 16px rgba(0,0,0,.35);}}
 
 @media (max-width:640px) {
   .signal-head {flex-wrap:wrap; gap:8px;}
@@ -1758,6 +1761,27 @@ body.modal-open {overflow:hidden;}
 .mp-verdict.weak {background:var(--amber-soft); color:var(--amber);}
 .mp-verdict.na {background:var(--elev2); color:var(--text3);}
 .mp-verdict.risk {background:rgba(255,61,0,0.14); color:#FF6B4A;}
+.mp-flag.amber {color:var(--amber);}
+.lt-box {background:var(--surface); border:1px solid var(--border-accent); border-radius:16px; padding:14px 16px; margin-bottom:14px;}
+.lt-head {display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+.lt-why {font-size:13.5px; line-height:1.5; margin-top:8px;}
+.lt-meta {font-size:12px; color:var(--text2); margin-top:6px;}
+.lt-note {font-size:11.5px; color:var(--text3); margin-top:8px; line-height:1.45;}
+@media (max-width:640px) {
+  .mp-stock-h {flex-wrap:wrap; row-gap:6px;}
+  .mp-stock-h .who {flex:1 1 calc(100% - 50px);}
+  .mp-stock-h .chg, .mp-stock-h .px {white-space:nowrap;}
+  .mp-stock-h .mp-verdict {order:3;}
+  .mp-stock-h .mp-icon-btn {width:38px; height:38px;}
+  .mp-size button {min-height:36px; padding:6px 13px; font-size:12.5px;}
+  .mp-quick button {min-height:38px; padding:8px 13px;}
+  .mp-cand-a input {min-height:36px;}
+  .sim-inwrap {padding:9px 10px;}
+  .sim-inwrap input {min-height:24px;}
+  .chat-suggest button {min-height:36px;}
+  .ov-card h3 a {display:inline-block; padding:10px 6px; margin:-10px -6px;}
+  .dp-tabs button, .dtab {min-height:40px;}
+}
 .mp-ev-why {font-size:12px; color:var(--text2); margin-top:4px; line-height:1.45;}
 .mp-ev-line {display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:13.5px; margin:6px 0;}
 .mp-picks {display:grid; grid-template-columns:repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap:10px;}

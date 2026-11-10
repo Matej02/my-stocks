@@ -359,6 +359,26 @@ function setNewsSrc(src) {
     loadNewsFromSource(src);
 }
 
+// České překlady titulků: seznam se ukáže hned (anglicky), překlad se doplní, jakmile je hotový (a příště je uložený).
+async function translateNewsTitles(ticker, scope) {
+    const els = [...scope.querySelectorAll('.news-title[data-tr="1"]')];
+    if (!els.length) return;
+    try {
+        const r = await fetch(`${BACKEND_URL}/api/news-translate`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticker, titles: els.map(e => e.dataset.orig) }) });
+        const d = await r.json();
+        if (!d.ok || _currentNewsTicker !== ticker) return;
+        els.forEach(e => {
+            const cs = d.t && d.t[e.dataset.orig];
+            if (!cs || !e.isConnected) return;
+            e.textContent = cs;
+            e.title = 'Originál: ' + e.dataset.orig;
+            const meta = e.parentElement && e.parentElement.querySelector('.news-meta');
+            if (meta) meta.insertAdjacentHTML('beforeend', '<span class="news-src-tag">přeloženo AI</span>');
+        });
+    } catch (e) {}
+}
+
 async function loadNewsFromSource(src) {
     const list = document.getElementById('news-list');
     if (!list) return;
@@ -374,11 +394,13 @@ async function loadNewsFromSource(src) {
                 const when = n.ts ? formatNewsTime(n.ts) : '';
                 const safe = n.link ? `href="${n.link}" target="_blank" rel="noopener noreferrer nofollow"` : '';
                 const dom = n.source_domain ? `<span class="news-src-tag">z: ${escapeHtml(n.source_domain)}</span>` : '';
+                const cz = /[ěščřžýáíéúůďťňó]/i.test(n.title || '') || /(^|\.)(kurzy|e15|roklen24|idnes)\.cz$/.test(n.source_domain || '');
                 return `<a class="news-item" ${safe}>
-                    <div class="news-title">${escapeHtml(n.title)}</div>
+                    <div class="news-title"${cz ? '' : ` data-tr="1" data-orig="${escapeHtml(n.title)}"`}>${escapeHtml(n.title)}</div>
                     <div class="news-meta">${when ? '<i class="ti ti-clock"></i> ' + when : ''}${dom}</div>
                 </a>`;
             }).join('');
+            translateNewsTitles(ticker, list);
         } else if (src === 'yahoo') {
             const d = await (await fetch(`${BACKEND_URL}/api/news/${encodeURIComponent(ticker)}`)).json();
             const arr = d && d.results;
