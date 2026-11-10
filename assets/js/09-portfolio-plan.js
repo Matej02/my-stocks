@@ -138,7 +138,6 @@ async function planRefresh() {
     if (planData && planData.picks && planData.picks.loading) planData.picks.loading = false;     // chyba serveru: zůstane oříznutý koš
     renderPlan();
     renderOverviewPlan();
-    if (typeof activeTab !== 'undefined' && activeTab === 'ai' && hasFeature('elite')) renderRecommendations();
     if (FEATURE_QTY && planData && planData.rows && planData.rows.length) planLoadStress();
     planLoadTipNews();
 }
@@ -393,11 +392,12 @@ function renderPlanNames(root) {
         html += planNamesKpisHTML(d);
     }
     html += `</div>`;
-    if (d && d.rows && d.rows.length) { html += planChangesHTML(d); html += planEvalHTML(d); html += planNamesHTML(d); }
+    if (d && d.rows && d.rows.length) { html += (hasFeature('elite') ? `<div id="rec-ai">${recComment.html}</div>` : ''); html += planChangesHTML(d); html += planEvalHTML(d); html += planNamesHTML(d); }
     if (d && d.picks) html += planPicksHTML(d);
     html += planDepositHTML(d);
     if (d) html += planWhyHTML(d);
     root.innerHTML = html;
+    if (d && d.rows && d.rows.length && hasFeature('elite')) loadRecComment(d);
 }
 
 function planNamesKpisHTML(d) {
@@ -441,7 +441,7 @@ function planNamesHTML(d) {
           <div class="mp-stock-h">
             <div class="who"><span class="tk">${mpEsc(mpBase(r.ticker))}</span>${r.chg != null ? `<span class="chg" style="color:var(--${r.chg >= 0 ? 'up' : 'down'})">${r.chg >= 0 ? '+' : ''}${mpPct(r.chg, 1)}</span>` : ''}${price ? `<span class="px">${price}</span>` : ''}
               <div class="nm">${mpEsc(r.name)}</div></div>
-            ${ev.action === 'buy' ? '<span class="mp-verdict strong">🟢 Podhodnocená – dokup</span>' : ev.action === 'risk' ? '<span class="mp-verdict risk">🔴 Pozor – vážný problém</span>' : ev.action === 'stretched' ? '<span class="mp-verdict weak">🟠 Natažená</span>' : ''}
+            ${ev.action === 'buy' ? '<span class="mp-verdict strong">🟢 Podhodnocená – dokup</span>' : ev.action === 'risk' ? '<span class="mp-verdict risk">🔴 Pozor – vážný problém</span>' : ev.action === 'watch' ? '<span class="mp-verdict weak">🟡 Slabá rozvaha</span>' : ev.action === 'stretched' ? '<span class="mp-verdict weak">🟠 Natažená</span>' : ''}
             <span class="mp-verdict ${ev.level}">${mpEsc(ev.verdict)}</span>
             <button class="mp-icon-btn" onclick="planRemove('${mpEsc(r.ticker)}')" title="Odebrat z portfolia"><i class="ti ti-x"></i></button>
           </div>
@@ -450,6 +450,7 @@ function planNamesHTML(d) {
           <div class="mp-ev-why">${mpEsc(ev.why || '')}</div>
           ${ev.action === 'buy' ? `<div class="mp-ev-why" style="color:var(--up)">Proč podhodnocená: ${mpEsc(ev.action_why)}</div>` : ''}
           ${ev.action === 'risk' ? `<div class="mp-flag">🔴 ${mpEsc(ev.action_why)}</div>` : ''}
+          ${ev.action === 'watch' ? `<div class="mp-flag amber">🟡 ${mpEsc(ev.action_why)}</div>` : ''}
           ${ev.action === 'stretched' ? `<div class="mp-flag amber" title="${mpEsc(ev.action_why)}">🟠 Velký růst a vysoké ocenění – bývají větší výkyvy. Nedokupuj hodně; prodej jen kvůli ceně data nepotvrzují.</div>` : ''}
           ${perfL}
           ${earnL}
@@ -459,7 +460,7 @@ function planNamesHTML(d) {
         </div>`;
     }).join('');
     return `<div class="mp-card"><h4><i class="ti ti-briefcase"></i> Moje akcie – hodnocení každé</h4>
-      <div class="mp-sub">Od nejsilnější. Hodnocení říká, co dělat s <b>novými penězi</b>: 🟢 podhodnocené dokupuj, slabší nedokupuj. Prodávat jen podle skóre ani podle „vysoké ceny“ nedoporučuji – na historii to spolehlivě nefungovalo. Výjimka: 🔴 <b>vážný problém firmy</b> (bankrot, neplatné výkazy, hrozba vyřazení z burzy) – tam zvaž prodej.</div>
+      <div class="mp-sub">Od nejsilnější. Hodnocení říká, co dělat s <b>novými penězi</b>: 🟢 podhodnocené dokupuj, slabší nedokupuj. Prodávat jen podle skóre ani podle „vysoké ceny“ nedoporučuji – na historii to spolehlivě nefungovalo. Výjimka: 🔴 <b>vážný problém firmy</b> (bankrot, neplatné výkazy, hrozba vyřazení z burzy) – tam zvaž prodej. 🟡 <b>Slabá rozvaha</b> = firma ve ztrátě, které dochází hotovost nebo má záporný kapitál či velké dluhy – větší riziko velkého propadu, ne pokyn k prodeji.</div>
       ${(d.evaluation && (d.evaluation.items || []).some(e => e.action === 'stretched')) ? `<div class="mp-note"><i class="ti ti-info-circle"></i><span><b>🟠 Natažená</b> = za rok vyrostla o víc než 100 % a je drahá (P/E nad 40 nebo bez zisku). Takové akcie se v historii propadly o víc než 30 % za rok v 11–20 % případů (běžně v ~6 %), ale častěji i vyrostly o víc než 50 % – v průměru nezaostávaly. Je to upozornění na výkyvy, ne signál k prodeji.</span></div>` : ''}
       <div class="mp-stocks">${cards}</div>
     </div>`;
@@ -579,7 +580,7 @@ function planDepCustomHTML(dep) {
     const amt = parseFloat(String(planAmount).replace(/\s/g, '').replace(',', '.')) || 0;
     const sel = new Set(planDepPick), eq = sel.size && amt ? Math.round(amt / sel.size) : 0;
     const badge = c => c.group === 'new' ? '<span class="mp-pick-src vm">Nový tip</span>'
-        : (c.action === 'buy' ? '<span class="mp-verdict strong">Podhodnocená</span>' : c.action === 'risk' ? '<span class="mp-verdict risk">Pozor – problém</span>' : c.action === 'stretched' ? '<span class="mp-verdict weak">Natažená</span>'
+        : (c.action === 'buy' ? '<span class="mp-verdict strong">Podhodnocená</span>' : c.action === 'risk' ? '<span class="mp-verdict risk">Pozor – problém</span>' : c.action === 'watch' ? '<span class="mp-verdict weak">Slabá rozvaha</span>' : c.action === 'stretched' ? '<span class="mp-verdict weak">Natažená</span>'
             : { strong: '<span class="mp-verdict strong">Silná</span>', hold: '<span class="mp-verdict hold">Drž</span>', weak: '<span class="mp-verdict weak">Slabší</span>' }[c.level] || '');
     const row = c => `<div class="mp-cand ${sel.has(c.ticker) ? 'on' : ''}">
         <label><input type="checkbox" ${sel.has(c.ticker) ? 'checked' : ''} onchange="planDepToggle('${mpEsc(c.ticker)}')"> <b>${mpEsc(mpBase(c.ticker))}</b> <small>${mpEsc(c.name)}</small> ${badge(c)}</label>

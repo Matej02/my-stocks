@@ -4652,10 +4652,146 @@ def _extra_evals(rows, scan, eu=None, budget_s=14.0):
 #            (20 % / 11 % případů proti 6 % u všech akcií) → jen upozornění na výkyvy, ne signál k prodeji
 #  nobuy     slabší → nedokupuj; hold = drž
 # „Prodej na stropu" podle ceny model NEUMÍ (test 2015–2025) – proto ho neslibuje.
+# ---------------------------------------------------------------------------
+# SLABÁ ROZVAHA (2026-11, test ~/dev/my-stocks-research/distress.py, S&P 500 2015–2024, výsledky 12 měsíců dopředu).
+# Označuje firmu v LOSSU, která: (A) má záporný vlastní kapitál, (B) pálí hotovost – při současném tempu jí hotovost
+# vystačí na < 18 měsíců, nebo (C) má dluhy > 90 % majetku (mimo finance a nemovitosti). Data z ročních výkazů SEC (10-K).
+# Výsledek testu: označené akcie se za rok propadly o ≥ 50 % v 6,9 % (2015–20, n=116) a 11,9 % (2021–24, n=319) případů,
+# ostatní v ~1,4 %; průměrně ale zaostaly jen o 2–4 b. (většina označených se nepropadla) a efekt je silně vázaný na období
+# 2021–24. Formální kritérium (n ≥ 150 v obou obdobích a −3 b.) NESPLNĚNO → jen upozornění, ne signál k prodeji.
+# ---------------------------------------------------------------------------
+DISTRESS_TTL_DAYS = 7
+DISTRESS_NOTE = ("V historii (S&P 500, 2015–2024) se u takto označených akcií za rok propadlo o ≥ 50 % asi 7–12 % případů "
+                 "(u ostatních ~1 %); většina se ale nepropadla. Dokupuj opatrně a sleduj zprávy – prodej jen kvůli tomu data nepotvrzují.")
+_DISTRESS_CONCEPTS = (("ni", "NetIncomeLoss", False), ("cfo", "NetCashProvidedByUsedInOperatingActivities", False),
+                      ("eq", "StockholdersEquity", True), ("liab", "Liabilities", True), ("assets", "Assets", True),
+                      ("cash", "CashAndCashEquivalentsAtCarryingValue", True))
+
+
+def _sec_latest_fy(cik, concept, instant):
+    """Poslední roční hodnota (10-K) pojmu z SEC companyconcept; None, když chybí nebo je starší než ~20 měsíců."""
+    r = requests.get(f"https://data.sec.gov/api/xbrl/companyconcept/CIK{int(cik):010d}/us-gaap/{concept}.json",
+                     headers=SEC_HEADERS, timeout=8)
+    if r.status_code != 200:
+        return None
+    best = None
+    for u in ((r.json() or {}).get("units") or {}).get("USD") or []:
+        if u.get("fp") != "FY" or not str(u.get("form", "")).startswith("10-K") or not u.get("end"):
+            continue
+        if not instant:
+            try:
+                days = (datetime.strptime(u["end"], "%Y-%m-%d") - datetime.strptime(u["start"], "%Y-%m-%d")).days
+            except Exception:
+                continue
+            if not 330 <= days <= 400:
+                continue
+        if best is None or (u["end"], u.get("filed") or "") > (best["end"], best.get("filed") or ""):
+            best = u
+    if not best:
+        return None
+    age = (datetime.now(timezone.utc).date() - datetime.strptime(best["end"], "%Y-%m-%d").date()).days
+    return {"end": best["end"], "val": best["val"]} if age <= 600 else None
+
+
+def _distress_eval(m, sector=None):
+    """(příznak, [důvody česky]) z hodnot {ni, cfo, eq, liab, assets, cash}."""
+    ni, cfo, eq, liab, assets, cash = (m.get(k) for k in ("ni", "cfo", "eq", "liab", "assets", "cash"))
+    why = []
+    if ni is None or ni >= 0:
+        return False, why                                # jen firmy ve ztrátě
+    if eq is not None and eq <= 0:
+        why.append("záporný vlastní kapitál")
+    if cfo is not None and cfo < 0 and cash and cash > 0 and cash / (-cfo) < 1.5:
+        why.append(f"hotovost při současném pálení vystačí asi na {max(1, int(round(cash / (-cfo) * 12)))} měsíců")
+    if sector and sector not in ("Financials", "Real Estate") and liab and assets and liab / assets > 0.9:
+        why.append(f"dluhy tvoří {int(round(liab / assets * 100))} % majetku")
+    return bool(why), why
+
+
+def _distress_compute(ticker, sector=None):
+    cik = None
+    try:
+        cik = _cik_map().get(_spx_key(ticker)) or _sec_lookup_cik(ticker)
+    except Exception:
+        pass
+    if not cik:
+        return {"flag": False, "na": True, "ts": int(time.time())}
+    vals = {}
+    for key, concept, instant in _DISTRESS_CONCEPTS:
+        try:
+            x = _sec_latest_fy(cik, concept, instant)
+        except Exception:
+            x = None
+        if x:
+            vals[key] = x["val"]
+    if "ni" not in vals:
+        return {"flag": False, "na": True, "ts": int(time.time())}
+    flag, why = _distress_eval(vals, sector)
+    return {"flag": flag, "why": why, "ts": int(time.time())}
+
+
+def _distress_map():
+    try:
+        return (kv_get_json("distress:map") or {}).get("m") or {}
+    except Exception:
+        return {}
+
+
+def _distress_warm(tickers, budget_s=10.0, sectors=None):
+    """Dopočítá a uloží slabou rozvahu pro tituly, které ještě nemáme (nebo jsou starší 7 dní). Resumovatelné (po titulech)."""
+    t0 = time.time()
+    mp = _distress_map()
+    cut = time.time() - DISTRESS_TTL_DAYS * 86400
+    todo = [t for t in dict.fromkeys(tickers) if (mp.get(_spx_key(t)) or {}).get("ts", 0) < cut][:60]
+    if not todo:
+        return 0
+    from concurrent.futures import ThreadPoolExecutor
+    ex = ThreadPoolExecutor(max_workers=4)
+    done = 0
+    try:
+        futs = [(t, ex.submit(_distress_compute, t, (sectors or {}).get(_spx_key(t)))) for t in todo]
+        for t, f in futs:
+            left = budget_s - (time.time() - t0)
+            if left <= 0:
+                break
+            try:
+                mp[_spx_key(t)] = f.result(timeout=left)
+                done += 1
+            except Exception:
+                continue
+    finally:
+        ex.shutdown(wait=False)
+    if done:
+        try:
+            kv_set_json("distress:map", {"m": mp, "ts": int(time.time())})
+        except Exception:
+            pass
+    return done
+
+
+def _annotate_rows(rows, flags=False):
+    """K držené akcii doplní vážný problém z SEC (8-K) a slabou rozvahu z uložených dat (jen čtení, bez čekání na síť)."""
+    try:
+        mp = _distress_map()
+    except Exception:
+        mp = {}
+    if flags:
+        try:
+            fl = _red_flags([r["ticker"] for r in rows if r.get("kind") != "core" and not _is_fund(r)])
+        except Exception:
+            fl = {}
+    for r in rows:
+        if flags and fl.get(r["ticker"]):
+            r["flag"] = fl[r["ticker"]]
+        d = mp.get(_spx_key(r["ticker"]))
+        if d and d.get("flag") and r.get("kind") != "core":
+            r["distress"] = d
+
+
 STRETCHED_NOTE = ("Po takovém růstu se akcie za rok propadla o víc než 30 % v 11–20 % případů (běžně v ~6 %), ale častěji "
                   "i vyrostla o víc než 50 %. Prodávat jen podle ceny nemá v datech oporu – nedokupuj hodně a výběr zisku řeš podle toho, kolik výkyvů snesou tvoje nervy.")
 ACTION_LABEL = {"buy": "Podhodnocená – dokup", "hold": "Drž", "nobuy": "Nedokupuj", "stretched": "Natažená – větší výkyvy",
-                "risk": "Pozor – vážný problém", "na": ""}
+                "risk": "Pozor – vážný problém", "watch": "Slabá rozvaha", "na": ""}
 
 
 def _holding_action(e, r, scan):
@@ -4665,6 +4801,9 @@ def _holding_action(e, r, scan):
     if flag.get("pause"):
         reason = ((flag.get("reasons") or [{}])[0]).get("reason") or "vážná zpráva od firmy"
         return "risk", f"{reason}. Zvaž prodej, nebo aspoň nedokupuj a sleduj další zprávy."
+    ds = r.get("distress") or {}
+    if ds.get("flag"):
+        return "watch", "Slabá rozvaha: firma je ve ztrátě a " + " a ".join(ds.get("why") or ["má slabou rozvahu"]) + ". " + DISTRESS_NOTE
     mom, pe = e.get("mom_pct"), e.get("pe")
     if mom is not None and mom >= 100 and (pe is None or pe <= 0 or pe >= 40):
         return "stretched", STRETCHED_NOTE
@@ -4856,7 +4995,7 @@ def _deposit_names(amount, rows, picks, ev, mode="app", n=None, pick=None, amoun
         out = []
         for k, r in held.items():
             e = evby.get(k) or {}
-            if e.get("level") == "strong" and e.get("action") not in ("risk", "stretched") and r.get("price") and not r.get("no_price"):
+            if e.get("level") == "strong" and e.get("action") not in ("risk", "stretched", "watch") and r.get("price") and not r.get("no_price"):
                 out.append((r, e))
         out.sort(key=lambda x: (x[1].get("action") != "buy", x[0].get("size") == "L", x[1].get("rank") or 9999))   # podhodnocené první, velké pozice nakonec
         return out
@@ -5681,12 +5820,106 @@ def _eu_match(row, eu):
     return None, None
 
 
-def _eval_changes(user, ev, record=True):
+# ---------------------------------------------------------------------------
+# ZÁZNAM RAD APLIKACE: kdykoli appka u TVÉ akcie poprvé (nebo po 30 dnech znovu) řekne „podhodnocená – dokup",
+# „vážný problém" nebo „slabá rozvaha", zapíše se datum a cena. Výsledky ukážou, jak ty rady dopadly proti S&P 500.
+# ---------------------------------------------------------------------------
+ADVICE_ACTIONS = ("buy", "risk", "watch")
+ADVICE_REPEAT_DAYS = 30
+ADVICE_MAX = 400
+
+
+def _log_advice(user, ev, rows):
+    if not user or not ev or not rows:
+        return 0
+    try:
+        rec = kv_get_json(f"advice:{user}") or {"items": []}
+        items = rec.get("items") or []
+        today = _today_iso()
+        cutoff = (datetime.now(timezone.utc).date() - timedelta(days=ADVICE_REPEAT_DAYS)).isoformat()
+        recent = {(i["t"], i["a"]) for i in items if i.get("d", "") >= cutoff}
+        px = {r["ticker"]: (r.get("price"), r.get("currency")) for r in rows}
+        added = 0
+        for e in ev.get("items") or []:
+            a = e.get("action")
+            p, cur = px.get(e["ticker"], (None, None))
+            if a in ADVICE_ACTIONS and p and (e["ticker"], a) not in recent:
+                items.append({"t": e["ticker"], "d": today, "a": a, "p": round(float(p), 4), "c": cur})
+                added += 1
+        if added:
+            kv_set_json(f"advice:{user}", {"items": items[-ADVICE_MAX:]})
+            try:
+                kv_set_json(f"advicerec:{user}:{today}", {"ts": 0})      # přepočítat výsledky rad
+            except Exception:
+                pass
+        return added
+    except Exception:
+        return 0
+
+
+def _advice_record(user):
+    """Výsledek rad: u každé zapsané rady cena tehdy → dnes proti S&P 500 za stejné období. Kešováno 3 h."""
+    ck = f"advicerec:{user}:{_today_iso()}"
+    try:
+        c = kv_get_json(ck)
+        if c and time.time() - c.get("ts", 0) < 3 * 3600:
+            return c["data"]
+    except Exception:
+        pass
+    rec = kv_get_json(f"advice:{user}") or {}
+    items = rec.get("items") or []
+    if not items:
+        return {"count": 0, "groups": {}, "items": [], "since": None}
+    first = min(i["d"] for i in items)
+    age = (datetime.now(timezone.utc).date() - datetime.strptime(first, "%Y-%m-%d").date()).days
+    tick = sorted({i["t"] for i in items} | {"SPY"})
+    prices, paths = _price_paths(tick, "1y" if age < 330 else "2y")
+    out_items, by = [], {}
+    for i in items:
+        p1 = prices.get(i["t"])
+        if not p1 or not i.get("p"):
+            continue
+        s0 = _close_at(paths.get("SPY"), i["d"])
+        s1 = prices.get("SPY")
+        days = (datetime.now(timezone.utc).date() - datetime.strptime(i["d"], "%Y-%m-%d").date()).days
+        ret = (p1 / i["p"] - 1) * 100
+        spy = ((s1 / s0 - 1) * 100) if (s0 and s1) else None
+        it = {"ticker": i["t"], "date": i["d"], "action": i["a"], "price0": i["p"], "price1": round(p1, 4), "currency": i.get("c"),
+              "ret": round(ret, 1), "spy": round(spy, 1) if spy is not None else None, "days": days}
+        out_items.append(it)
+        if days >= 7 and spy is not None:                      # kratší než týden je jen šum
+            g = by.setdefault(i["a"], {"n": 0, "ret": 0.0, "spy": 0.0, "beat": 0, "days": 0})
+            g["n"] += 1; g["ret"] += ret; g["spy"] += spy; g["beat"] += (ret > spy); g["days"] += days
+    groups = {a: {"n": g["n"], "avg_ret": round(g["ret"] / g["n"], 1), "avg_spy": round(g["spy"] / g["n"], 1),
+                  "beat_pct": round(g["beat"] / g["n"] * 100), "avg_days": round(g["days"] / g["n"])} for a, g in by.items() if g["n"]}
+    out_items.sort(key=lambda x: x["date"], reverse=True)
+    data = {"count": len(out_items), "since": first, "groups": groups, "items": out_items[:40]}
+    try:
+        kv_set_json(ck, {"ts": time.time(), "data": data})
+    except Exception:
+        pass
+    return data
+
+
+@app.route("/api/advice-record")
+def api_advice_record():
+    user = _auth_user()
+    if not user:
+        return jsonify({"ok": False, "error": "Nepřihlášeno."}), 401
+    try:
+        return jsonify({"ok": True, **_advice_record(user)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def _eval_changes(user, ev, record=True, rows=None):
     """Uloží dnešní snímek hodnocení a vrátí změny proti poslednímu dřívějšímu dni.
     Změna o jeden stupeň kvůli pořadí se hlásí, jen když pořadí přelezlo hranici aspoň o 2 % univerza
     (šum kolem hranice se nehlásí); změna o dva stupně a vstup/výstup z koše tipů vždy."""
     if not user or not ev:
         return None
+    if record and rows:
+        _log_advice(user, ev, rows)
     today = _today_iso()
     try:
         hist = kv_get_json(f"evalhist:{user}") or {}
@@ -6002,6 +6235,7 @@ def api_plan():
             holdings = _holdings_for_eval(holdings or [])
         rows, total, missing, scan = _value_holdings(holdings or [])
         plan = _build_plan(rows, risk, scan)
+        _annotate_rows(rows)
         held = {_spx_key(r["ticker"]) for r in rows}
         try:
             cand = [t.replace(".", "-") for t, _s in _mix_basket(scan, 10)[:40]]
@@ -6033,7 +6267,7 @@ def api_plan():
         if not FEATURE_QTY:
             out["sectors"] = _sector_mix(rows, scan)
             for k, fn in (("basket_perf", lambda: _basket_perf(picks["n"])),
-                          ("changes", lambda: _eval_changes(user, ev) if user else None),
+                          ("changes", lambda: _eval_changes(user, ev, rows=rows) if user else None),
                           ("perf", lambda: _holdings_perf(user, rows) if user else None)):
                 try:
                     out[k] = fn()
@@ -8071,6 +8305,61 @@ def api_portfolio_history():
     return jsonify({"ok": True, "cached": False, **out})
 
 
+TRANSLATE_PROMPT = """Přelož tyto titulky finančních zpráv z angličtiny do přirozené češtiny. Názvy firem, tickery a značky produktů nech
+beze změny. Nic nepřidávej, nevysvětluj ani nehodnoť, jen přelož.
+Titulky (id | titulek):
+{items}
+Odpověz JEN JSON: {{"t": {{"1": "český titulek", "2": "…"}}}}"""
+_CZ_CHARS = re.compile(r"[ěščřžýáíéúůďťňó]", re.I)
+
+
+def _translate_titles(ticker, titles):
+    """{původní titulek: český překlad}. Překlady se ukládají (KV po tickeru), AI se volá jen pro titulky, které ještě nemá.
+    Česky psané titulky se nepřekládají. Anglická odpověď AI se zahodí (stejně jako u shrnutí zpráv)."""
+    key = f"trnews:{re.sub(r'[^A-Z0-9.=-]', '', (ticker or '').upper())[:14]}"
+    try:
+        cache = kv_get_json(key) or {}
+    except Exception:
+        cache = {}
+    m = dict(cache.get("m") or {})
+    todo = []
+    for t in titles:
+        t = (t or "").strip()[:220]
+        if t and t not in m and not _CZ_CHARS.search(t) and t not in todo:
+            todo.append(t)
+    todo = todo[:30]
+    if todo and analysis_enabled():
+        raw = call_llm(TRANSLATE_PROMPT.format(items="\n".join(f"{i} | {t}" for i, t in enumerate(todo, 1))))
+        got = (raw or {}).get("t") if isinstance(raw, dict) else None
+        if isinstance(got, dict):
+            new = 0
+            for i, t in enumerate(todo, 1):
+                cs = got.get(str(i))
+                if isinstance(cs, str) and 3 <= len(cs.strip()) <= 320 and not _looks_english(cs):
+                    m[t] = cs.strip(); new += 1
+            if new:
+                try:
+                    kv_set_json(key, {"m": dict(list(m.items())[-80:]), "ts": int(time.time())})
+                except Exception:
+                    pass
+    return {t: m[t] for t in titles if t in m}
+
+
+@app.route("/api/news-translate", methods=["POST"])
+def api_news_translate():
+    """České překlady titulků zpráv k akcii (volá se až po zobrazení seznamu, ať se čeká jen na překlad, ne na zprávy)."""
+    if not _rate_ok("newstr", 25, 60):
+        return jsonify({"ok": False, "error": "Moc požadavků, zkus to za chvíli."}), 429
+    b = request.get_json(silent=True) or {}
+    titles = [str(t)[:220] for t in (b.get("titles") or []) if isinstance(t, str)][:30]
+    if not titles:
+        return jsonify({"ok": True, "t": {}})
+    try:
+        return jsonify({"ok": True, "t": _translate_titles(str(b.get("ticker") or ""), titles)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:200]}), 500
+
+
 @app.route("/api/news-feed")
 def api_news_feed():
     """Sjednocený feed: Yahoo (per-ticker) + RSS zdroje. Filtr podle tickeru,
@@ -9688,6 +9977,7 @@ def _portfolio_email_html(email, mark_sent=False):
     rows, total, missing, scan = _value_holdings(lots)
     if not rows:
         return "", None
+    _annotate_rows(rows, flags=True)
     risk = hrec.get("risk") or _user_risk(email)
     plan = _build_plan(rows, risk, scan)
     held = [r for r in rows if r["kind"] != "core"]
@@ -9711,7 +10001,7 @@ def _portfolio_email_html(email, mark_sent=False):
             except Exception:
                 extra = {}
             ev = _evaluate_holdings(rows, scan, {_spx_key(p["ticker"]) for p in picks["basket"]}, extra, eu)
-            chg = _eval_changes(email, ev)
+            chg = _eval_changes(email, ev, rows=rows)
             perf = _holdings_perf(email, rows) if names_only else None
         except Exception:
             picks, ev = None, None
@@ -9922,6 +10212,7 @@ def _morning_digest_html(email, top_opps, top_signals, mark_sent=False):
     risk = [i for i in items if i["action"] == "risk"]
     buy = sorted([i for i in items if i["action"] == "buy"], key=lambda i: i.get("rank") or 9999)
     stretched = [i for i in items if i["action"] == "stretched"]
+    watch = [i for i in items if i["action"] == "watch"]
     # výsledky hospodaření do 7 dnů
     earn = {}
     try:
@@ -9931,7 +10222,7 @@ def _morning_digest_html(email, top_opps, top_signals, mark_sent=False):
         pass
     # změny hodnocení od včera
     try:
-        chg = (_eval_changes(email, ev) or {}).get("items") or []
+        chg = (_eval_changes(email, ev, rows=rows) or {}).get("items") or []
     except Exception:
         chg = []
     # pravidelný vklad (1× měsíčně, do 10. dne)
@@ -9988,6 +10279,11 @@ def _morning_digest_html(email, top_opps, top_signals, mark_sent=False):
             _eml_row(i["ticker"], nm(i), f"P/E {int(round(i['pe']))} · za rok +{int(round(i['mom_pct']))} %" if i.get("pe") and i.get("pe") > 0
                      else f"bez zisku · za rok +{int(round(i['mom_pct']))} %", "#FFB347") for i in stretched[:3]) +
             "<div style='color:#9ba1b0;font-size:11.5px;padding-top:6px'>Po takovém růstu se v historii častěji propadly o &gt;30 % (11–20 % vs 6 %), ale v průměru nezaostávaly – prodej jen podle ceny data nepotvrzují.</div>", "amber")
+    # --- slabá rozvaha ---
+    if watch:
+        out += _eml_sec("🟡 Slabá rozvaha – větší riziko (nedokupuj hodně)", "".join(
+            _eml_row(i["ticker"], nm(i), _html_escape(i["action_why"].split(". V historii")[0]), "#FFC400") for i in watch[:3]) +
+            "<div style='color:#9ba1b0;font-size:11.5px;padding-top:6px'>" + _html_escape(DISTRESS_NOTE) + "</div>", "amber")
     # --- výsledky, změny, hýbání, zprávy ---
     extra = ""
     if soon:
@@ -10019,7 +10315,7 @@ def _morning_digest_html(email, top_opps, top_signals, mark_sent=False):
         extra += (f"<div style='padding:6px 0;border-top:1px solid #23262f;font-size:13px;line-height:1.5'>"
                   f"<b style='color:{ {'pozitivní': '#00C853', 'negativní': '#FF3D00'}.get(it['impact'], '#FFB347') }'>●</b> <b>{base(it['ticker'])}</b> – "
                   f"{_html_escape(it['what'])}{link}</div>")
-    n_hold = len([i for i in items if i["action"] in ("hold", "nobuy")])
+    n_hold = len([i for i in items if i["action"] in ("hold", "nobuy", "stretched", "watch")])
     c = ev["counts"]
     tail = (f"<div style='padding:8px 0 0;border-top:1px solid #23262f;font-size:12.5px;color:#9ba1b0'>Ostatních {n_hold} akcií: beze změny – nic dělat nemusíš. "
             f"Celkem {len(items)}: {c.get('strong', 0)} silných, {c.get('hold', 0)} drž, {c.get('weak', 0)} slabších (nedokupuj).</div>")
@@ -10656,6 +10952,7 @@ def _user_eval_saved(user):
     rows, total, missing, scan = _value_holdings(lots)
     if not rows:
         return None
+    _annotate_rows(rows, flags=True)
     held = {_spx_key(r["ticker"]) for r in rows}
     try:
         flags = _red_flags([t.replace(".", "-") for t, _s in _mix_basket(scan, 10)[:40]])
@@ -10690,10 +10987,16 @@ def _alert_email_html(changes):
 def _user_daily(user):
     """Denní snímek hodnocení uživatele (i když appku neotevře) + upozornění e-mailem, když se
     některá jeho akcie zhoršila a má zapnutá upozornění (bez ranního souhrnu – ten změny obsahuje)."""
+    try:        # slabou rozvahu držených akcií spočítá denní automatika předem (SEC), e-mail a web ji jen čtou
+        _lots = (kv_get_json(f"holdings:{user}") or {}).get("holdings") or []
+        _distress_warm([l.get("ticker") for l in _lots if l.get("ticker")], budget_s=9.0,
+                       sectors=((market_scan(allow_step=False) or {}).get("sector_map") or {}))
+    except Exception:
+        pass
     ue = _user_eval_saved(user)
     if not ue:
         return {"skipped": True}
-    ch = _eval_changes(user, ue["ev"]) or {}
+    ch = _eval_changes(user, ue["ev"], rows=ue["rows"]) or {}
     try:
         _holdings_perf(user, ue["rows"])            # sleduj výkon od teď, i když appku neotevře
     except Exception:

@@ -257,13 +257,13 @@ function renderLongTerm(data) {
     if (!box) return;
     const lt = data && data.longterm;
     if (!lt || !lt.level || lt.level === 'na') { box.style.display = 'none'; return; }
-    const map = { buy: ['strong', '🟢 Podhodnocená – dokup'], risk: ['risk', '🔴 Pozor – vážný problém'], stretched: ['weak', '🟠 Natažená – větší výkyvy'],
+    const map = { buy: ['strong', '🟢 Podhodnocená – dokup'], risk: ['risk', '🔴 Pozor – vážný problém'], watch: ['weak', '🟡 Slabá rozvaha'], stretched: ['weak', '🟠 Natažená – větší výkyvy'],
                   nobuy: ['weak', 'Nedokupuj'], hold: ['hold', 'Drž'] };
     const [cls, label] = map[lt.action] || [lt.level, lt.verdict];
     const held = (planLots || []).some(l => mpBase(l.ticker).replace('-', '.') === mpBase(data.ticker).replace('-', '.'));
     box.innerHTML = `<div class="lt-head"><span class="vb-label">Dlouhodobě (stejně jako v Moje portfolio)</span>
         <span class="mp-verdict ${cls}">${mpEsc(label)}</span></div>
-      <div class="lt-why">${mpEsc(lt.action_why && (lt.action === 'buy' || lt.action === 'risk' || lt.action === 'stretched') ? lt.action_why : lt.why || '')}</div>
+      <div class="lt-why">${mpEsc(lt.action_why && (lt.action === 'buy' || lt.action === 'risk' || lt.action === 'stretched' || lt.action === 'watch') ? lt.action_why : lt.why || '')}</div>
       <div class="lt-meta">#${lt.rank} z ${lt.of} v S&amp;P 500${lt.pe ? ' · P/E ' + Math.round(lt.pe) : ''}${lt.mom_pct != null ? ' · za rok ' + (lt.mom_pct >= 0 ? '+' : '') + Math.round(lt.mom_pct) + ' %' : ''}${lt.in_basket ? ' · <b>v koši tipů</b>' : ''}${held ? ' · máš ji v portfoliu' : ''}</div>
       <div class="lt-note">Krátkodobý pohled níž (technika, zprávy na ~2 týdny) se může lišit – pro dlouhodobé investování rozhoduje tohle hodnocení.</div>`;
     box.style.display = '';
@@ -715,55 +715,6 @@ function toggleWatchlist() {
 // --- PORTFOLIO HODNOCENÍ: CO PRODAT / PŘIKOUPIT (server-side AI) ---
 // ---------- Doporučení: stejné hodnocení jako Moje portfolio + změny, výkon, tipy, AI shrnutí ----------
 let recComment = { key: '', html: '' };
-function renderRecommendations() {
-    const root = document.getElementById('rec-root');
-    if (!root) return;
-    const d = planData;
-    if (!planLots.length) {
-        root.innerHTML = `<div class="mp-card"><h4><i class="ti ti-bulb"></i> Doporučení pro tvoje akcie</h4>
-            <div class="mp-sub">Doporučení vychází z akcií, které vlastníš. Nahraj je v <b>Moje portfolio</b> (screenshot, CSV z Trading 212 nebo seznam) a uvidíš tady hodnocení každé, co se změnilo od včera a jak se jim daří.</div>
-            <button class="tool-btn primary" onclick="switchTab('portfolio')"><i class="ti ti-briefcase"></i> Otevřít Moje portfolio</button></div>` + (d && d.picks ? recPicksHTML(d) : '');
-        if (!d && !planLoading) planRefresh();
-        return;
-    }
-    if (!d) {
-        root.innerHTML = `<div class="mp-card"><div class="mp-progress"><i class="ti ti-loader spin"></i> Hodnotím tvoje akcie…</div></div>`;
-        if (!planLoading) planRefresh();
-        return;
-    }
-    root.innerHTML = `<div class="rec-head"><h2><i class="ti ti-bulb"></i> Doporučení pro tvoje akcie</h2>
-          <div class="mp-sub">Stejné hodnocení jako v Moje portfolio – jedno místo pravdy. Říká, kam dávat <b>nové peníze</b>; prodávat podle něj nedoporučuji.</div></div>
-        <div id="rec-ai">${recComment.html}</div>
-        ${planChangesHTML(d)}
-        ${planEvalHTML(d)}
-        <div style="margin:-8px 0 18px"><button class="tool-btn" onclick="switchTab('portfolio')"><i class="ti ti-list-details"></i> Detail každé akcie v Moje portfolio</button></div>
-        ${recPerfHTML(d)}
-        ${recPicksHTML(d)}`;
-    loadRecComment(d);
-}
-
-function recPerfHTML(d) {
-    const pf = d.perf, bp = d.basket_perf;
-    if (!(pf && pf.n) && !bp) return '';
-    const row = (lbl, x, note) => `<div class="rec-perf-row"><div class="l">${lbl}</div>
-        <div class="v" style="color:var(--${x.ret >= x.spy ? 'up' : 'amber'})">${mpSigned(x.ret)}</div>
-        <div class="b">S&amp;P 500 ${mpSigned(x.spy)}</div><div class="n">${note}</div></div>`;
-    return `<div class="mp-card"><h4><i class="ti ti-activity"></i> Výkon – živý záznam</h4>
-        ${pf && pf.n ? row(`Tvoje akcie od ${mpDate(pf.since)}`, pf, pf.weighted ? 'vážené podle velikostí, které jsi zadal' : 'rovnoměrně – každá akcie stejně') : ''}
-        ${bp ? row(`Koš tipů od ${mpDate(bp.since)}`, bp, `koš ${bp.n} akcií, měsíčně obměněný`) : ''}
-        <div class="mp-sub" style="margin:8px 0 0">Počítáno z cen při přidání do appky (v měně akcie), bez poplatků a dividend. Krátké období je hlavně náhoda – vypovídací hodnotu to má po měsících.</div></div>`;
-}
-
-function recPicksHTML(d) {
-    const pk = d.picks;
-    if (!pk || !(pk.new || []).length) return '';
-    const items = pk.new.slice(0, 5).map(p => `<div class="rec-pick" onclick="loadStockDetail('${mpEsc(p.ticker)}')">
-        <b>${mpEsc(mpBase(p.ticker))}</b> <span class="mp-pick-src ${p.source}">${p.source === 'vm' ? 'Levná + roste' : 'Silné momentum'}</span>
-        <div class="mp-sub" style="margin:2px 0 0">${mpEsc(p.name)} – ${mpEsc(p.why)}</div></div>`).join('');
-    return `<div class="mp-card"><h4><i class="ti ti-target-arrow"></i> Co koupit teď (z koše tipů, co ještě nemáš)</h4>${items}
-        <button class="tool-btn" style="margin-top:10px" onclick="planGoTo('mp-picks')" ><i class="ti ti-coins"></i> Celý koš a kam s penězi</button></div>`;
-}
-
 async function loadRecComment(d) {
     const el = document.getElementById('rec-ai');
     if (!el || !authToken) return;

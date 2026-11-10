@@ -510,6 +510,39 @@ async function loadResultsLive() {
     }
 }
 
+// Rady aplikace u tvých akcií: od dne, kdy je appka poprvé řekla, do dneška proti S&P 500 za stejné období
+const ADVICE_LBL = { buy: ['🟢 Podhodnocená – dokup', 'up'], risk: ['🔴 Vážný problém', 'down'], watch: ['🟡 Slabá rozvaha', 'amber'] };
+async function loadAdviceRecord() {
+    const card = document.getElementById('tr-advice'), body = document.getElementById('tr-advice-body'), meta = document.getElementById('tr-advice-meta');
+    if (!card || !authToken) { if (card) card.style.display = 'none'; return; }
+    card.style.display = '';
+    body.innerHTML = '<div class="ov-load"><i class="ti ti-loader spin"></i> Načítám záznam rad…</div>';
+    try {
+        const d = await (await fetch(`${BACKEND_URL}/api/advice-record`, { headers: authHeaders() })).json();
+        if (!d.ok || !d.count) {
+            body.innerHTML = '<div class="ov-empty">Záznam se plní. Pokaždé, když appka u tvé akcie poprvé řekne „podhodnocená – dokup“, „vážný problém“ nebo „slabá rozvaha“, zapíše se datum a cena. Po týdnech tady uvidíš, jak ta rada dopadla proti S&amp;P 500.</div>';
+            return;
+        }
+        meta.textContent = `od ${mpDate(d.since)} ${d.since.slice(0, 4)} · ${d.count} rad`;
+        const kpi = Object.entries(d.groups || {}).map(([a, g]) => {
+            const [lbl, col] = ADVICE_LBL[a] || [a, 'up'];
+            const better = a === 'buy' ? g.avg_ret >= g.avg_spy : g.avg_ret <= g.avg_spy;       // u varování je „dobře“, když akcie zaostala
+            return `<div class="tr-kpi"><div class="lbl">${lbl} · ${g.n} ${g.n === 1 ? 'rada' : (g.n < 5 ? 'rady' : 'rad')}</div>
+                <div class="val" style="color:var(--${better ? 'up' : 'amber'})">${mpSigned(g.avg_ret)}</div>
+                <div style="font-size:11.5px;color:var(--text2);margin-top:4px">S&amp;P 500 ${mpSigned(g.avg_spy)} · průměrně za ${g.avg_days} dní${a === 'buy' ? ` · index porazilo ${g.beat_pct} %` : ''}</div></div>`;
+        }).join('');
+        const rows = (d.items || []).slice(0, 15).map(x => {
+            const [lbl] = ADVICE_LBL[x.action] || [x.action];
+            return `<div class="tr-bk-row" onclick="loadStockDetail('${mpEsc(x.ticker)}')" style="cursor:pointer"><div><div class="m">${mpEsc(mpBase(x.ticker))} <span style="font-weight:500;color:var(--text2)">${lbl}</span></div>
+                <div class="d">${mpDate(x.date)} · před ${x.days} ${x.days === 1 ? 'dnem' : 'dny'} · ${mpQty(x.price0)} → ${mpQty(x.price1)} ${mpEsc(x.currency || '')}</div></div>
+                <div class="v" style="color:var(--${x.ret >= 0 ? 'up' : 'down'})">${mpSigned(x.ret)}${x.spy != null ? ` <span style="font-weight:500;color:var(--text2)">· S&amp;P ${mpSigned(x.spy)}</span>` : ''}</div></div>`;
+        }).join('');
+        body.innerHTML = (kpi ? `<div class="tr-stats" style="margin-bottom:12px">${kpi}</div>` : '<div class="ov-empty" style="margin-bottom:10px">Rady jsou čerstvé (do týdne) – souhrn se ukáže, až trochu zestárnou.</div>') +
+            `<div class="tr-live-list">${rows}</div>
+            <div class="tr-fine">Cena v den rady (v měně akcie, bez dividend) → dnes, proti S&amp;P 500 za stejné období. U „podhodnocená“ je dobře, když akcie porazí index; u varování, když zaostane. Krátké období je hlavně náhoda – vypovídá až po měsících.</div>`;
+    } catch (e) { body.innerHTML = '<div class="ov-empty" style="color:var(--down)">Záznam rad se nepodařilo načíst.</div>'; }
+}
+
 // Živý záznam koše: měsíční koše (prvních n v pořadí), rovnoměrně, řetězeno přes měsíce, proti S&P 500
 async function renderResultsBasket(basket) {
     const body = document.getElementById('tr-basket-body'), meta = document.getElementById('tr-basket-meta');

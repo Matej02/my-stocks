@@ -132,7 +132,7 @@ async function adminDailyKick(manual) {
         try { localStorage.setItem('ma_daily_kick2', today); } catch (e) {}
         signalsLoaded = false;
         if (added) showToast(`Denní aktualizace hotová: +${added} ${added === 1 ? 'verdikt' : (added < 5 ? 'verdikty' : 'verdiktů')} v track recordu`, 'up', 'ti-refresh');
-        if (typeof activeTab !== 'undefined' && activeTab === 'ai') loadTrackRecord();
+        if (typeof activeTab !== 'undefined' && activeTab === 'results') loadTrackRecord();
     }
     if (out) out.innerHTML = done
         ? `<span style="color:var(--up)">Hotovo: sken ${d.scan ? 'je aktuální' : '–'}, nových verdiktů ${added}${d.skipped ? ` (${d.skipped} titulů už mělo čerstvý verdikt)` : ''}.</span>`

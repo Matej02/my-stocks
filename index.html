@@ -233,7 +233,7 @@
   </div>
 </div>
 
-<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.11.07·a</div>
+<div id="buildTag" title="Verze aplikace" style="position:fixed; bottom:6px; right:9px; font-size:10px; color:var(--text2); opacity:.45; z-index:5; pointer-events:none; font-family:monospace;">v2026.11.10·a</div>
 
 <div class="container">
   
@@ -705,7 +705,6 @@
       <button class="dash-tab" id="dtab-portfolio" onclick="switchTab('portfolio')"><i class="ti ti-wallet"></i> <span class="dt-pre">Moje&nbsp;</span>portfolio</button>
       <button class="dash-tab" id="dtab-opportunities" onclick="switchTab('opportunities')"><i class="ti ti-rocket"></i> Příležitosti</button>
       <button class="dash-tab" id="dtab-results" onclick="switchTab('results')"><i class="ti ti-chart-histogram"></i> Výsledky</button>
-      <button class="dash-tab" id="dtab-ai" onclick="switchTab('ai')"><i class="ti ti-bulb"></i> Doporučení</button>
     </div>
 
     <!-- SEKCE: PŘEHLED (uvítací dashboard) -->
@@ -838,6 +837,15 @@
         <div id="tr-basket-body"><div class="ov-load"><i class="ti ti-loader spin"></i> Načítám záznam koše…</div></div>
       </div>
 
+      <!-- ZÁZNAM RAD APLIKACE PRO TVOJE AKCIE (podhodnocená – dokup, vážný problém, slabá rozvaha) -->
+      <div class="ov-card" style="margin-top:18px; display:none;" id="tr-advice">
+        <h3 style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <span><i class="ti ti-clipboard-check"></i> Rady aplikace pro tvoje akcie — jak dopadly</span>
+          <span class="tr-live-meta" id="tr-advice-meta"></span>
+        </h3>
+        <div id="tr-advice-body"></div>
+      </div>
+
       <!-- HLAVNÍ STATISTIKY (starší krátkodobý signál) -->
       <div class="tr-stats" id="tr-stats">
         <div class="ov-load"><i class="ti ti-loader spin"></i> Načítám výsledky backtestu…</div>
@@ -864,6 +872,14 @@
         <div class="tr-fine">Přehrávat lze posledních 60 verdiktů. Návratnost počítáme od aktuální tržní ceny — zelená = signál drží, červená = zatím v mínusu.</div>
       </div>
 
+    <!-- TRACK RECORD: úspěšnost dosavadních verdiktů -->
+    <div class="track-box" id="track-box" style="display:none; margin-top:18px;">
+      <div class="track-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;"><span><i class="ti ti-history"></i> Track record — jak vychází naše verdikty</span><button class="tool-btn" onclick="openSim()"><i class="ti ti-calculator"></i> Kolik to vydělá?</button></div>
+      <div class="track-auto-note"><i class="ti ti-refresh"></i> Verdikty přibývají <b>automaticky každý den</b> – pro signály dne a koš tipů – a hned se sledují. K tomu se ukládají i tvoje ruční hloubkové analýzy.</div>
+      <div id="track-stats" class="track-stats"></div>
+      <div id="track-list" class="track-list"></div>
+    </div>
+
       <!-- DISCLAIMER -->
       <div class="tr-disclaim">
         <i class="ti ti-shield-check"></i>
@@ -871,20 +887,7 @@
       </div>
     </div><!-- /section-results -->
 
-    <!-- SEKCE: AI ANALÝZA -->
-    <div class="dash-section" id="section-ai" style="display:none;">
-    <div id="ai-lock" style="display:none;"></div>
-    <!-- DOPORUČENÍ = totéž hodnocení jako Moje portfolio (dřív samostatné AI nad watchlistem, které si mohlo odporovat) -->
-    <div id="rec-root"></div>
 
-    <!-- TRACK RECORD: úspěšnost dosavadních verdiktů -->
-    <div class="track-box" id="track-box" style="display:none;">
-      <div class="track-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;"><span><i class="ti ti-history"></i> Track record — jak vychází naše verdikty</span><button class="tool-btn" onclick="openSim()"><i class="ti ti-calculator"></i> Kolik to vydělá?</button></div>
-      <div class="track-auto-note"><i class="ti ti-refresh"></i> Verdikty přibývají <b>automaticky každý den</b> – pro signály dne a koš tipů – a hned se sledují. K tomu se ukládají i tvoje ruční hloubkové analýzy.</div>
-      <div id="track-stats" class="track-stats"></div>
-      <div id="track-list" class="track-list"></div>
-    </div>
-    </div><!-- /section-ai -->
 
     <!-- SEKCE: PŘÍLEŽITOSTI -->
     <div class="dash-section" id="section-opportunities" style="display:none;">
